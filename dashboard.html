@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>홈 · Eduino Works</title>
+<link rel="stylesheet" href="assets/css/base.css">
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+
+<div class="wrap">
+  <div id="hello"></div>
+
+  <div class="section-title">🏠 내 부서</div>
+  <div class="grid cols2" id="myDept"></div>
+
+  <div class="section-title">🧭 전체 업무</div>
+  <p class="muted" style="margin:-.4rem 0 1rem;font-size:.9rem">부서를 선택하면 해당 업무의 편의기능으로 이동합니다.</p>
+  <div class="grid cols4" id="allDept"></div>
+
+  <div class="section-title">➕ 공통 기능</div>
+  <div class="grid cols4" id="commonFx"></div>
+
+  <div class="note" style="margin-top:2rem">
+    <b>초안(Draft) 안내</b> — 현재는 DB 없이 브라우저 안에서만 동작합니다. 로그인·데이터는 이 PC에 임시 저장되며,
+    <b class="live" style="color:var(--ok)">동작</b> 표시 기능은 바로 사용, <b style="color:var(--warn)">예정</b> 표시는 화면 틀만 잡아둔 상태입니다.
+  </div>
+</div>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+  const user = requireAuth('');
+  if(user){
+    renderAppbar($('appbar'), user, '');
+
+    $('hello').innerHTML =
+      `<div class="card" style="display:flex;align-items:center;gap:1rem">
+        <span class="avatar" style="width:2.6rem;height:2.6rem;font-size:1.05rem">${esc(user.name.slice(0,1))}</span>
+        <div><h2 style="font-size:1.2rem">${esc(user.name)} 님, 안녕하세요 👋</h2>
+        <div class="muted" style="font-size:.9rem">${esc(user.role)} · ${user.dept==='all'?'전체 접근':esc(DEPT_MAP[user.dept]?.full||'')}</div></div>
+      </div>`;
+
+    // 부서 타일
+    function deptTile(d, mine){
+      const t = el('a','tile '+d.cls);
+      t.href = 'modules/'+d.key+'/index.html';
+      t.innerHTML = `<div class="accent"></div>
+        <div style="display:flex;align-items:center;gap:.6em">
+          <span class="ic">${d.icon}</span>
+          <div><h4>${esc(d.name)} <span class="muted" style="font-weight:400;font-size:.85rem">${esc(d.full)}</span></h4></div>
+          ${mine?'<span class="badge mine" style="margin-left:auto">내 부서</span>':''}
+        </div>
+        <div class="desc">${esc(d.desc)}</div>`;
+      return t;
+    }
+
+    // 내 부서
+    const myWrap = $('myDept');
+    const mine = DEPARTMENTS.filter(d => user.dept==='all' || d.key===user.dept);
+    (mine.length?mine:DEPARTMENTS).forEach(d => myWrap.appendChild(deptTile(d, d.key===user.dept)));
+
+    // 전체 부서
+    const allWrap = $('allDept');
+    DEPARTMENTS.forEach(d => allWrap.appendChild(deptTile(d, d.key===user.dept)));
+
+    // 공통 기능
+    const cWrap = $('commonFx');
+    COMMON_FEATURES.forEach(f => {
+      const t = el('div','tile soon');
+      t.innerHTML = `<div class="accent" style="background:var(--faint)"></div>
+        <div style="display:flex;align-items:center;gap:.6em"><span class="ic">${f.icon}</span>
+        <h4>${esc(f.name)}</h4><span class="badge soon" style="margin-left:auto">예정</span></div>
+        <div class="desc">${esc(f.desc)}</div>`;
+      cWrap.appendChild(t);
+    });
+  }
+</script>
+</body>
+</html>

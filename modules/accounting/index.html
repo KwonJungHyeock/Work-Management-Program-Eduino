@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>경리 · Eduino Works</title>
+<link rel="stylesheet" href="../../assets/css/base.css">
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+<main id="modRoot"></main>
+
+<script src="../../assets/js/data.js"></script>
+<script src="../../assets/js/app.js"></script>
+<script src="../../assets/js/module.js"></script>
+<script>
+/* ---- 경리 기능: 매출·매입 집계기 ---- */
+const acctLedger = {
+  title: '매출·매입 집계기',
+  render(root){
+    const db = store('acct.ledger');
+    let rows = db.get([
+      { date:'2026-07-01', type:'매출', item:'아두이노 스타터 키트', partner:'스마트스토어', amount:330000 },
+      { date:'2026-07-02', type:'매입', item:'센서 모듈 부자재',     partner:'○○전자',      amount:132000 },
+    ]);
+    const won = n => (Number(n)||0).toLocaleString('ko-KR');
+
+    root.innerHTML = `
+      <div style="display:flex;align-items:center;gap:.7em;margin-bottom:1rem;flex-wrap:wrap">
+        <h2 style="font-size:1.2rem">📊 매출·매입 집계기</h2>
+        <span class="muted" style="font-size:.9rem">금액은 <b>부가세 포함(공급대가)</b> 기준으로 입력 → 공급가·부가세 자동 분리</span>
+        <span style="margin-left:auto;display:flex;gap:.4em">
+          <button class="btn sm" id="addRow"><span class="ic">＋</span>행 추가</button>
+          <button class="btn sm pri" id="csv"><span class="ic">⬇</span>CSV 내보내기</button>
+        </span>
+      </div>
+      <div class="grid cols3" id="summary" style="margin-bottom:1rem"></div>
+      <div style="overflow:auto"><table class="grid-t" id="tbl"></table></div>
+      <p class="muted" style="font-size:.82rem;margin-top:.8rem">※ 부가세는 공급대가 ÷ 11 로 계산한 참고값입니다. 면세/영세 거래는 실제 세율에 맞게 확인하세요.</p>`;
+
+    function calc(r){ const gross=Number(r.amount)||0; const vat=Math.round(gross/11); return { gross, vat, supply:gross-vat }; }
+
+    function renderSummary(){
+      const s = { 매출:{g:0,v:0}, 매입:{g:0,v:0} };
+      rows.forEach(r=>{ const c=calc(r); (s[r.type]||s.매출).g+=c.gross; (s[r.type]||s.매출).v+=c.vat; });
+      const net = s.매출.g - s.매입.g;
+      const card = (label,val,cls)=>`<div class="card"><div class="muted" style="font-size:.85rem">${label}</div>
+        <div style="font-size:1.4rem;font-weight:700;color:${cls}" class="num">${won(val)}<span style="font-size:.9rem;font-weight:400"> 원</span></div></div>`;
+      $('summary').innerHTML =
+        card('총 매출 (부가세 포함)', s.매출.g, 'var(--ok)') +
+        card('총 매입 (부가세 포함)', s.매입.g, 'var(--red)') +
+        card('매출 − 매입', net, net>=0?'var(--ink)':'var(--red)');
+    }
+
+    function renderTable(){
+      const t = $('tbl');
+      t.innerHTML = `<thead><tr>
+        <th style="width:8rem">일자</th><th style="width:5rem">구분</th><th>항목</th><th style="width:9rem">거래처</th>
+        <th class="num" style="width:8rem">금액(포함)</th><th class="num" style="width:8rem">공급가</th>
+        <th class="num" style="width:7rem">부가세</th><th style="width:3rem"></th></tr></thead><tbody></tbody>`;
+      const tb = t.querySelector('tbody');
+      rows.forEach((r,i)=>{
+        const c = calc(r);
+        const tr = el('tr');
+        tr.innerHTML = `
+          <td><input type="date" data-f="date" value="${esc(r.date)}" style="padding:.3em"></td>
+          <td><select data-f="type" style="padding:.3em">
+            <option${r.type==='매출'?' selected':''}>매출</option>
+            <option${r.type==='매입'?' selected':''}>매입</option></select></td>
+          <td><input type="text" data-f="item" value="${esc(r.item)}" style="padding:.3em"></td>
+          <td><input type="text" data-f="partner" value="${esc(r.partner)}" style="padding:.3em"></td>
+          <td><input type="number" data-f="amount" value="${esc(r.amount)}" style="padding:.3em;text-align:right"></td>
+          <td class="num">${won(c.supply)}</td>
+          <td class="num">${won(c.vat)}</td>
+          <td><button class="btn sm ghost" title="삭제">✕</button></td>`;
+        tr.querySelectorAll('[data-f]').forEach(inp=>{
+          inp.onchange = ()=>{ r[inp.dataset.f] = inp.type==='number'?Number(inp.value):inp.value; save(); };
+        });
+        tr.querySelector('button').onclick = ()=>{ rows.splice(i,1); save(); };
+        tb.appendChild(tr);
+      });
+    }
+    function save(){ db.set(rows); renderSummary(); renderTable(); }
+
+    $('addRow').onclick = ()=>{ rows.push({date:'2026-07-07',type:'매출',item:'',partner:'',amount:0}); save(); };
+    $('csv').onclick = ()=>{
+      const head = ['일자','구분','항목','거래처','금액(부가세포함)','공급가','부가세'];
+      const lines = rows.map(r=>{ const c=calc(r);
+        return [r.date,r.type,r.item,r.partner,c.gross,c.supply,c.vat]
+          .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','); });
+      const csv = '﻿'+[head.join(','), ...lines].join('\r\n');
+      const a = el('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+      a.download = '매출매입_집계_20260707.csv'; a.click(); URL.revokeObjectURL(a.href);
+      toast('CSV로 내보냈습니다');
+    };
+
+    renderSummary(); renderTable();
+  }
+};
+
+initModule('acct', { ledger: acctLedger });
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS · Eduino Works</title>
+<link rel="stylesheet" href="../../assets/css/base.css">
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+<main id="modRoot"></main>
+
+<script src="../../assets/js/data.js"></script>
+<script src="../../assets/js/app.js"></script>
+<script src="../../assets/js/module.js"></script>
+<script>
+/* ---- CS 기능: 답변 템플릿 라이브러리 (localStorage) ---- */
+const csTemplates = {
+  title: '답변 템플릿',
+  render(root){
+    const db = store('cs.templates');
+    const DEFAULTS = [
+      { cat:'배송', title:'배송 지연 안내', body:'안녕하세요, 에듀이노입니다.\n주문하신 상품의 배송이 지연되어 진심으로 사과드립니다. 현재 상품은 준비 중이며, {날짜}까지 발송될 예정입니다. 발송 시 송장번호를 문자로 안내드리겠습니다. 감사합니다.' },
+      { cat:'배송', title:'송장번호 안내', body:'안녕하세요, 에듀이노입니다.\n주문하신 상품이 오늘 발송되었습니다. 택배사: {택배사} / 송장번호: {송장번호}\n배송 조회는 택배사 홈페이지에서 확인하실 수 있습니다. 감사합니다.' },
+      { cat:'반품/교환', title:'반품 접수 안내', body:'안녕하세요, 에듀이노입니다.\n반품 요청 확인했습니다. 상품을 아래 주소로 보내주시면 확인 후 환불 처리해 드리겠습니다.\n[반송지] {주소}\n왕복 배송비 관련 안내: {배송비안내}. 감사합니다.' },
+      { cat:'제품문의', title:'호환/사용 문의', body:'안녕하세요, 에듀이노입니다.\n문의하신 제품은 {대상}과 호환되며, 사용 방법은 제품에 동봉된 가이드 또는 홈페이지 자료실에서 확인하실 수 있습니다. 추가로 궁금하신 점 있으시면 언제든 말씀해 주세요. 감사합니다.' },
+    ];
+    let items = db.get(null);
+    if(items === null){ items = DEFAULTS.slice(); db.set(items); }
+
+    root.innerHTML = `
+      <div style="display:flex;align-items:center;gap:.7em;margin-bottom:1rem;flex-wrap:wrap">
+        <h2 style="font-size:1.2rem">💬 답변 템플릿</h2>
+        <span class="muted" style="font-size:.9rem">복사해서 바로 붙여넣기 · {중괄호}는 상황에 맞게 수정</span>
+        <button class="btn pri sm" id="addBtn" style="margin-left:auto"><span class="ic">＋</span>새 템플릿</button>
+      </div>
+      <div style="display:flex;gap:.5em;flex-wrap:wrap;margin-bottom:1rem" id="cats"></div>
+      <div class="grid cols2" id="list"></div>`;
+
+    const catBar = $('cats'), list = $('list');
+    let filter = '전체';
+
+    function cats(){ return ['전체', ...Array.from(new Set(items.map(i=>i.cat)))]; }
+    function renderCats(){
+      catBar.innerHTML = '';
+      cats().forEach(c => {
+        const b = el('button','btn sm'+(c===filter?' pri':''), esc(c));
+        b.onclick = ()=>{ filter=c; renderCats(); renderList(); };
+        catBar.appendChild(b);
+      });
+    }
+    function renderList(){
+      list.innerHTML='';
+      const view = items.filter(i => filter==='전체' || i.cat===filter);
+      if(!view.length){ list.innerHTML='<p class="muted">템플릿이 없습니다. “새 템플릿”으로 추가하세요.</p>'; return; }
+      view.forEach(it => {
+        const idx = items.indexOf(it);
+        const c = el('div','card');
+        c.innerHTML = `
+          <div style="display:flex;align-items:center;gap:.5em;margin-bottom:.4rem">
+            <span class="badge dept c-cs">${esc(it.cat)}</span>
+            <b>${esc(it.title)}</b>
+            <span style="margin-left:auto;display:flex;gap:.3em">
+              <button class="btn sm ghost" data-a="edit">수정</button>
+              <button class="btn sm ghost" data-a="del">삭제</button>
+            </span>
+          </div>
+          <div class="muted" style="white-space:pre-wrap;font-size:.9rem;line-height:1.6;
+            max-height:8.5em;overflow:auto;background:var(--zebra);border:1px solid var(--soft);
+            border-radius:6px;padding:.6em .7em">${esc(it.body)}</div>
+          <button class="btn sm block" data-a="copy" style="margin-top:.6rem"><span class="ic">📋</span>복사</button>`;
+        c.querySelector('[data-a=copy]').onclick = ()=>copyText(it.body);
+        c.querySelector('[data-a=del]').onclick = ()=>{
+          if(confirm('이 템플릿을 삭제할까요?')){ items.splice(idx,1); db.set(items); renderCats(); renderList(); }
+        };
+        c.querySelector('[data-a=edit]').onclick = ()=>editForm(it, idx);
+        list.appendChild(c);
+      });
+    }
+    function editForm(it, idx){
+      const isNew = !it;
+      const data = it || { cat:'', title:'', body:'' };
+      const c = el('div','card');
+      c.innerHTML = `
+        <h3 style="margin-bottom:.8rem">${isNew?'새 템플릿':'템플릿 수정'}</h3>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem">
+          <label class="fld" style="flex:1;min-width:8rem">분류<input type="text" id="fCat" value="${esc(data.cat)}" placeholder="예: 배송"></label>
+          <label class="fld" style="flex:2;min-width:12rem">제목<input type="text" id="fTitle" value="${esc(data.title)}" placeholder="템플릿 제목"></label>
+        </div>
+        <label class="fld">내용<textarea id="fBody" rows="6" placeholder="답변 내용...">${esc(data.body)}</textarea></label>
+        <div style="display:flex;gap:.5em;margin-top:.9rem;justify-content:flex-end">
+          <button class="btn" id="cCancel">취소</button>
+          <button class="btn pri" id="cSave">저장</button>
+        </div>`;
+      list.replaceChildren(c);
+      catBar.style.display='none';
+      $('cCancel').onclick = ()=>{ catBar.style.display=''; renderList(); };
+      $('cSave').onclick = ()=>{
+        const rec = { cat:($('fCat').value.trim()||'기타'), title:($('fTitle').value.trim()||'제목 없음'), body:$('fBody').value };
+        if(isNew) items.unshift(rec); else items[idx]=rec;
+        db.set(items); catBar.style.display=''; renderCats(); renderList();
+        toast(isNew?'추가했습니다':'수정했습니다');
+      };
+    }
+
+    $('addBtn').onclick = ()=>editForm(null);
+    renderCats(); renderList();
+  }
+};
+
+initModule('cs', { templates: csTemplates });
+</script>
+</body>
+</html>

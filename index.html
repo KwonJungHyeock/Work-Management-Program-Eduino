@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 · Eduino Works</title>
+<link rel="stylesheet" href="assets/css/base.css">
+</head>
+<body>
+<div class="login-wrap">
+  <form class="login-card" id="loginForm" autocomplete="off">
+    <div class="login-brand"><div class="bar"></div><div class="nm">Eduino <span>Works</span></div></div>
+    <div class="login-sub">통합 업무관리 프로그램 · 직원 로그인</div>
+
+    <label class="fld">아이디
+      <input type="text" id="uid" placeholder="사번 / 아이디" autofocus>
+    </label>
+    <label class="fld" style="margin-top:.9rem">비밀번호
+      <input type="password" id="upw" placeholder="비밀번호">
+    </label>
+    <div class="login-err" id="err"></div>
+    <button type="submit" class="btn pri block">로그인</button>
+
+    <div class="login-hint">
+      <b>초안 데모 계정</b> (비번 모두 <code>1234</code>)<br>
+      <code>admin</code> 전체 · <code>cs01</code> CS · <code>md01</code> MD · <code>acct01</code> 경리 · <code>des01</code> 디자인
+    </div>
+  </form>
+</div>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+  // 이미 로그인된 상태면 대시보드로
+  if(Auth.current()) location.href = 'dashboard.html';
+
+  $('loginForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const id = $('uid').value.trim(), pw = $('upw').value;
+    const user = Auth.login(id, pw);
+    if(!user){ $('err').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.'; return; }
+    location.href = 'dashboard.html';
+  });
+</script>
+</body>
+</html>

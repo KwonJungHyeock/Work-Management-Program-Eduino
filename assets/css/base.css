@@ -1,0 +1,144 @@
+/* ===========================================================================
+   Eduino 통합 업무관리 · 공통 디자인 시스템
+   (상품 데이터 관리 도구 샘플의 토큰/컴포넌트를 재활용해 통일감 유지)
+   =========================================================================== */
+html{font-size:clamp(13px, 0.30vw + 9.2px, 17px)}
+:root{
+  --red:#E31E24;--red-soft:#fdecec;--red-dk:#c2181d;
+  --ink:#1f2328;--muted:#6b7178;--faint:#9aa0a8;
+  --grid:#d8dbdf;--soft:#e6e8eb;--chrome:#f3f4f6;--panel:#fff;
+  --hd:#eef0f2;--zebra:#fafbfc;--hover:#f5f6f8;--sel:#fdecec;
+  --ok:#12855a;--ok-bg:#e7f5ee;--warn:#a6690a;--warn-bg:#fbf1dc;
+  --info:#1d5fb0;--info-bg:#e8f0fb;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  --radius:8px;--shadow:0 1px 3px rgba(20,22,25,.08),0 8px 24px rgba(20,22,25,.06);
+  /* 부서 컬러 (대시보드 카드/뱃지용) */
+  --dept-cs:#1d5fb0;--dept-md:#E31E24;--dept-acct:#12855a;--dept-design:#8a3ffc;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--chrome);color:var(--ink);font-family:var(--sans);
+  font-size:1rem;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4{margin:0}
+.hidden{display:none!important}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+
+/* ---- 버튼 ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.45em;
+  border:1px solid var(--grid);background:#fff;color:var(--ink);border-radius:6px;
+  padding:.55em .9em;font-size:.92rem;font-family:var(--sans);cursor:pointer;white-space:nowrap;transition:.12s}
+.btn:hover{border-color:var(--red);color:var(--red)}
+.btn.pri{background:var(--red);border-color:var(--red);color:#fff}
+.btn.pri:hover{background:var(--red-dk);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover);color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--grid);color:var(--ink)}
+.btn .ic{font-size:1.05em;line-height:1}
+.btn.sm{padding:.35em .6em;font-size:.85rem}
+.btn.block{width:100%}
+
+/* ---- 입력 ---- */
+input[type=text],input[type=password],input[type=number],input[type=email],select,textarea{
+  border:1px solid var(--grid);border-radius:6px;padding:.55em .7em;font-family:var(--sans);
+  font-size:.92rem;background:#fff;color:var(--ink);width:100%}
+textarea{resize:vertical;line-height:1.55}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--red-soft);border-color:var(--red)}
+label.fld{display:flex;flex-direction:column;gap:.35em;font-size:.85rem;color:var(--muted);font-weight:600}
+
+/* ---- 앱 셸 ---- */
+.appbar{display:flex;align-items:center;gap:.9em;background:var(--panel);
+  border-bottom:1px solid var(--grid);padding:0 1rem;min-height:3.2rem;flex:none}
+.appbar .mk{width:.6rem;height:1.5rem;background:var(--red);border-radius:2px}
+.appbar .brand{font-weight:700;font-size:1.05rem;letter-spacing:-.2px}
+.appbar .brand span{color:var(--red)}
+.appbar .div{width:1px;height:1.4rem;background:var(--soft)}
+.appbar .title{color:var(--muted);font-size:.92rem}
+.appbar .sp{margin-left:auto}
+.appbar .who{display:flex;align-items:center;gap:.55em;font-size:.88rem;color:var(--muted)}
+.appbar .who b{color:var(--ink)}
+.avatar{width:1.9rem;height:1.9rem;border-radius:50%;background:var(--red);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700}
+
+.crumbs{display:flex;align-items:center;gap:.5em;padding:.6rem 1rem;background:var(--panel);
+  border-bottom:1px solid var(--grid);font-size:.88rem;color:var(--muted)}
+.crumbs a:hover{color:var(--red)}
+.crumbs .sep{color:var(--faint)}
+
+.wrap{max-width:72rem;margin:0 auto;padding:1.6rem 1.2rem 3rem}
+
+/* ---- 카드 ---- */
+.card{background:#fff;border:1px solid var(--grid);border-radius:var(--radius);padding:1.2rem}
+.card h3{font-size:1.05rem;margin-bottom:.3rem}
+.card p.sub{color:var(--muted);font-size:.9rem;margin:0 0 1rem}
+
+.section-title{font-size:1.15rem;font-weight:700;margin:1.8rem 0 .8rem;display:flex;align-items:center;gap:.5em}
+.section-title:first-child{margin-top:0}
+
+/* ---- 부서/기능 그리드 ---- */
+.grid{display:grid;gap:1rem}
+.grid.cols4{grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))}
+.grid.cols3{grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))}
+.grid.cols2{grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))}
+
+.tile{position:relative;display:flex;flex-direction:column;gap:.5rem;background:#fff;
+  border:1px solid var(--grid);border-radius:var(--radius);padding:1.1rem 1.15rem;cursor:pointer;
+  transition:.14s;overflow:hidden}
+.tile:hover{border-color:var(--red);box-shadow:var(--shadow);transform:translateY(-1px)}
+.tile .ic{font-size:1.7rem;line-height:1}
+.tile h4{font-size:1rem}
+.tile .desc{color:var(--muted);font-size:.86rem;line-height:1.5}
+.tile .accent{position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
+.tile.soon{opacity:.62;cursor:default}
+.tile.soon:hover{border-color:var(--grid);box-shadow:none;transform:none}
+
+.badge{display:inline-flex;align-items:center;gap:.35em;font-size:.72rem;font-weight:700;
+  padding:.18em .6em;border-radius:20px;letter-spacing:.02em}
+.badge.dept{color:#fff}
+.badge.soon{background:var(--warn-bg);color:var(--warn)}
+.badge.live{background:var(--ok-bg);color:var(--ok)}
+.badge.mine{background:var(--red-soft);color:var(--red)}
+
+/* 부서 컬러 유틸 */
+.c-cs{--dept:var(--dept-cs)}.c-md{--dept:var(--dept-md)}
+.c-acct{--dept:var(--dept-acct)}.c-design{--dept:var(--dept-design)}
+.tile[class*="c-"] .accent{background:var(--dept)}
+.badge.dept[class*="c-"]{background:var(--dept)}
+
+/* ---- 표 ---- */
+table.grid-t{border-collapse:collapse;width:100%;font-size:.9rem;background:#fff}
+table.grid-t th{background:var(--hd);text-align:left;padding:.55em .72em;border:1px solid var(--grid);
+  font-weight:600;color:var(--muted);white-space:nowrap}
+table.grid-t td{padding:.45em .72em;border:1px solid var(--soft);vertical-align:middle}
+table.grid-t tbody tr:nth-child(even){background:var(--zebra)}
+table.grid-t tbody tr:hover{background:var(--hover)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---- 알림/토스트 ---- */
+.toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%) translateY(1rem);
+  background:var(--ink);color:#fff;padding:.7em 1.1em;border-radius:8px;font-size:.9rem;
+  box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.25s;z-index:200}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.note{font-size:.9rem;color:var(--muted);padding:.8rem 1rem;background:var(--info-bg);
+  border-left:3px solid var(--info);border-radius:6px;line-height:1.6}
+.note b{color:var(--ink)}
+
+/* ---- 로그인 ---- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#1b1c1f,#26282c)}
+.login-card{width:23rem;max-width:92vw;background:#fff;border-radius:14px;padding:2rem 1.8rem;
+  box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login-brand{display:flex;align-items:center;gap:.7em;margin-bottom:.3rem}
+.login-brand .bar{width:8px;height:2rem;background:var(--red);border-radius:2px}
+.login-brand .nm{font-size:1.5rem;font-weight:700;letter-spacing:-.5px}
+.login-brand .nm span{color:var(--red)}
+.login-sub{color:var(--muted);font-size:.88rem;margin-bottom:1.5rem}
+.login-card .fld{margin-bottom:1rem}
+.login-err{color:var(--red);font-size:.85rem;min-height:1.2em;margin:.2rem 0 .6rem}
+.login-hint{margin-top:1.3rem;padding-top:1rem;border-top:1px dashed var(--soft);
+  font-size:.82rem;color:var(--faint);line-height:1.7}
+.login-hint code{background:var(--chrome);padding:.1em .4em;border-radius:4px;color:var(--muted)}

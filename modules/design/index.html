@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>디자인 · Eduino Works</title>
+<link rel="stylesheet" href="../../assets/css/base.css">
+</head>
+<body>
+<header class="appbar" id="appbar"></header>
+<main id="modRoot"></main>
+
+<script src="../../assets/js/data.js"></script>
+<script src="../../assets/js/app.js"></script>
+<script src="../../assets/js/module.js"></script>
+<script>
+/* ---- 디자인 기능: 파일 이름 일괄변경 (규칙 미리보기) ---- */
+const designRename = {
+  title: '파일 이름 일괄변경',
+  render(root){
+    let files = [];  // {orig, ext}
+
+    root.innerHTML = `
+      <h2 style="font-size:1.2rem;margin-bottom:.3rem">🔤 파일 이름 일괄변경</h2>
+      <p class="muted" style="font-size:.9rem;margin-bottom:1rem">이미지 파일을 선택하고 규칙을 정하면 새 이름을 미리 확인할 수 있습니다.
+        브라우저 보안상 실제 파일명 변경은 안 되므로, 확정 규칙을 참고해 저장 시 이름을 맞추세요.</p>
+
+      <div class="card" style="margin-bottom:1rem">
+        <input type="file" id="picker" accept="image/*" multiple class="hidden">
+        <button class="btn pri" id="pick"><span class="ic">📁</span>이미지 선택</button>
+        <span class="muted" id="pickInfo" style="margin-left:.6em;font-size:.9rem">선택된 파일 없음</span>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem">
+        <h3 style="margin-bottom:.8rem">이름 규칙</h3>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end">
+          <label class="fld" style="flex:1;min-width:9rem">접두사(앞)<input type="text" id="pre" placeholder="예: eduino_"></label>
+          <label class="fld" style="flex:1;min-width:9rem">기본 이름<input type="text" id="base" placeholder="예: 상세컷 (비우면 원본이름)"></label>
+          <label class="fld" style="flex:1;min-width:9rem">접미사(뒤)<input type="text" id="suf" placeholder="예: _v2"></label>
+        </div>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end;margin-top:.8rem">
+          <label class="fld" style="width:9rem">번호 매기기 시작<input type="number" id="startNo" value="1"></label>
+          <label class="fld" style="width:9rem">자릿수<input type="number" id="pad" value="2"></label>
+          <label class="fld" style="width:12rem">연결 기호<input type="text" id="join" value="_"></label>
+          <label class="fld" style="flex:1;min-width:8rem">확장자<select id="extMode">
+            <option value="keep">원본 유지</option><option value="lower">소문자로</option>
+            <option value="jpg">.jpg 로 통일</option><option value="png">.png 로 통일</option></select></label>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:.6em;margin-bottom:.6rem">
+        <h3 style="font-size:1.05rem">미리보기</h3>
+        <button class="btn sm" id="copyList" style="margin-left:auto"><span class="ic">📋</span>새 이름 목록 복사</button>
+      </div>
+      <div style="overflow:auto"><table class="grid-t" id="preview">
+        <thead><tr><th class="num" style="width:3rem">#</th><th>원본 이름</th><th style="width:2rem"></th><th>새 이름</th></tr></thead>
+        <tbody><tr><td colspan="4" class="muted" style="text-align:center;padding:1.2rem">이미지를 선택하세요.</td></tr></tbody>
+      </table></div>`;
+
+    const $$ = id => root.querySelector('#'+id);
+
+    function splitExt(name){ const m = name.match(/\.([^.]+)$/); return m ? {stem:name.slice(0,m.index), ext:m[1]} : {stem:name, ext:''}; }
+    function newExt(ext){ const m=$$('extMode').value;
+      if(m==='keep') return ext; if(m==='lower') return ext.toLowerCase();
+      if(m==='jpg') return 'jpg'; if(m==='png') return 'png'; return ext; }
+
+    function build(){
+      const pre=$$('pre').value, base=$$('base').value, suf=$$('suf').value;
+      const start=parseInt($$('startNo').value)||0, pad=parseInt($$('pad').value)||0, join=$$('join').value;
+      const tb = $$('preview').querySelector('tbody');
+      if(!files.length){ tb.innerHTML='<tr><td colspan="4" class="muted" style="text-align:center;padding:1.2rem">이미지를 선택하세요.</td></tr>'; return; }
+      const seen={};
+      tb.innerHTML = files.map((f,i)=>{
+        const {stem,ext} = splitExt(f.orig);
+        const core = base.trim() || stem;
+        const no = String(start+i).padStart(pad,'0');
+        const stem2 = core + (pad>0 ? join+no : '') + (suf || '');
+        const ne = newExt(ext);
+        let full = (pre||'') + stem2 + (ne?'.'+ne:'');
+        seen[full]=(seen[full]||0)+1;
+        const dup = seen[full]>1;
+        return `<tr><td class="num">${i+1}</td><td class="muted">${esc(f.orig)}</td>
+          <td class="faint">→</td><td><b${dup?' style="color:var(--warn)"':''}>${esc(full)}</b>${dup?' <span class="badge soon">중복</span>':''}</td></tr>`;
+      }).join('');
+    }
+
+    $$('pick').onclick = ()=>$$('picker').click();
+    $$('picker').onchange = (e)=>{
+      files = Array.from(e.target.files).map(f=>({orig:f.name}));
+      $$('pickInfo').textContent = files.length? `${files.length}개 선택됨` : '선택된 파일 없음';
+      build();
+    };
+    ['pre','base','suf','startNo','pad','join','extMode'].forEach(id=>{
+      $$(id).addEventListener('input', build); $$(id).addEventListener('change', build);
+    });
+    $$('copyList').onclick = ()=>{
+      const names = Array.from($$('preview').querySelectorAll('tbody tr td:last-child b')).map(b=>b.textContent);
+      if(!names.length){ toast('먼저 파일을 선택하세요'); return; }
+      copyText(names.join('\n'));
+    };
+  }
+};
+
+initModule('design', { rename: designRename });
+</script>
+</body>
+</html>
