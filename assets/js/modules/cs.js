@@ -35,12 +35,33 @@ MODULES['cs.templates'] = {
             <button class="btn ghost sm" data-a="edit">수정</button>
             <button class="btn ghost sm" data-a="del">${icon('trash')}</button></span></div>
           <div class="card-bd">
-            <div class="mono" style="display:none"></div>
-            <div style="white-space:pre-wrap;font-size:12.5px;line-height:1.65;color:var(--ink-2);
+            <div style="white-space:pre-wrap;font-size:13px;line-height:1.65;color:var(--ink-2);
               max-height:150px;overflow:auto;background:var(--panel-2);border:1px solid var(--line);
               border-radius:6px;padding:10px" class="sc">${esc(it.body)}</div>
-            <button class="btn block" data-a="copy" style="margin-top:10px">${icon('copy')}복사</button></div>`;
-        c.querySelector('[data-a=copy]').onclick=()=>copyText(it.body);
+            <div data-fill></div>
+            <div style="display:flex;gap:6px;margin-top:10px" data-actions></div></div>`;
+        const vars=[...new Set((it.body.match(/\{([^}]+)\}/g)||[]).map(s=>s.slice(1,-1)))];
+        const actions=c.querySelector('[data-actions]'), fillBox=c.querySelector('[data-fill]');
+        if(vars.length){
+          actions.innerHTML=`<button class="btn pri" style="flex:1" data-a="fill">${icon('edit')}채워서 복사</button>
+            <button class="btn" data-a="raw">원문 복사</button>`;
+          c.querySelector('[data-a=raw]').onclick=()=>copyText(it.body);
+          c.querySelector('[data-a=fill]').onclick=()=>{
+            if(fillBox.dataset.open){ // 이미 열림 → 채워서 복사
+              const vals={}; fillBox.querySelectorAll('input').forEach(inp=>vals[inp.dataset.v]=inp.value);
+              const out=it.body.replace(/\{([^}]+)\}/g,(m,k)=> vals[k]!=null&&vals[k]!==''?vals[k]:m);
+              copyText(out); return;
+            }
+            fillBox.dataset.open='1';
+            fillBox.innerHTML=`<div style="margin-top:10px;padding:10px;background:var(--info-bg);border:1px solid #cfe0f7;border-radius:6px;display:grid;gap:8px">
+              ${vars.map(v=>`<label class="fld" style="font-size:12px">${esc(v)}<input type="text" data-v="${esc(v)}" placeholder="${esc(v)} 입력"></label>`).join('')}</div>`;
+            fillBox.querySelector('input')?.focus();
+            c.querySelector('[data-a=fill]').innerHTML=`${icon('copy')}입력값으로 복사`;
+          };
+        } else {
+          actions.innerHTML=`<button class="btn block" data-a="copy">${icon('copy')}복사</button>`;
+          c.querySelector('[data-a=copy]').onclick=()=>copyText(it.body);
+        }
         c.querySelector('[data-a=del]').onclick=()=>{ if(confirm('이 템플릿을 삭제할까요?')){ items.splice(idx,1); db.set(items); renderCats(); renderList(); } };
         c.querySelector('[data-a=edit]').onclick=()=>editForm(it,idx);
         list.appendChild(c); });

@@ -188,6 +188,13 @@ MODULES['md.product'] = {
             <div class="fs-bd">
               <label class="fld" style="margin-bottom:14px">상품명 <span style="font-weight:500;color:var(--muted)">· 파일명 앞에 플랫폼명이 자동으로 붙습니다</span>
                 <input type="text" id="prod" value="${esc(productName)}" placeholder="예: 아두이노 스타터 키트"></label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="platQuick">
+                <button class="btn sm" data-q="all">전체 선택</button>
+                <button class="btn sm" data-q="none">해제</button>
+                <span style="width:1px;background:var(--line);margin:0 2px"></span>
+                <button class="btn sm" data-q="p:오픈마켓">오픈마켓</button>
+                <button class="btn sm" data-q="p:자사몰">자사몰</button>
+              </div>
               <div class="plat-grid" id="platGrid"></div>
             </div>
           </div>
@@ -216,6 +223,13 @@ MODULES['md.product'] = {
             </div>
           </div>`;
         box.querySelector('#prod').oninput=e=>productName=e.target.value;
+        // 전체선택/해제/프리셋
+        const PRESETS={ '오픈마켓':['naver','coupang','st11','gmarket'], '자사몰':['eduino'] };
+        box.querySelectorAll('#platQuick button').forEach(b=>b.onclick=()=>{ const q=b.dataset.q;
+          if(q==='all'){ platforms.forEach(p=>sel.add(p.id)); }
+          else if(q==='none'){ sel.clear(); }
+          else if(q.startsWith('p:')){ const ids=PRESETS[q.slice(2)]||[]; sel.clear(); platforms.forEach(p=>{ if(ids.includes(p.id)) sel.add(p.id); }); }
+          renderPlatGrid(); suggestSplit(); });
         renderPlatGrid();
         box.querySelectorAll('input[name=sm]').forEach(r=>r.onchange=()=>{ splitMode=r.value; renderSplitOpt(); renderPreview(); });
         renderSplitOpt();

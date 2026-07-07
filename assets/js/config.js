@@ -29,11 +29,16 @@ const DEFAULT_PLATFORMS = [
   { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',short:'E',  color:'#e31e24', width:860,  maxH:0,    maxMB:0,  formats:['jpg','png','webp'] },
 ];
 
+/* CS 상담 메모 — 수정이 잦은 값은 상수로 분리 */
+const CS_INQUIRY_TYPES = ['상품추천','후불','견적','기타'];
+const CS_AGENTS = ['김상담','이응대','박고객','최문의'];
+
 /* 좌측 내비게이션 구조 (활성: CS·MD / 예정: 디자인·경리)
    각 item.key 는 모듈 레지스트리(app.js MODULES) 키와 일치 */
 const NAV = [
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
+      { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
       { key:'md.product', name:'상품 데이터 관리', icon:'grid' },
@@ -54,4 +59,7 @@ const STORE = {
   device:   'eduino.device',    // 기기 이름 (이 PC에 고정 저장)
   platforms:'eduino.platforms', // 플랫폼 세팅 오버라이드
   csTpl:    'eduino.cs.templates',
+  csNotes:  'eduino.cs.notes',       // 상담 메모 레코드 배열
+  csNoteCfg:'eduino.cs.notes.cfg',   // { sheetUrl, syncMode }
+  csAgent:  'eduino.cs.notes.agent', // 마지막 선택 담당자
 };
