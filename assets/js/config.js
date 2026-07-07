@@ -74,4 +74,5 @@ const STORE = {
   csNotes:  'eduino.cs.notes',       // 상담 메모 레코드 배열
   csNoteCfg:'eduino.cs.notes.cfg',   // { sheetUrl, syncMode }
   csAgent:  'eduino.cs.notes.agent', // 마지막 선택 담당자
+  csTypes:  'eduino.cs.notes.types', // 문의유형 목록(사용자 편집)
 };

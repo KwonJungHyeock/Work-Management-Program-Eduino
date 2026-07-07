@@ -61,8 +61,12 @@
   MODULES['cs.notes'] = {
     title:'상담 메모', icon:'clipboard',
     render(root){
+      // 문의유형 (사용자가 편집 가능 · 로컬 저장)
+      const typesDB=store(STORE.csTypes);
+      const getTypes=()=> typesDB.get(CS_INQUIRY_TYPES.slice());
+      const setTypes=(v)=> typesDB.set(v);
       let tab='memo', filter='전체', lastAgent=store(STORE.csAgent).get(CS_AGENTS[0]);
-      let formType=CS_INQUIRY_TYPES[0];
+      let formType=getTypes()[0], typeEdit=false;
 
       root.innerHTML=`
       <style>
@@ -94,6 +98,28 @@
         .q-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line-2)}
         .q-cb{font-size:15px;font-weight:700}
         .q-cb input{width:20px;height:20px}
+        /* 필드 정렬: 캡션은 항상 1줄 → 입력칸 높이 정렬 */
+        .q-fields .fld{gap:8px}
+        .q-fields .cap{display:block;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;line-height:20px}
+        .q-fields .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px}
+        /* 유형 편집 */
+        .q-label-row{display:flex;align-items:center;margin-bottom:9px}
+        .q-edit{margin-left:auto;background:none;border:0;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
+        .q-edit:hover{background:var(--hover);color:var(--red)}
+        .q-edit.on{color:var(--red)}
+        .q-type .q-del{display:inline-flex;align-items:center;justify-content:center;margin-left:8px;width:20px;height:20px;
+          border-radius:50%;background:rgba(0,0,0,.12);color:#fff;font-size:12px;font-weight:800}
+        .q-type:not(.on) .q-del{background:var(--line-strong);color:#fff}
+        .q-addtype{display:flex;gap:8px;align-items:center;min-width:200px}
+        .q-addtype input{height:auto;padding:12px 12px;font-size:15px;width:150px}
+        /* 연동 가이드 */
+        .guide{counter-reset:step;display:grid;gap:14px;margin:6px 0 4px;padding:0}
+        .guide li{list-style:none;position:relative;padding-left:40px;min-height:28px;font-size:14.5px;line-height:1.75}
+        .guide li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:0;
+          width:27px;height:27px;border-radius:50%;background:var(--red);color:#fff;font-weight:800;font-size:13px;
+          display:flex;align-items:center;justify-content:center}
+        .guide b{color:var(--ink);font-weight:700}
+        .guide .k{display:inline-block;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700;white-space:nowrap;line-height:1.5}
         .note-card{display:grid;grid-template-columns:64px 92px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-bottom:8px}
         .note-card .tm{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13.5px;font-weight:600}
         .note-card .memo{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
@@ -131,17 +157,21 @@
               <span class="kbd">저장 후 자동 초기화 · <b>Ctrl</b>+<b>Enter</b> 저장</span></div>
             <div class="q-bd">
               <form id="qform">
-                <div class="q-label">문의유형</div>
+                <div class="q-label-row"><span class="q-label" style="margin:0">문의유형</span>
+                  <button type="button" class="q-edit" id="typeEdit">유형 편집</button></div>
                 <div class="q-types" id="typebtns"></div>
 
-                <div class="q-label">메모 내용 <span class="req">필수</span></div>
+                <div class="q-label" style="margin-top:20px">메모 내용 <span class="req">필수</span></div>
                 <textarea id="fMemo" class="q-memo" placeholder="상담 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
 
                 <div class="q-fields">
-                  <label class="fld">담당자<input list="agentList" id="fAgent" value="${esc(lastAgent)}" autocomplete="off">
+                  <label class="fld"><span class="cap">담당자</span>
+                    <input list="agentList" id="fAgent" value="${esc(lastAgent)}" autocomplete="off">
                     <datalist id="agentList">${CS_AGENTS.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></label>
-                  <label class="fld">고객 연락처 <span class="muted" style="font-weight:500">· 선택</span><input type="text" id="fContact" placeholder="010-0000-0000"></label>
-                  <label class="fld">상품/모델 <span class="muted" style="font-weight:500">· 선택</span><input type="text" id="fProduct" placeholder="예: 스타터 키트"></label>
+                  <label class="fld"><span class="cap">고객 연락처 <em>선택</em></span>
+                    <input type="text" id="fContact" placeholder="010-0000-0000"></label>
+                  <label class="fld"><span class="cap">상품/모델 <em>선택</em></span>
+                    <input type="text" id="fProduct" placeholder="예: 스타터 키트"></label>
                 </div>
                 <div class="q-actions">
                   <label class="chk q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
@@ -161,9 +191,35 @@
 
         // 유형 버튼
         const tb=body.querySelector('#typebtns');
-        CS_INQUIRY_TYPES.forEach(t=>{ const b=el('button','q-type'+(t===formType?' on':''),esc(t)); b.type='button';
-          b.onclick=()=>{ formType=t; tb.querySelectorAll('.q-type').forEach(x=>x.classList.toggle('on',x.textContent===t)); };
-          tb.appendChild(b); });
+        function renderTypes(){
+          const types=getTypes();
+          if(!types.includes(formType)) formType=types[0];
+          tb.innerHTML='';
+          types.forEach(t=>{ const b=el('button','q-type'+(t===formType?' on':''));
+            b.type='button'; b.innerHTML=`${esc(t)}${typeEdit&&types.length>1?`<span class="q-del" title="삭제">✕</span>`:''}`;
+            b.onclick=(e)=>{
+              if(e.target.classList.contains('q-del')){ const nt=types.filter(x=>x!==t); setTypes(nt); if(formType===t)formType=nt[0]; renderTypes(); renderFilters(); return; }
+              if(typeEdit) return;
+              formType=t; renderTypes();
+            };
+            tb.appendChild(b);
+          });
+          if(typeEdit){ const add=el('div','q-addtype');
+            add.innerHTML=`<input type="text" id="newType" placeholder="새 유형 이름" maxlength="12">
+              <button type="button" class="btn pri" id="addTypeBtn">${icon('plus')}추가</button>`;
+            const doAdd=()=>{ const v=add.querySelector('#newType').value.trim();
+              if(!v) return; const cur=getTypes(); if(cur.includes(v)){ toast('이미 있는 유형입니다'); return; }
+              cur.push(v); setTypes(cur); renderTypes(); renderFilters();
+              const ni=tb.querySelector('#newType'); if(ni) ni.focus(); };
+            add.querySelector('#addTypeBtn').onclick=doAdd;
+            add.querySelector('#newType').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
+            tb.appendChild(add);
+          }
+        }
+        body.querySelector('#typeEdit').onclick=(e)=>{ typeEdit=!typeEdit;
+          e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'유형 편집';
+          renderTypes(); };
+        renderTypes();
 
         // 저장
         const form=body.querySelector('#qform');
@@ -192,9 +248,11 @@
         form.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); submit(); } });
 
         // 필터
-        const fbar=body.querySelector('#filters');
-        ['전체',...CS_INQUIRY_TYPES].forEach(f=>{ const b=el('button','btn sm'+(f===filter?' pri':''),esc(f));
-          b.onclick=()=>{ filter=f; drawMemo(); }; fbar.appendChild(b); });
+        function renderFilters(){ const fbar=body.querySelector('#filters'); if(!fbar) return; fbar.innerHTML='';
+          if(!['전체',...getTypes()].includes(filter)) filter='전체';
+          ['전체',...getTypes()].forEach(f=>{ const b=el('button','btn sm'+(f===filter?' pri':''),esc(f));
+            b.onclick=()=>{ filter=f; renderFilters(); renderList(); }; fbar.appendChild(b); }); }
+        renderFilters();
 
         renderList(); renderSyncBar();
         body.querySelector('#fMemo')?.focus();
@@ -232,7 +290,7 @@
         const box=el('div','note-card'); box.style.gridTemplateColumns='1fr';
         box.innerHTML=`
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:10px">
-            <label class="fld">유형<select id="eType">${CS_INQUIRY_TYPES.map(t=>`<option ${t===r.type?'selected':''}>${t}</option>`).join('')}</select></label>
+            <label class="fld">유형<select id="eType">${[...new Set([...getTypes(),r.type])].map(t=>`<option ${t===r.type?'selected':''}>${esc(t)}</option>`).join('')}</select></label>
             <label class="fld">담당자<input type="text" id="eAgent" value="${esc(r.agent)}"></label>
             <label class="fld">연락처<input type="text" id="eContact" value="${esc(r.contact||'')}"></label>
             <label class="fld">상품<input type="text" id="eProduct" value="${esc(r.product||'')}"></label>
@@ -289,7 +347,7 @@
         renderSum();
         function dayNotes(){ return getNotes().filter(r=>todayStr(r.createdAt)===date); }
         function agg(list){
-          const byType={}; CS_INQUIRY_TYPES.forEach(t=>byType[t]=0);
+          const byType={}; getTypes().forEach(t=>byType[t]=0);
           const byAgent={}; let cbOpen=0;
           list.forEach(r=>{ byType[r.type]=(byType[r.type]||0)+1; byAgent[r.agent]=(byAgent[r.agent]||0)+1; if(r.callback&&!r.done) cbOpen++; });
           return { total:list.length, byType, byAgent, cbOpen };
@@ -300,7 +358,7 @@
           wrap.innerHTML=`
             <div class="sum-grid" style="margin-bottom:16px">
               <div class="sum-card"><div class="lb">총 상담 건수</div><div class="vl">${a.total}</div></div>
-              ${CS_INQUIRY_TYPES.map(t=>`<div class="sum-card"><div class="lb">${t}</div><div class="vl">${a.byType[t]||0}</div></div>`).join('')}
+              ${getTypes().map(t=>`<div class="sum-card"><div class="lb">${esc(t)}</div><div class="vl">${a.byType[t]||0}</div></div>`).join('')}
               <div class="sum-card" style="border-color:#ead9b0;background:var(--warn-bg)"><div class="lb">콜백 필요</div><div class="vl" style="color:var(--warn)">${cbList.length}</div></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
@@ -317,7 +375,7 @@
         function summaryText(d){
           const list=getNotes().filter(r=>todayStr(r.createdAt)===d), a=agg(list);
           const lines=[`[${d} CS 상담 결산]`, `총 ${a.total}건`,
-            ...CS_INQUIRY_TYPES.map(t=>`- ${t}: ${a.byType[t]||0}건`),
+            ...getTypes().map(t=>`- ${t}: ${a.byType[t]||0}건`),
             `콜백 필요: ${list.filter(r=>r.callback).length}건`, '', '담당자별:',
             ...Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`- ${k}: ${v}건`)];
           return lines.join('\n');
@@ -330,22 +388,40 @@
         const cfg=getCfg();
         body.innerHTML=`
           <div class="card" style="margin-bottom:16px;max-width:820px">
-            <div class="card-hd">${icon('link')}<b>구글 시트 연동</b></div>
+            <div class="card-hd">${icon('link')}<b>연동 방법 — 처음 한 번만 (약 3분)</b>
+              <button class="btn pri sm" id="copyCode" style="margin-left:auto">${icon('copy')}Apps Script 코드 복사</button></div>
             <div class="card-bd">
-              <label class="fld" style="margin-bottom:14px">Apps Script 웹앱 URL
+              <ol class="guide">
+                <li>구글 드라이브에서 <b>기록용 구글 시트</b>를 하나 만들어 엽니다.</li>
+                <li>상단 메뉴 <span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> 를 클릭합니다.</li>
+                <li>편집기에 있던 내용을 모두 지우고, 위의 <b>[Apps Script 코드 복사]</b> 버튼을 눌러 복사한 코드를 붙여넣기(<span class="k">Ctrl</span>+<span class="k">V</span>) 후 저장(<span class="k">Ctrl</span>+<span class="k">S</span>)합니다.</li>
+                <li>오른쪽 위 <span class="k">배포</span> → <span class="k">새 배포</span> 를 클릭하고, 톱니바퀴(⚙) → <span class="k">웹 앱</span> 을 선택합니다.</li>
+                <li>‘액세스 권한’을 <span class="k">모든 사용자</span> 로 바꾸고 <span class="k">배포</span> 를 누릅니다. (권한 승인 창이 뜨면 허용)</li>
+                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span> 로 끝남)을 복사합니다.</li>
+                <li>그 URL을 아래 칸에 붙여넣고 <b>[저장]</b> → <b>[연결 테스트]</b> 를 눌러 <b style="color:var(--ok)">연결 성공</b> 이 뜨면 끝!</li>
+              </ol>
+              <div class="note" style="margin-top:6px">한 번 배포해두면 모든 직원이 같은 URL을 각자 <b>연동 설정</b>에 넣어 함께 사용할 수 있습니다.
+                같은 기록은 <b>중복 없이</b> 갱신되며, 전송이 실패해도 로컬에 안전하게 보관됩니다.</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;max-width:820px">
+            <div class="card-hd">${icon('link')}<b>구글 시트 연결</b></div>
+            <div class="card-bd">
+              <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 6번에서 복사한 주소</span>
                 <input type="text" id="cfgUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
-              <div style="margin-bottom:14px">
-                <label class="fld" style="margin-bottom:8px">전송 모드</label>
-                <div style="display:flex;gap:20px">
-                  <label class="chk"><input type="radio" name="mode" value="realtime" ${cfg.syncMode==='realtime'?'checked':''}> 실시간 (저장 시 즉시 전송)</label>
-                  <label class="chk"><input type="radio" name="mode" value="batch" ${cfg.syncMode!=='realtime'?'checked':''}> 일괄 (버튼으로 모아서 전송)</label>
+              <div style="margin-bottom:16px">
+                <label class="fld" style="margin-bottom:8px">전송 방식</label>
+                <div style="display:flex;gap:20px;flex-wrap:wrap">
+                  <label class="chk"><input type="radio" name="mode" value="realtime" ${cfg.syncMode==='realtime'?'checked':''}> 실시간 (저장할 때마다 바로 시트로)</label>
+                  <label class="chk"><input type="radio" name="mode" value="batch" ${cfg.syncMode!=='realtime'?'checked':''}> 일괄 (버튼 누를 때 모아서 전송)</label>
                 </div>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="cfgSave">${icon('check')}저장</button>
                 <button class="btn" id="cfgTest">${icon('cloud')}연결 테스트</button>
                 <button class="btn" id="cfgPush">${icon('cloudUp')}미동기화 전체 전송</button>
-                <span class="muted" id="cfgStat" style="align-self:center;font-size:13px"></span>
+                <span class="muted" id="cfgStat" style="font-size:13px"></span>
               </div>
             </div>
           </div>
@@ -353,13 +429,10 @@
           <div class="card" style="margin-bottom:16px;max-width:820px;opacity:.7">
             <div class="card-hd">${icon('link')}<b>노션 연동</b><span class="badge soon" style="margin-left:auto">예정</span></div>
             <div class="card-bd"><div class="muted" style="font-size:13.5px">저장/전송 로직은 목적지(destination) 추상화로 설계되어, 이후 노션 대상만 추가하면 됩니다. (현재 인터페이스만 존재)</div></div>
-          </div>
-
-          <div class="note" style="max-width:820px">
-            <b>연동 방법</b> — 저장소의 <code>google-apps-script.gs</code> 코드를 구글 시트 → 확장 프로그램 → Apps Script 에 붙여넣고,
-            <b>배포 → 새 배포 → 웹 앱</b>(액세스: 모든 사용자)로 배포한 뒤 나온 <b>/exec URL</b>을 위에 입력하세요.
-            레코드는 <code>id</code> 기준으로 시트에 <b>upsert</b>되어 재전송해도 중복되지 않습니다.
           </div>`;
+        body.querySelector('#copyCode').onclick=async(e)=>{ const btn=e.currentTarget;
+          try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; const t=await r.text(); copyText(t); }
+          catch{ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 를 사용하세요'); } };
         body.querySelector('#cfgSave').onclick=()=>{
           const url=body.querySelector('#cfgUrl').value.trim();
           const mode=body.querySelector('input[name=mode]:checked').value;
