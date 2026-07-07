@@ -26,6 +26,16 @@ MODULES['md.product'] = {
     const ctx=c.getContext('2d'); ctx.imageSmoothingQuality='high';
     ctx.drawImage(img.img,0,top,img.w,segH,0,0,c.width,c.height); return c;
   }
+  /* 로고 이미지(있으면) → 로드 실패 시 색상 모노그램으로 자동 대체 */
+  function platLogo(p, size){
+    const dim = size ? `width:${size}px;height:${size}px;` : '';
+    const mono = `<div class="mono-badge" style="display:${p.logo?'none':'flex'};${dim}background:${p.color||'#888'}">${esc(p.short||p.name.slice(0,1))}</div>`;
+    const img = p.logo
+      ? `<img class="plat-logo-img" style="${dim}" src="${esc(p.logo)}" alt="${esc(p.name)}"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    return img + mono;
+  }
 
   MODULES['md.image'] = {
     title:'상세이미지 변환기', icon:'image',
@@ -68,8 +78,11 @@ MODULES['md.product'] = {
           border-radius:12px;background:#fff;cursor:pointer;transition:.14s}
         .plat-tile:hover{border-color:var(--line-strong);box-shadow:var(--sh-sm)}
         .plat-tile.on{border-color:var(--red);background:var(--red-soft);box-shadow:0 3px 10px rgba(227,30,36,.12)}
-        .plat-tile .mono-badge{width:40px;height:40px;border-radius:10px;color:#fff;font-weight:800;font-size:16px;
-          display:flex;align-items:center;justify-content:center}
+        .mono-badge{border-radius:9px;color:#fff;font-weight:800;font-size:14px;flex:none;
+          align-items:center;justify-content:center}
+        .plat-logo-img{border-radius:9px;object-fit:contain;background:#fff;border:1px solid var(--line);display:block;flex:none}
+        .plat-tile .mono-badge{width:46px;height:46px;border-radius:11px;font-size:18px}
+        .plat-tile .plat-logo-img{width:46px;height:46px;border-radius:11px}
         .plat-tile .pn{font-size:14.5px;font-weight:700;line-height:1.25}
         .plat-tile .pmeta{font-size:11.5px;color:var(--muted)}
         .plat-tile .ftags{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
@@ -242,7 +255,7 @@ MODULES['md.product'] = {
         grid.innerHTML='';
         platforms.forEach(p=>{ const on=sel.has(p.id); const tile=el('div','plat-tile'+(on?' on':''));
           tile.innerHTML=`<div class="chk">${icon('check')}</div>
-            <div class="mono-badge" style="background:${p.color||'#888'}">${esc(p.short||p.name.slice(0,1))}</div>
+            ${platLogo(p)}
             <div class="pn">${esc(p.name)}</div>
             <div class="pmeta">${p.width?p.width+'px':'원본'}${p.maxH?' · 세로 '+fmtNum(p.maxH):''}</div>
             <div class="ftags">${p.formats.map(f=>`<span class="ftag">${FORMATS[f].label}</span>`).join('')}</div>`;
@@ -348,9 +361,12 @@ MODULES['md.product'] = {
         platforms.forEach((p,i)=>{ const row=el('div','pf-row');
           const num=k=>`<input type="number" data-k="${k}" value="${p[k]}">`;
           row.innerHTML=`
-            <div style="display:flex;flex-direction:column;gap:5px">
-              <input type="text" data-k="name" value="${esc(p.name)}">
-              <input type="text" data-k="prefix" value="${esc(p.prefix)}" style="font-size:12.5px" placeholder="파일명 접두어"></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${platLogo(p,30)}
+              <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:0">
+                <input type="text" data-k="name" value="${esc(p.name)}">
+                <input type="text" data-k="prefix" value="${esc(p.prefix)}" style="font-size:12.5px" placeholder="파일명 접두어"></div>
+            </div>
             <div class="fmt-tags">${Object.keys(FORMATS).map(f=>`<span class="fmt-tag ${p.formats.includes(f)?'on':''}" data-f="${f}">${FORMATS[f].label}</span>`).join('')}</div>
             <div>${num('width')}</div><div>${num('maxH')}</div><div>${num('maxMB')}</div>
             <button class="btn ghost sm" title="삭제">${icon('trash')}</button>`;

@@ -21,12 +21,14 @@ const IMG_QUALITY = 0.9;
    maxH   : 1장 최대 세로(px, 0=제한없음) → 자동분할 기본 높이
    maxMB  : 업로드 용량 상한(참고 경고용)
    formats: 기본 출력 포맷 */
+/* logo: 있으면 카드에 이미지로 표시(assets/platform-logos/), 로드 실패 시 short/color 모노그램으로 대체 */
 const DEFAULT_PLATFORMS = [
-  { id:'naver',  name:'네이버 스마트스토어', prefix:'네이버',  short:'N',  color:'#03c75a', width:860,  maxH:5000, maxMB:20, formats:['jpg','png'] },
-  { id:'coupang',name:'쿠팡',              prefix:'쿠팡',   short:'쿠', color:'#f43142', width:1000, maxH:3000, maxMB:5,  formats:['jpg','png'] },
-  { id:'st11',   name:'11번가',            prefix:'11번가', short:'11', color:'#ff2e2e', width:800,  maxH:0,    maxMB:10, formats:['jpg'] },
-  { id:'gmarket',name:'G마켓',             prefix:'G마켓',  short:'G',  color:'#00a05a', width:860,  maxH:4000, maxMB:10, formats:['jpg'] },
-  { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',short:'E',  color:'#e31e24', width:860,  maxH:0,    maxMB:0,  formats:['jpg','png','webp'] },
+  { id:'naver',  name:'네이버 스마트스토어', prefix:'네이버',  short:'N',  color:'#03c75a', logo:'assets/platform-logos/naver.svg',   width:860,  maxH:5000, maxMB:20, formats:['jpg','png'] },
+  { id:'coupang',name:'쿠팡',              prefix:'쿠팡',   short:'쿠', color:'#f43142', logo:'assets/platform-logos/coupang.svg', width:1000, maxH:3000, maxMB:5,  formats:['jpg','png'] },
+  { id:'st11',   name:'11번가',            prefix:'11번가', short:'11', color:'#e51b25', logo:'assets/platform-logos/st11.svg',    width:800,  maxH:0,    maxMB:10, formats:['jpg'] },
+  { id:'gmarket',name:'G마켓',             prefix:'G마켓',  short:'G',  color:'#00a05a', logo:'assets/platform-logos/gmarket.svg', width:860,  maxH:4000, maxMB:10, formats:['jpg'] },
+  { id:'auction',name:'옥션',              prefix:'옥션',   short:'A',  color:'#d0111b', logo:'assets/platform-logos/auction.svg', width:860,  maxH:3600, maxMB:10, formats:['jpg'] },
+  { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',short:'E',  color:'#e31e24', logo:'',                                  width:860,  maxH:0,    maxMB:0,  formats:['jpg','png','webp'] },
 ];
 
 /* CS 상담 메모 — 수정이 잦은 값은 상수로 분리 */
