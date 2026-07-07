@@ -4,42 +4,76 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>로그인 · Eduino Works</title>
-<link rel="stylesheet" href="assets/css/base.css">
+<link rel="icon" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/login.css">
 </head>
 <body>
-<div class="login-wrap">
-  <form class="login-card" id="loginForm" autocomplete="off">
-    <div class="login-brand"><div class="bar"></div><div class="nm">Eduino <span>Works</span></div></div>
-    <div class="login-sub">통합 업무관리 프로그램 · 직원 로그인</div>
-
-    <label class="fld">아이디
-      <input type="text" id="uid" placeholder="사번 / 아이디" autofocus>
-    </label>
-    <label class="fld" style="margin-top:.9rem">비밀번호
-      <input type="password" id="upw" placeholder="비밀번호">
-    </label>
-    <div class="login-err" id="err"></div>
-    <button type="submit" class="btn pri block">로그인</button>
-
-    <div class="login-hint">
-      <b>초안 데모 계정</b> (비번 모두 <code>1234</code>)<br>
-      <code>admin</code> 전체 · <code>cs01</code> CS · <code>md01</code> MD · <code>acct01</code> 경리 · <code>des01</code> 디자인
+<div class="auth">
+  <div class="auth-card">
+    <div class="auth-top">
+      <div class="auth-brand"><div class="mk"></div><div class="nm">Eduino <span>Works</span></div>
+        <div class="tag">사내 업무관리</div></div>
+      <div class="auth-steps"><div class="st on" id="st1"></div><div class="st" id="st2"></div></div>
+      <div class="auth-title" id="aTitle">사내 접속코드 입력</div>
+      <div class="auth-desc" id="aDesc">회사에서 공유한 10자리 접속코드를 입력하세요.</div>
     </div>
-  </form>
+    <div class="auth-body">
+      <!-- Step 1: 접속코드 -->
+      <form id="step1">
+        <label class="fld" style="margin-bottom:4px">접속코드
+          <input type="password" id="code" class="code-in" maxlength="10" placeholder="••••••••••" autocomplete="off" autofocus></label>
+        <div class="auth-err" id="err1"></div>
+        <button type="submit" class="btn pri lg block">확인</button>
+      </form>
+      <!-- Step 2: 기기 이름 -->
+      <form id="step2" class="hidden">
+        <label class="fld" style="margin-bottom:4px">이 PC의 기기 이름
+          <input type="text" id="dev" maxlength="24" placeholder="예: MD-PC-01" autocomplete="off"></label>
+        <div class="auth-desc" style="margin:2px 0 6px">브라우저는 실제 PC 이름을 읽을 수 없어, 이 PC를 구분할 이름을 한 번만 정합니다. (이 PC에 저장됩니다)</div>
+        <div class="dev-suggest" id="devSuggest"></div>
+        <div class="auth-err" id="err2"></div>
+        <button type="submit" class="btn pri lg block" style="margin-top:10px">시작하기</button>
+      </form>
+    </div>
+    <div class="auth-foot">
+      <b>초안(Draft) 안내</b> — 현재 DB 없이 브라우저에서 동작합니다. 초기 접속코드는 <code>robodyne12</code> 입니다.
+    </div>
+  </div>
 </div>
 
-<script src="assets/js/data.js"></script>
+<script src="assets/js/config.js"></script>
 <script src="assets/js/app.js"></script>
 <script>
-  // 이미 로그인된 상태면 대시보드로
-  if(Auth.current()) location.href = 'dashboard.html';
+  if(Auth.current() && Auth.device()) location.href='app.html';
 
-  $('loginForm').addEventListener('submit', (e)=>{
+  const goStep2=()=>{
+    $('step1').classList.add('hidden'); $('step2').classList.remove('hidden');
+    $('st2').classList.add('on'); $('aTitle').textContent='기기 이름 설정';
+    $('aDesc').textContent='이 PC를 구분할 이름을 정하면 접속 화면에 표시됩니다.';
+    const pre=Auth.device(); if(pre) $('dev').value=pre;
+    $('dev').focus();
+    const sug=['MD-PC-01','CS-PC-01','경리-PC','디자인-PC','대표-노트북'];
+    $('devSuggest').innerHTML=sug.map(s=>`<span class="pill">${s}</span>`).join('');
+    $('devSuggest').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{ $('dev').value=p.textContent; });
+  };
+
+  $('step1').addEventListener('submit',e=>{
     e.preventDefault();
-    const id = $('uid').value.trim(), pw = $('upw').value;
-    const user = Auth.login(id, pw);
-    if(!user){ $('err').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.'; return; }
-    location.href = 'dashboard.html';
+    const code=$('code').value.trim();
+    if(code.length!==10){ $('err1').textContent='접속코드는 10자리입니다.'; return; }
+    if(code!==ACCESS_CODE){ $('err1').textContent='접속코드가 올바르지 않습니다.'; $('code').select(); return; }
+    $('err1').textContent='';
+    if(Auth.device()){ Auth.login(code); location.href='app.html'; }
+    else goStep2();
+  });
+
+  $('step2').addEventListener('submit',e=>{
+    e.preventDefault();
+    const name=$('dev').value.trim();
+    if(name.length<2){ $('err2').textContent='기기 이름을 2자 이상 입력하세요.'; return; }
+    Auth.setDevice(name); Auth.login($('code').value.trim());
+    location.href='app.html';
   });
 </script>
 </body>
