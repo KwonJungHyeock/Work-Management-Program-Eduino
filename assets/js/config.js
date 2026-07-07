@@ -22,6 +22,12 @@ const IMG_QUALITY = 0.9;
    maxMB  : 업로드 용량 상한(참고 경고용)
    formats: 기본 출력 포맷 */
 /* logo: 있으면 카드에 이미지로 표시(assets/platform-logos/), 로드 실패 시 short/color 모노그램으로 대체 */
+/* 플랫폼 프리셋 (변환기 빠른 선택 · 사용자가 추가/수정 가능) */
+const DEFAULT_PRESETS = [
+  { id:'openmarket', name:'오픈마켓', ids:['naver','coupang','st11','gmarket','auction'] },
+  { id:'ownmall',    name:'자사몰',   ids:['eduino'] },
+];
+
 const DEFAULT_PLATFORMS = [
   { id:'naver',  name:'네이버 스마트스토어', prefix:'네이버',  short:'N',  color:'#03c75a', logo:'assets/platform-logos/naver.svg',   width:860,  maxH:5000, maxMB:20, formats:['jpg','png'] },
   { id:'coupang',name:'쿠팡',              prefix:'쿠팡',   short:'쿠', color:'#f43142', logo:'assets/platform-logos/coupang.svg', width:1000, maxH:3000, maxMB:5,  formats:['jpg','png'] },
@@ -70,6 +76,7 @@ const STORE = {
   session:  'eduino.session',   // { device, code, ts }
   device:   'eduino.device',    // 기기 이름 (이 PC에 고정 저장)
   platforms:'eduino.platforms', // 플랫폼 세팅 오버라이드
+  mdPresets:'eduino.md.presets', // 플랫폼 프리셋
   csTpl:    'eduino.cs.templates',
   csNotes:  'eduino.cs.notes',       // 상담 메모 레코드 배열
   csNoteCfg:'eduino.cs.notes.cfg',   // { sheetUrl, syncMode }

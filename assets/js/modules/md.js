@@ -52,6 +52,10 @@ MODULES['md.product'] = {
         return saved;
       }
       let platforms=loadPlatforms(); pf.set(platforms); // 마이그레이션 결과 저장
+      // 프리셋 (사용자 추가/수정 가능)
+      const prDB=store(STORE.mdPresets);
+      let presets=prDB.get(null)||DEFAULT_PRESETS.map(p=>({...p,ids:[...p.ids]}));
+      const savePresets=()=>prDB.set(presets);
       let sources=[]; const sel=new Set(platforms.map(p=>p.id));
       let productName='', splitMode='none', splitH=3000, manualCuts=[], keepOriginal=false, tab='convert';
       const save=()=>pf.set(platforms);
@@ -92,6 +96,11 @@ MODULES['md.product'] = {
         .plat-logo-img{border-radius:9px;object-fit:contain;background:#fff;border:1px solid var(--line);display:block;flex:none}
         .plat-tile .mono-badge{width:46px;height:46px;border-radius:11px;font-size:18px}
         .plat-tile .plat-logo-img{width:46px;height:46px;border-radius:11px}
+        .logo-edit{position:relative;padding:0;border:0;background:none;cursor:pointer;flex:none;line-height:0;border-radius:9px}
+        .logo-edit:hover{box-shadow:0 0 0 2px var(--red-soft)}
+        .logo-clear{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--ink);
+          color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+        .logo-clear:hover{background:var(--red)}
         .plat-tile .pn{font-size:14.5px;font-weight:700;line-height:1.25}
         .plat-tile .pmeta{font-size:11.5px;color:var(--muted)}
         .plat-tile .ftags{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
@@ -210,13 +219,7 @@ MODULES['md.product'] = {
             <div class="fs-bd">
               <label class="fld" style="margin-bottom:14px">상품명 <span style="font-weight:500;color:var(--muted)">· 파일명 앞에 플랫폼명이 자동으로 붙습니다</span>
                 <input type="text" id="prod" value="${esc(productName)}" placeholder="예: 아두이노 스타터 키트"></label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="platQuick">
-                <button class="btn sm" data-q="all">전체 선택</button>
-                <button class="btn sm" data-q="none">해제</button>
-                <span style="width:1px;background:var(--line);margin:0 2px"></span>
-                <button class="btn sm" data-q="p:오픈마켓">오픈마켓</button>
-                <button class="btn sm" data-q="p:자사몰">자사몰</button>
-              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px" id="platQuick"></div>
               <div class="plat-grid" id="platGrid"></div>
             </div>
           </div>
@@ -245,13 +248,7 @@ MODULES['md.product'] = {
             </div>
           </div>`;
         box.querySelector('#prod').oninput=e=>productName=e.target.value;
-        // 전체선택/해제/프리셋
-        const PRESETS={ '오픈마켓':['naver','coupang','st11','gmarket'], '자사몰':['eduino'] };
-        box.querySelectorAll('#platQuick button').forEach(b=>b.onclick=()=>{ const q=b.dataset.q;
-          if(q==='all'){ platforms.forEach(p=>sel.add(p.id)); }
-          else if(q==='none'){ sel.clear(); }
-          else if(q.startsWith('p:')){ const ids=PRESETS[q.slice(2)]||[]; sel.clear(); platforms.forEach(p=>{ if(ids.includes(p.id)) sel.add(p.id); }); }
-          renderPlatGrid(); suggestSplit(); });
+        renderQuick();
         renderPlatGrid();
         box.querySelectorAll('input[name=sm]').forEach(r=>r.onchange=()=>{ splitMode=r.value; renderSplitOpt(); renderPreview(); });
         renderSplitOpt();
@@ -270,6 +267,20 @@ MODULES['md.product'] = {
             <div class="ftags">${p.formats.map(f=>`<span class="ftag">${FORMATS[f].label}</span>`).join('')}</div>`;
           tile.onclick=()=>{ on?sel.delete(p.id):sel.add(p.id); renderPlatGrid(); suggestSplit(); };
           grid.appendChild(tile); });
+      }
+      function renderQuick(){
+        const box=cbody.querySelector('#platQuick'); if(!box) return; box.innerHTML='';
+        const mk=(label,fn)=>{ const b=el('button','btn sm',label); b.onclick=fn; box.appendChild(b); return b; };
+        mk('전체 선택',()=>{ platforms.forEach(p=>sel.add(p.id)); renderPlatGrid(); suggestSplit(); });
+        mk('해제',()=>{ sel.clear(); renderPlatGrid(); suggestSplit(); });
+        const dv=el('span'); dv.style.cssText='width:1px;height:20px;background:var(--line);margin:0 3px'; box.appendChild(dv);
+        presets.forEach(pr=>{ mk(pr.name,()=>{ sel.clear(); platforms.forEach(p=>{ if(pr.ids.includes(p.id)) sel.add(p.id); }); renderPlatGrid(); suggestSplit(); }); });
+        const save=mk('＋ 현재선택 저장',()=>{
+          const ids=[...sel]; if(!ids.length){ toast('먼저 플랫폼을 선택하세요'); return; }
+          const name=(prompt('저장할 프리셋 이름','새 프리셋')||'').trim(); if(!name) return;
+          presets.push({ id:'pr'+presets.length+'_'+ids.length, name, ids }); savePresets(); renderQuick(); toast('프리셋을 저장했습니다');
+        });
+        save.style.color='var(--muted)';
       }
       const selectedPlatforms=()=>platforms.filter(p=>sel.has(p.id));
       function suggestSplit(){ const hs=selectedPlatforms().map(p=>p.maxH).filter(h=>h>0);
@@ -346,24 +357,57 @@ MODULES['md.product'] = {
       }
 
       /* ============ 플랫폼 설정 탭 ============ */
+      let logoTargetId=null;
       function drawSettings(){
         cbody.style.overflow='auto'; cbody.innerHTML=`<div style="padding:20px 22px;max-width:1000px">
+          <input type="file" id="logoUpload" accept="image/*" class="hidden">
           <div class="card">
             <div class="card-hd">${icon('sliders')}<b>플랫폼별 변환 규격</b>
               <span style="margin-left:auto;display:flex;gap:8px">
                 <button class="btn sm" id="addPlat">${icon('plus')}플랫폼 추가</button>
                 <button class="btn sm" id="resetPlat">${icon('refresh')}기본값 복원</button></span></div>
             <div class="card-bd" style="padding:0">
-              <div class="pf-row hd"><div>플랫폼 / 접두어</div><div>포맷</div><div>가로(px)</div><div>세로/장</div><div>용량(MB)</div><div></div></div>
+              <div class="pf-row hd"><div>로고 · 플랫폼 / 접두어</div><div>포맷</div><div>가로(px)</div><div>세로/장</div><div>용량(MB)</div><div></div></div>
               <div id="pfRows"></div></div>
           </div>
-          <div class="note" style="margin-top:14px">가로 0 = 원본 유지 · 세로/장 0 = 분할 제한 없음 · 용량 0 = 경고 안 함.
-            <b>WEBP</b>는 자사몰·네이버 등에서 지원하나 일부 오픈마켓은 미지원일 수 있습니다.
+          <div class="note" style="margin-top:14px">플랫폼의 <b>로고를 클릭</b>하면 이미지를 올려 바꿀 수 있습니다(로고 위 ✕ = 기본으로).
+            가로 0 = 원본 유지 · 세로/장 0 = 분할 제한 없음 · 용량 0 = 경고 안 함.
             (2026 조사: 쿠팡 3,000px·5MB, 네이버 20MB, 11번가/G마켓 10MB)</div>
+
+          <div class="card" style="margin-top:16px">
+            <div class="card-hd">${icon('layers')}<b>프리셋</b> <span class="muted" style="font-size:12.5px">· 변환 화면의 빠른 선택 버튼</span>
+              <button class="btn sm" id="addPreset" style="margin-left:auto">${icon('plus')}프리셋 추가</button></div>
+            <div class="card-bd" id="presetList" style="display:grid;gap:12px"></div>
+          </div>
         </div>`;
-        renderPfRows();
-        cbody.querySelector('#addPlat').onclick=()=>{ platforms.push({id:'p'+platforms.length+'_'+(platforms.length),name:'새 플랫폼',prefix:'플랫폼',short:'N',color:'#6b7280',width:860,maxH:0,maxMB:0,formats:['jpg']}); save(); renderPfRows(); };
+        // 로고 업로드
+        const up=cbody.querySelector('#logoUpload');
+        up.onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(!f||!logoTargetId) return;
+          if(f.size>400*1024){ toast('로고는 400KB 이하 이미지를 권장합니다'); }
+          const rd=new FileReader(); rd.onload=()=>{ const p=platforms.find(x=>x.id===logoTargetId); if(p){ p.logo=rd.result; save(); renderPfRows(); toast('로고를 변경했습니다'); } }; rd.readAsDataURL(f); };
+        renderPfRows(); renderPresets();
+        cbody.querySelector('#addPlat').onclick=()=>{ platforms.push({id:'p'+Date.now(),name:'새 플랫폼',prefix:'플랫폼',short:'N',color:'#6b7280',logo:'',width:860,maxH:0,maxMB:0,formats:['jpg']}); save(); renderPfRows(); };
         cbody.querySelector('#resetPlat').onclick=()=>{ if(confirm('플랫폼 설정을 기본값으로 되돌릴까요?')){ platforms=DEFAULT_PLATFORMS.map(p=>({...p,formats:[...p.formats]})); sel.clear(); platforms.forEach(p=>sel.add(p.id)); save(); renderPfRows(); toast('기본값으로 복원'); } };
+        cbody.querySelector('#addPreset').onclick=()=>{ presets.push({id:'pr'+Date.now(),name:'새 프리셋',ids:[...sel]}); savePresets(); renderPresets(); };
+      }
+      function renderPresets(){
+        const box=cbody.querySelector('#presetList'); if(!box) return; box.innerHTML='';
+        if(!presets.length){ box.innerHTML='<div class="muted" style="font-size:13px">프리셋이 없습니다. “프리셋 추가”로 만들어 보세요.</div>'; return; }
+        presets.forEach((pr,i)=>{ const row=el('div'); row.style.cssText='border:1px solid var(--line);border-radius:9px;padding:12px 14px';
+          row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <input type="text" value="${esc(pr.name)}" style="max-width:240px;font-weight:700" data-nm>
+              <span class="muted" style="font-size:12px">${pr.ids.length}개 선택</span>
+              <button class="btn ghost sm" style="margin-left:auto" data-del>${icon('trash')}삭제</button></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap" data-chips></div>`;
+          row.querySelector('[data-nm]').onchange=e=>{ pr.name=e.target.value.trim()||'프리셋'; savePresets(); renderQuick&&renderQuick(); };
+          row.querySelector('[data-del]').onclick=()=>{ presets.splice(i,1); savePresets(); renderPresets(); renderQuick&&renderQuick(); };
+          const chips=row.querySelector('[data-chips]');
+          platforms.forEach(p=>{ const on=pr.ids.includes(p.id); const c=el('button','pill');
+            c.style.cssText='cursor:pointer;gap:6px;'+(on?'border-color:var(--red);background:var(--red-soft);color:var(--red)':'');
+            c.innerHTML=`${platLogo(p,18)}${esc(p.name)}`;
+            c.onclick=()=>{ const idx=pr.ids.indexOf(p.id); if(idx>=0)pr.ids.splice(idx,1); else pr.ids.push(p.id); savePresets(); renderPresets(); renderQuick&&renderQuick(); };
+            chips.appendChild(c); });
+          box.appendChild(row); });
       }
       function renderPfRows(){
         const box=cbody.querySelector('#pfRows'); if(!box) return; box.innerHTML='';
@@ -371,7 +415,8 @@ MODULES['md.product'] = {
           const num=k=>`<input type="number" data-k="${k}" value="${p[k]}">`;
           row.innerHTML=`
             <div style="display:flex;align-items:center;gap:8px">
-              ${platLogo(p,30)}
+              <button type="button" class="logo-edit" title="클릭해서 로고 변경">${platLogo(p,34)}
+                ${p.logo?'<span class="logo-clear" title="기본 로고로">✕</span>':''}</button>
               <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:0">
                 <input type="text" data-k="name" value="${esc(p.name)}">
                 <input type="text" data-k="prefix" value="${esc(p.prefix)}" style="font-size:12.5px" placeholder="파일명 접두어"></div>
@@ -379,6 +424,10 @@ MODULES['md.product'] = {
             <div class="fmt-tags">${Object.keys(FORMATS).map(f=>`<span class="fmt-tag ${p.formats.includes(f)?'on':''}" data-f="${f}">${FORMATS[f].label}</span>`).join('')}</div>
             <div>${num('width')}</div><div>${num('maxH')}</div><div>${num('maxMB')}</div>
             <button class="btn ghost sm" title="삭제">${icon('trash')}</button>`;
+          row.querySelector('.logo-edit').onclick=(e)=>{
+            if(e.target.classList.contains('logo-clear')){ p.logo=(DEFAULT_PLATFORMS.find(d=>d.id===p.id)||{}).logo||''; save(); renderPfRows(); return; }
+            logoTargetId=p.id; cbody.querySelector('#logoUpload').click();
+          };
           row.querySelectorAll('input[data-k]').forEach(inp=>inp.onchange=inp.oninput=()=>{ const k=inp.dataset.k;
             p[k]=inp.type==='number'?(parseFloat(inp.value)||0):inp.value; save(); });
           row.querySelectorAll('.fmt-tag').forEach(tag=>tag.onclick=()=>{ const f=tag.dataset.f; const idx=p.formats.indexOf(f);

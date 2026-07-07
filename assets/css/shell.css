@@ -10,14 +10,14 @@
 /* ---- 사이드바 (메뉴) ---- */
 .side{grid-area:side;background:#1e2531;border-right:1px solid #171c25;
   display:flex;flex-direction:column;min-height:0;color:#c7cdd6}
-.side-brand{display:flex;align-items:center;gap:11px;height:var(--topbar-h);padding:0 14px;width:100%;
+.side-brand{display:flex;align-items:center;gap:13px;height:var(--topbar-h);padding:0 16px;width:100%;
   border-bottom:1px solid #2a3240;flex:none;background:none;border-left:0;border-right:0;border-top:0;
   cursor:pointer;text-align:left}
 .side-brand:hover{background:#252d3a}
-.side-brand .brand-mark{width:34px;height:27px;flex:none;filter:brightness(0) invert(1)}
-.side-brand .nm{display:flex;flex-direction:column;line-height:1.1;white-space:nowrap;overflow:hidden}
-.side-brand .nm b{font-weight:800;font-size:16px;letter-spacing:-.02em;color:#fff}
-.side-brand .nm small{font-size:11px;color:#8b93a1;font-weight:600;margin-top:2px}
+.side-brand .brand-mark{width:46px;height:36px;flex:none}          /* 브랜드 레드 유지 */
+.side-brand .nm{display:flex;flex-direction:column;justify-content:center;line-height:1.15;white-space:nowrap;overflow:hidden;flex:1}
+.side-brand .nm b{font-weight:800;font-size:19px;letter-spacing:-.02em;color:#fff}
+.side-brand .nm small{font-size:12px;color:#96a0af;font-weight:600;margin-top:2px}
 .nav-collapsed .side-brand{justify-content:center;padding:0}
 .nav-collapsed .side-brand .nm{display:none}
 
@@ -59,6 +59,11 @@
 .nav-item.soon .ic{color:#5a6270}
 .nav-item.soon:hover{background:transparent;color:#6b7280}
 .nav-item.soon:hover .ic{color:#5a6270}
+/* 예정(개발 예정) 그룹은 구현된 메뉴보다 확실히 덜 띄게 */
+.nav-group.soon{opacity:.4}
+.nav-group.soon .nav-glabel{color:#606978}
+.nav-group.soon .badge.soon{background:transparent;color:#5a6270;padding:0}
+.nav-group.soon:hover{opacity:.62}
 .nav-item .badge{margin-left:auto}
 .nav-collapsed .nav-item{justify-content:center;padding:11px 0}
 .nav-collapsed .nav-item .txt,.nav-collapsed .nav-item .badge{display:none}
