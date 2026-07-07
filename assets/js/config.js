@@ -13,6 +13,8 @@ const FORMATS = {
 };
 /* 원본 통이미지 포함 옵션의 키 */
 const KEEP_ORIGINAL = 'orig';
+/* JPG/WEBP 인코딩 품질 (설정 UI 없이 고정값) */
+const IMG_QUALITY = 0.9;
 
 /* 플랫폼 기본 세팅 (2026 조사 기준 · 사용자가 대시보드에서 편집 가능)
    width  : 권장 가로(px, 0=원본유지)
@@ -20,11 +22,11 @@ const KEEP_ORIGINAL = 'orig';
    maxMB  : 업로드 용량 상한(참고 경고용)
    formats: 기본 출력 포맷 */
 const DEFAULT_PLATFORMS = [
-  { id:'naver',  name:'네이버 스마트스토어', prefix:'네이버',  width:860,  maxH:5000, maxMB:20, quality:0.85, formats:['jpg','png'] },
-  { id:'coupang',name:'쿠팡',              prefix:'쿠팡',   width:1000, maxH:3000, maxMB:5,  quality:0.82, formats:['jpg','png'] },
-  { id:'st11',   name:'11번가',            prefix:'11번가', width:800,  maxH:0,    maxMB:10, quality:0.85, formats:['jpg'] },
-  { id:'gmarket',name:'G마켓',             prefix:'G마켓',  width:860,  maxH:4000, maxMB:10, quality:0.85, formats:['jpg'] },
-  { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',width:860,  maxH:0,    maxMB:0,  quality:0.88, formats:['jpg','png','webp'] },
+  { id:'naver',  name:'네이버 스마트스토어', prefix:'네이버',  short:'N',  color:'#03c75a', width:860,  maxH:5000, maxMB:20, formats:['jpg','png'] },
+  { id:'coupang',name:'쿠팡',              prefix:'쿠팡',   short:'쿠', color:'#f43142', width:1000, maxH:3000, maxMB:5,  formats:['jpg','png'] },
+  { id:'st11',   name:'11번가',            prefix:'11번가', short:'11', color:'#ff2e2e', width:800,  maxH:0,    maxMB:10, formats:['jpg'] },
+  { id:'gmarket',name:'G마켓',             prefix:'G마켓',  short:'G',  color:'#00a05a', width:860,  maxH:4000, maxMB:10, formats:['jpg'] },
+  { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',short:'E',  color:'#e31e24', width:860,  maxH:0,    maxMB:0,  formats:['jpg','png','webp'] },
 ];
 
 /* 좌측 내비게이션 구조 (활성: CS·MD / 예정: 디자인·경리)

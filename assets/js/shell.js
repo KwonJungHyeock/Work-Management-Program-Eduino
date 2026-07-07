@@ -37,9 +37,11 @@ function bootShell(){
   $('devAv').textContent = me.device.replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,2).toUpperCase() || 'PC';
 
   // 내비게이션
+  const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', design:'#b07cff', acct:'#42c98a' };
   const nav = $('nav');
   NAV.forEach(g=>{
     const grp = el('div','nav-group');
+    grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
     grp.innerHTML = `<div class="nav-glabel">${icon(g.icon)}<span class="txt">${esc(g.name)} · ${esc(g.full)}</span>
       ${g.soon?'<span class="badge soon cnt">예정</span>':''}</div>`;
     g.items.forEach(it=>{
@@ -70,6 +72,7 @@ function bootShell(){
     setCrumb(key, mod);
     main.className = 'main sc'+(mod.flush?' flush':'');
     main.style.position = mod.flush?'relative':'';
+    main.style.overflow = '';   // 모듈이 자체 스크롤을 쓰면 render 안에서 재설정
     main.innerHTML='';
     mod.render(main, { me });
   }

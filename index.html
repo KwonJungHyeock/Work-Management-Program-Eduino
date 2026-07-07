@@ -9,6 +9,12 @@
 <link rel="stylesheet" href="assets/css/login.css">
 </head>
 <body>
+<div id="intro" class="intro">
+  <div class="intro-mark"><span class="bar"></span><span class="nm">Eduino <b>Works</b></span></div>
+  <div class="intro-sub">사내 통합 업무관리</div>
+  <div class="intro-tip">화면을 클릭하면 시작합니다</div>
+</div>
+
 <div class="auth">
   <div class="auth-card">
     <div class="auth-top">
@@ -45,6 +51,12 @@
 <script src="assets/js/config.js"></script>
 <script src="assets/js/app.js"></script>
 <script>
+  // 인트로 스플래시 (클릭 또는 자동으로 사라짐)
+  (function(){ const intro=$('intro'); if(!intro) return;
+    const hide=()=>intro.classList.add('gone');
+    intro.addEventListener('click',hide); setTimeout(hide,2200);
+  })();
+
   if(Auth.current() && Auth.device()) location.href='app.html';
 
   const goStep2=()=>{

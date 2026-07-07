@@ -1,3 +1,20 @@
+/* 인트로 스플래시 */
+.intro{position:fixed;inset:0;z-index:100;background:radial-gradient(1000px 500px at 50% 20%,#242c39,#14181f 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer;
+  transition:opacity .55s ease}
+.intro.gone{opacity:0;pointer-events:none}
+.intro-mark{display:flex;align-items:center;gap:14px;opacity:0;animation:introRise .7s .15s forwards}
+.intro-mark .bar{width:10px;height:46px;background:var(--red);border-radius:3px;transform:scaleY(0);
+  transform-origin:bottom;animation:introGrow .55s .1s forwards}
+.intro-mark .nm{font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.intro-mark .nm b{color:var(--red)}
+.intro-sub{color:#aeb4bd;font-size:14px;letter-spacing:.28em;text-transform:uppercase;opacity:0;animation:introRise .7s .45s forwards}
+.intro-tip{position:absolute;bottom:44px;color:#6b7280;font-size:13px;opacity:0;animation:introFade 1s 1.2s forwards}
+@keyframes introGrow{to{transform:scaleY(1)}}
+@keyframes introRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes introFade{to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.intro-mark,.intro-sub,.intro-tip{animation:none;opacity:1}.intro-mark .bar{animation:none;transform:none}}
+
 /* 로그인 / 기기 등록 화면 */
 .auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
   background:radial-gradient(1200px 600px at 70% -10%,#2b3444 0%,#1a1f28 45%,#14181f 100%)}
