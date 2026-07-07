@@ -73,10 +73,27 @@
         .cs-tabs .t{padding:10px 16px;font-size:14.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
         .cs-tabs .t.on{color:var(--red);border-bottom-color:var(--red)}
         .cs-body{padding:20px 22px;max-width:1200px;margin:0 auto}
-        .typebtns{display:flex;gap:8px;flex-wrap:wrap}
-        .typebtn{padding:10px 18px;border:2px solid var(--line-strong);border-radius:9px;background:#fff;font-size:15px;font-weight:700;color:var(--ink-2);cursor:pointer;transition:.12s}
-        .typebtn:hover{border-color:var(--faint)}
-        .typebtn.on{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 3px 10px rgba(227,30,36,.25)}
+        /* 빠른 입력 (메모 중심) */
+        .q-card{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
+        .q-hd{display:flex;align-items:center;gap:9px;padding:14px 20px;background:var(--panel-2);border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
+        .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
+        .q-hd .kbd b{background:#fff;border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
+        .q-bd{padding:20px}
+        .q-label{font-size:13.5px;font-weight:800;color:var(--muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;letter-spacing:.01em}
+        .q-label .req{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 7px}
+        .q-types{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+        .q-type{flex:1;min-width:130px;padding:17px 10px;border:2px solid var(--line-strong);border-radius:13px;background:#fff;font-size:17px;font-weight:800;color:var(--ink-2);cursor:pointer;transition:.12s}
+        .q-type:hover{border-color:var(--faint);background:var(--panel-2)}
+        .q-type.on{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 4px 16px rgba(227,30,36,.32)}
+        .q-memo{width:100%;min-height:150px;font-size:17px;line-height:1.6;padding:16px;border:2px solid #f3c7c9;border-radius:13px;background:#fffcfc;resize:vertical}
+        .q-memo::placeholder{color:#c9b3b4}
+        .q-memo:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft);background:#fff}
+        .q-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin:20px 0}
+        .q-fields .fld{font-size:13px}
+        .q-fields input{height:46px;font-size:15.5px}
+        .q-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line-2)}
+        .q-cb{font-size:15px;font-weight:700}
+        .q-cb input{width:20px;height:20px}
         .note-card{display:grid;grid-template-columns:64px 92px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-bottom:8px}
         .note-card .tm{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13.5px;font-weight:600}
         .note-card .memo{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
@@ -109,26 +126,26 @@
       /* ---------------- 상담 메모 탭 ---------------- */
       function drawMemo(){
         body.innerHTML=`
-          <div class="card" style="margin-bottom:18px">
-            <div class="card-hd">${icon('phone')}<b>빠른 입력</b>
-              <span class="muted" style="margin-left:auto;font-size:12.5px">저장 후 폼이 즉시 초기화됩니다 · <b>Ctrl+Enter</b> 저장</span></div>
-            <div class="card-bd">
+          <div class="q-card">
+            <div class="q-hd">${icon('phone')}빠른 입력
+              <span class="kbd">저장 후 자동 초기화 · <b>Ctrl</b>+<b>Enter</b> 저장</span></div>
+            <div class="q-bd">
               <form id="qform">
-                <div style="margin-bottom:14px">
-                  <label class="fld" style="margin-bottom:8px">문의유형</label>
-                  <div class="typebtns" id="typebtns"></div>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:14px">
+                <div class="q-label">문의유형</div>
+                <div class="q-types" id="typebtns"></div>
+
+                <div class="q-label">메모 내용 <span class="req">필수</span></div>
+                <textarea id="fMemo" class="q-memo" placeholder="상담 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
+
+                <div class="q-fields">
                   <label class="fld">담당자<input list="agentList" id="fAgent" value="${esc(lastAgent)}" autocomplete="off">
                     <datalist id="agentList">${CS_AGENTS.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></label>
                   <label class="fld">고객 연락처 <span class="muted" style="font-weight:500">· 선택</span><input type="text" id="fContact" placeholder="010-0000-0000"></label>
                   <label class="fld">상품/모델 <span class="muted" style="font-weight:500">· 선택</span><input type="text" id="fProduct" placeholder="예: 스타터 키트"></label>
                 </div>
-                <label class="fld" style="margin-bottom:14px">메모 내용 <span class="muted" style="font-weight:500">· 필수</span>
-                  <textarea id="fMemo" rows="3" placeholder="상담 내용을 입력하세요…" required></textarea></label>
-                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-                  <label class="chk"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
-                  <button type="submit" class="btn pri lg" style="margin-left:auto">${icon('save')}저장 <span style="opacity:.7;font-weight:500;font-size:12px">Ctrl+Enter</span></button>
+                <div class="q-actions">
+                  <label class="chk q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
+                  <button type="submit" class="btn pri lg" style="margin-left:auto;min-width:180px">${icon('save')}저장 <span style="opacity:.7;font-weight:500;font-size:12px">Ctrl+Enter</span></button>
                 </div>
               </form>
             </div>
@@ -144,8 +161,8 @@
 
         // 유형 버튼
         const tb=body.querySelector('#typebtns');
-        CS_INQUIRY_TYPES.forEach(t=>{ const b=el('button','typebtn'+(t===formType?' on':''),esc(t)); b.type='button';
-          b.onclick=()=>{ formType=t; tb.querySelectorAll('.typebtn').forEach(x=>x.classList.toggle('on',x.textContent===t)); };
+        CS_INQUIRY_TYPES.forEach(t=>{ const b=el('button','q-type'+(t===formType?' on':''),esc(t)); b.type='button';
+          b.onclick=()=>{ formType=t; tb.querySelectorAll('.q-type').forEach(x=>x.classList.toggle('on',x.textContent===t)); };
           tb.appendChild(b); });
 
         // 저장

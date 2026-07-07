@@ -31,6 +31,16 @@ const DEFAULT_PLATFORMS = [
   { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',short:'E',  color:'#e31e24', logo:'',                                  width:860,  maxH:0,    maxMB:0,  formats:['jpg','png','webp'] },
 ];
 
+/* 프로그램 명칭 */
+const APP_NAME = '에듀이노 통합 업무관리';
+const APP_NAME_FULL = '에듀이노 통합 업무관리 프로그램';
+
+/* 상단 사내 바로가기 링크 (여기만 수정하면 버튼이 추가/변경됩니다) */
+const QUICK_LINKS = [
+  { name:'에듀이노몰',    short:'몰',  url:'https://eduino.kr' },
+  { name:'카페24 관리자', short:'24', url:'https://eclogin.cafe24.com/Shop/?url=Init&login_mode=2&is_multi=F' },
+];
+
 /* CS 상담 메모 — 수정이 잦은 값은 상수로 분리 */
 const CS_INQUIRY_TYPES = ['상품추천','후불','견적','기타'];
 const CS_AGENTS = ['김상담','이응대','박고객','최문의'];

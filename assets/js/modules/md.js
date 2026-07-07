@@ -42,7 +42,16 @@ MODULES['md.product'] = {
     render(root){
       root.style.overflow='hidden';
       const pf=store(STORE.platforms);
-      let platforms=pf.get(null)||DEFAULT_PLATFORMS.map(p=>({...p,formats:[...p.formats]}));
+      // 저장된 플랫폼에 기본값의 로고/색상/short 를 backfill 하고, 신규 기본 플랫폼(옥션 등)을 병합
+      function loadPlatforms(){
+        const saved=pf.get(null);
+        if(!saved) return DEFAULT_PLATFORMS.map(p=>({...p,formats:[...p.formats]}));
+        const byId=Object.fromEntries(DEFAULT_PLATFORMS.map(d=>[d.id,d]));
+        saved.forEach(p=>{ const d=byId[p.id]; if(d){ if(p.logo==null)p.logo=d.logo; if(!p.short)p.short=d.short; if(!p.color)p.color=d.color; } });
+        DEFAULT_PLATFORMS.forEach(d=>{ if(!saved.some(p=>p.id===d.id)) saved.push({...d,formats:[...d.formats]}); });
+        return saved;
+      }
+      let platforms=loadPlatforms(); pf.set(platforms); // 마이그레이션 결과 저장
       let sources=[]; const sel=new Set(platforms.map(p=>p.id));
       let productName='', splitMode='none', splitH=3000, manualCuts=[], keepOriginal=false, tab='convert';
       const save=()=>pf.set(platforms);

@@ -1,7 +1,8 @@
-# Eduino Works — 통합 업무관리 프로그램 (초안)
+# 에듀이노 통합 업무관리 프로그램 (초안)
 
 에듀이노 사내 업무를 한곳에 모은 통합 업무관리 프로그램의 초안입니다.
 **사내 접속코드**로 로그인 → 좌측 메뉴에서 부서·기능 선택 → 사용하는 사내 프로그램 형태입니다.
+상단에는 사내 연동 서비스(에듀이노몰·카페24 관리자 등) **바로가기 링크**가 있으며, 좌측 상단 **로고를 누르면 인트로 후 홈으로** 이동합니다. (링크는 `config.js`의 `QUICK_LINKS`에서 관리)
 
 > **초안 단계**: DB·백엔드 없이 브라우저 안에서만 동작합니다. (설정·데이터는 이 PC의 `localStorage`에 저장)
 > 실제 연동 시 `assets/js/config.js`(접속코드·플랫폼)와 인증/저장 로직만 API로 교체하면 됩니다.
@@ -76,7 +77,9 @@ index.html (접속코드 로그인 + 기기 이름 등록)
 index.html                 접속코드 로그인 + 기기 등록
 app.html                   앱 셸
 assets/
-  favicon.svg
+  favicon.svg              에듀이노 전극 마크
+  brand/eduino-mark.svg    브랜드 로고(마크) · 로그인/인트로/사이드바에 사용
+  platform-logos/          플랫폼 로고(naver·coupang·st11·gmarket·auction).svg
   css/  theme.css          디자인 시스템(엔터프라이즈 톤)
         shell.css          셸 레이아웃
         login.css          로그인 화면
