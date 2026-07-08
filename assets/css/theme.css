@@ -7,9 +7,12 @@
   --bg:#eceef1; --panel:#ffffff; --panel-2:#f7f8fa;
   --line:#e2e5ea; --line-2:#eceef1; --line-strong:#cfd4da;
   --ink:#151d27; --ink-2:#333c4a; --muted:#69727e; --faint:#98a0ab;
-  --hover:#f2f4f7; --active-bg:#fdecec; --zebra:#fafbfc;
-  /* 브랜드/상태 */
-  --red:#e31e24; --red-dk:#c2181d; --red-soft:#fdecec;
+  --hover:#f2f4f7; --active-bg:#e9f1fb; --zebra:#fafbfc;
+  /* 주 색상 = 네이비/블루(신뢰 톤) · 브랜드 레드는 로고·강조·위험에만
+     ※ 인터랙션(버튼·탭·활성·포커스)이 --red 를 참조하므로, --red 값을 네이비로 둬서 전체 전환 */
+  --red:#1f56a3; --red-dk:#184484; --red-soft:#e9f1fb;
+  --danger:#e31e24; --danger-dk:#c2181d; --danger-soft:#fdecec;
+  --brand:#e31e24;
   --ok:#0f9d58; --ok-bg:#e8f6ee; --warn:#b26a00; --warn-bg:#fbf1de;
   --info:#1a6dd6; --info-bg:#e9f1fc;
   /* 타이포/모양 */

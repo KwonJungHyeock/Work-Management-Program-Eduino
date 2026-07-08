@@ -92,7 +92,7 @@ MODULES['md.product'] = {
         .plat-tile{position:relative;display:flex;flex-direction:column;gap:8px;padding:14px;border:2px solid var(--line);
           border-radius:12px;background:#fff;cursor:pointer;transition:.14s}
         .plat-tile:hover{border-color:var(--line-strong);box-shadow:var(--sh-sm)}
-        .plat-tile.on{border-color:var(--red);background:var(--red-soft);box-shadow:0 3px 10px rgba(227,30,36,.12)}
+        .plat-tile.on{border-color:var(--red);background:var(--red-soft);box-shadow:0 3px 10px rgba(31,86,163,.14)}
         .mono-badge{border-radius:9px;color:#fff;font-weight:800;font-size:14px;flex:none;
           align-items:center;justify-content:center}
         .plat-logo-img{border-radius:9px;object-fit:contain;background:#fff;border:1px solid var(--line);display:block;flex:none}
@@ -354,7 +354,7 @@ MODULES['md.product'] = {
           <div style="overflow:auto;max-height:280px" class="sc"><table class="tbl">
             <thead><tr><th>파일명</th><th>플랫폼</th><th>크기(px)</th><th class="num">용량</th></tr></thead>
             <tbody>${rows.map(r=>`<tr><td class="mono" style="font-size:12px">${esc(r.name)}</td><td>${esc(r.plat.name)}</td>
-              <td class="mono">${r.dim}</td><td class="num" ${r.over?'style="color:var(--red);font-weight:700"':''}>${bytes(r.size)}</td></tr>`).join('')}</tbody>
+              <td class="mono">${r.dim}</td><td class="num" ${r.over?'style="color:var(--danger);font-weight:700"':''}>${bytes(r.size)}</td></tr>`).join('')}</tbody>
           </table></div>`;
       }
 

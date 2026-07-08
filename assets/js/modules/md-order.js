@@ -71,7 +71,7 @@
         /* 자동 조회 */
         .lookup{display:flex;align-items:center;padding:13px 16px;border-radius:11px;border:1.5px solid var(--line);background:var(--panel-2);min-height:66px;font-size:14px;transition:.14s}
         .lookup.ok{border-color:#8fd3ab;background:linear-gradient(0deg,var(--ok-bg),#f4fbf6)}
-        .lookup.bad{border-color:#eecac6;background:#fdeef0;color:var(--red);font-weight:600}
+        .lookup.bad{border-color:#eecac6;background:#fdeef0;color:var(--danger);font-weight:600}
         .lk{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0}
         .lk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .lk-vn{font-weight:800;font-size:18px;color:var(--ink);white-space:nowrap;letter-spacing:-.01em}
@@ -278,7 +278,7 @@
 
       async function sendToSheet(){
         const cfg=getCfg(), stat=body.querySelector('#sheetStat');
-        if(!cfg.sheetUrl){ stat.innerHTML=`<span style="color:var(--red)">${SHEET_MSG.noUrl}.</span>`; return; }
+        if(!cfg.sheetUrl){ stat.innerHTML=`<span style="color:var(--danger)">${SHEET_MSG.noUrl}.</span>`; return; }
         const pending=orders.filter(o=>!o.synced);
         if(!pending.length){ stat.innerHTML=`<span style="color:var(--ok)">${SHEET_MSG.allSent}.</span>`; return; }
         stat.textContent=`${SHEET_MSG.sending} (${pending.length}건)`;
@@ -286,7 +286,7 @@
         stat.innerHTML = r.ok
           ? (r.unconfirmed ? `<span style="color:var(--ok)">${esc(SHEET_MSG.unconf(r.sent))}</span>`
                            : `<span style="color:var(--ok)">${esc(SHEET_MSG.ok(r.sent))}</span>`)
-          : `<span style="color:var(--red)">${esc(SHEET_MSG.fail(r.error))} (복사/CSV로 대체 가능)</span>`;
+          : `<span style="color:var(--danger)">${esc(SHEET_MSG.fail(r.error))} (복사/CSV로 대체 가능)</span>`;
         if(r.ok) toast(r.unconfirmed?SHEET_MSG.unconf(r.sent):SHEET_MSG.ok(r.sent));
       }
 
@@ -512,8 +512,8 @@
         body.querySelector('#ordTest').onclick=async()=>{ const url=body.querySelector('#ordUrl').value.trim(), stat=body.querySelector('#ordStat');
           if(!url){ stat.textContent='URL을 입력하세요'; return; } stat.textContent='테스트 중…';
           try{ const res=await fetch(url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
-            stat.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`:`<span style="color:var(--red)">HTTP ${res.status}</span>`;
-          }catch(err){ stat.innerHTML=`<span style="color:var(--red)">연결 실패: ${esc(err.message)}</span>`; } };
+            stat.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`:`<span style="color:var(--danger)">HTTP ${res.status}</span>`;
+          }catch(err){ stat.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(err.message)}</span>`; } };
       }
 
       draw();

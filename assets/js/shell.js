@@ -217,8 +217,8 @@ function bootShell(){
         st.textContent=`${r.name} 테스트 중…`;
         try{ const res=await fetch(r.url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
           st.innerHTML = res.ok ? `<span style="color:var(--ok)">${esc(r.name)} 연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`
-                                : `<span style="color:var(--red)">${esc(r.name)} 응답 오류 HTTP ${res.status}</span>`;
-        }catch(err){ st.innerHTML=`<span style="color:var(--red)">${esc(r.name)} 연결 실패: ${esc(err.message)}</span>`; }
+                                : `<span style="color:var(--danger)">${esc(r.name)} 응답 오류 HTTP ${res.status}</span>`;
+        }catch(err){ st.innerHTML=`<span style="color:var(--danger)">${esc(r.name)} 연결 실패: ${esc(err.message)}</span>`; }
       });
     }
     renderInteg();

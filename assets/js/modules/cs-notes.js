@@ -715,8 +715,8 @@
           if(!url){ stat.textContent='URL을 입력하세요'; return; }
           stat.textContent='테스트 중…';
           try{ const res=await fetch(url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
-            stat.innerHTML = res.ok ? `<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>` : `<span style="color:var(--red)">응답 오류 HTTP ${res.status}</span>`;
-          }catch(err){ stat.innerHTML=`<span style="color:var(--red)">연결 실패: ${esc(err.message)}</span>`; }
+            stat.innerHTML = res.ok ? `<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>` : `<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`;
+          }catch(err){ stat.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(err.message)}</span>`; }
         };
         body.querySelector('#cfgPush').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false;

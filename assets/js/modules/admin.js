@@ -101,10 +101,10 @@
       $('#saveUser').onclick=async()=>{
         const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value,
           email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), perms:collectPerms() };
-        if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--red)">아이디와 접속코드는 필수입니다.</span>'; return; }
+        if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--danger)">아이디와 접속코드는 필수입니다.</span>'; return; }
         $('#admStat').textContent='저장 중…';
         try{ await authApi('saveUser',{user}); $('#admStat').innerHTML='<span style="color:var(--ok)">저장되었습니다.</span>'; resetForm(); load(); }
-        catch(err){ $('#admStat').innerHTML=`<span style="color:var(--red)">${esc(err.message)}</span>`; }
+        catch(err){ $('#admStat').innerHTML=`<span style="color:var(--danger)">${esc(err.message)}</span>`; }
       };
       $('#reload').onclick=load;
 
@@ -132,7 +132,7 @@
             tb.appendChild(tr);
           });
         }catch(err){
-          t.querySelector('tbody').innerHTML=`<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--red)">${esc(err.message)}</td></tr>`;
+          t.querySelector('tbody').innerHTML=`<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--danger)">${esc(err.message)}</td></tr>`;
         }
       }
       load();
