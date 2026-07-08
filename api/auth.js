@@ -13,8 +13,8 @@
    =========================================================================== */
 
 const ACCOUNTS_KEY = 'eduino:accounts';
-const ADMIN_ID = process.env.ADMIN_ID || 'admin';
-const ADMIN_CODE = process.env.ADMIN_CODE || 'robodyne12';
+const ADMIN_ID = process.env.ADMIN_ID || process.env.EDUINO_ADMIN_ID || 'admin';
+const ADMIN_CODE = process.env.ADMIN_CODE || process.env.EDUINO_ADMIN_CODE || 'robodyne12';
 
 function kvCreds() {
   const env = process.env;
