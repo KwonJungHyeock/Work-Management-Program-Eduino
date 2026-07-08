@@ -141,18 +141,21 @@ function bootShell(){
 
           <div style="border-top:1px solid var(--line);margin:16px 0 14px"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <b style="font-size:14px">공용(구글) 동기화</b>
+            <b style="font-size:14px">공용 저장소 동기화</b>
             <span class="badge ${SyncStore&&SyncStore.configured()?'live':'soon'}" style="margin-left:auto">${SyncStore&&SyncStore.configured()?'연결됨':'미연결'}</span>
           </div>
-          <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">전용 구글시트(공용 저장소)에 <b>팀 공통 설정</b>을 올려두면, 4명이 같은 설정을 쓰고 캐시가 지워져도 <b>[받기]</b>로 복원됩니다. 접속자 현황도 함께 표시됩니다. 설치 코드는 저장소의 <span class="mono" style="font-size:11.5px">google-apps-script-sync.gs</span>.</p>
+          <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">팀(4명)이 같은 설정을 공유하고 캐시가 지워져도 <b>[받기]</b>로 복원됩니다. 접속자 현황도 함께 표시됩니다. 두 방식 중 하나를 URL로 지정하세요.
+            <br>· <b>Vercel 백엔드(권장)</b>: 아래 <b>[Vercel 백엔드 사용]</b> 클릭 (Vercel에 KV 스토어 연결 필요, CORS 없음·자동)
+            <br>· 구글시트: <span class="mono" style="font-size:11.5px">google-apps-script-sync.gs</span> 배포 후 <span class="mono">/exec</span> URL 입력</p>
           <label class="fld" style="margin-bottom:10px">웹 앱 URL<input type="text" id="mSyncUrl" placeholder="https://script.google.com/macros/s/……/exec"></label>
           <label class="chk" style="margin-bottom:10px;font-size:13px"><input type="checkbox" id="mAutoPull"> 접속(부팅) 시 공용 설정 자동으로 받기</label>
           <div class="note" style="font-size:12px;margin-bottom:10px"><b>[공용에 올리기]</b> 하면 올라가는 항목: <span id="mSyncItems"></span></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn sm" id="mSyncVercel">${icon('cloud')}Vercel 백엔드 사용</button>
             <button class="btn sm" id="mSyncSave">${icon('check')}저장</button>
             <button class="btn sm pri" id="mSyncPush">${icon('cloudUp')}공용에 올리기</button>
             <button class="btn sm" id="mSyncPull">${icon('download')}공용 설정 받기</button>
-            <button class="btn sm" id="mSyncCode">${icon('copy')}설치 코드 복사</button>
+            <button class="btn sm" id="mSyncCode">${icon('copy')}구글 설치 코드</button>
             <span class="muted" id="mSyncStat" style="font-size:12.5px"></span>
           </div>
         </div>
@@ -195,6 +198,8 @@ function bootShell(){
     ov.querySelector('#mSyncUrl').value = scfg.url||'';
     ov.querySelector('#mAutoPull').checked = !!scfg.autoPull;
     const sStat = ov.querySelector('#mSyncStat');
+    ov.querySelector('#mSyncVercel').onclick = ()=>{ ov.querySelector('#mSyncUrl').value='/api/store'; ov.querySelector('#mAutoPull').checked=true;
+      SyncStore.setCfg({ url:'/api/store', autoPull:true }); renderInteg(); sStat.innerHTML='Vercel 백엔드(<span class="mono">/api/store</span>)로 설정됨 · [공용에 올리기]로 첫 업로드'; toast('Vercel 백엔드로 설정'); };
     ov.querySelector('#mSyncSave').onclick = ()=>{ SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked }); sStat.textContent='저장했습니다'; renderInteg(); toast('공용 동기화 설정 저장'); };
     ov.querySelector('#mSyncPush').onclick = async(e)=>{ const b=e.currentTarget; b.disabled=true; sStat.textContent='올리는 중…';
       SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked });
