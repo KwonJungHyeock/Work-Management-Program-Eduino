@@ -64,11 +64,21 @@ async function getPresence() {
 }
 async function beat(device) { if (!device) return; await redis(['HSET', PRESENCE_KEY, device, String(Date.now())]); }
 
+// 범용 공용 컬렉션 (처리대기 큐·상담이력 공유 등) — coll 이름은 영숫자/_ 만
+function collKey(c) { if (!/^[a-z0-9_]{1,40}$/i.test(c || '')) throw new Error('bad collection name'); return 'eduino:coll:' + c; }
+async function collGet(c) {
+  const map = arrToObj(await redis(['HGETALL', collKey(c)]));
+  return Object.keys(map).map(k => { try { return JSON.parse(map[k]); } catch (e) { return null; } }).filter(Boolean);
+}
+async function collPush(c, item) { if (!item || item.id == null) throw new Error('item.id required'); await redis(['HSET', collKey(c), String(item.id), JSON.stringify(item)]); }
+async function collDel(c, id) { await redis(['HDEL', collKey(c), String(id)]); }
+
 module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const type = (req.query && req.query.type) || 'all';
       const out = { ok: true };
+      if (type === 'coll') { out.items = await collGet(req.query.coll); return res.status(200).json(out); }
       if (type === 'settings' || type === 'all') out.settings = await getSettings();
       if (type === 'presence' || type === 'all') out.presence = await getPresence();
       return res.status(200).json(out);
@@ -83,6 +93,8 @@ module.exports = async function handler(req, res) {
         await beat(body.device || '');
         return res.status(200).json({ ok: true });
       }
+      if (body.op === 'collPush') { await collPush(body.coll, body.item); return res.status(200).json({ ok: true }); }
+      if (body.op === 'collDel') { await collDel(body.coll, body.id); return res.status(200).json({ ok: true }); }
       return res.status(400).json({ ok: false, error: 'unknown op' });
     }
     return res.status(405).json({ ok: false, error: 'method not allowed' });

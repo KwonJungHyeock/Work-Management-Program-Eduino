@@ -6,9 +6,10 @@
    =========================================================================== */
 window.SyncStore = (function(){
   const cfgDB = ()=>store(STORE.syncCfg);
-  const getCfg = ()=>cfgDB().get({ url:'', autoPull:false });
+  const getCfg = ()=>cfgDB().get({ url:'', autoPull:false, autoPush:true });
   const setCfg = (v)=>cfgDB().set(v);
   const configured = ()=>!!(getCfg().url);
+  let pulling = false;   // pull 중 auto-push 억제
 
   async function post(body){
     const cfg=getCfg(); if(!cfg.url) throw new Error('공용 저장소 URL 미설정');
@@ -44,14 +45,31 @@ window.SyncStore = (function(){
   /* 공용 저장소의 설정을 로컬로 받아 적용 (팀 공통 키만) */
   async function pullSettings(){
     const d=await get('settings'); const s=(d&&d.settings)||{};
-    let n=0; SHARED_SETTING_KEYS.forEach(k=>{ if(s[k]!=null){ localStorage.setItem(k, s[k]); n++; } });
+    let n=0; pulling=true;
+    try{ SHARED_SETTING_KEYS.forEach(k=>{ if(s[k]!=null){ localStorage.setItem(k, s[k]); n++; } }); }
+    finally{ pulling=false; }
     return { ok:true, applied:n };
   }
+
+  /* 공용 컬렉션(처리대기 큐·상담이력 공유 등) */
+  async function collGet(coll){ try{ const d=await get('coll&coll='+encodeURIComponent(coll)); return (d&&d.items)||[]; }catch{ return null; } }
+  async function collPush(coll,item){ return post({ op:'collPush', coll, item }); }
+  async function collDel(coll,id){ return post({ op:'collDel', coll, id }); }
   /* 접속 하트비트 (fire-and-forget) */
   async function beat(){ const device=store(STORE.device).get(''); if(!device) return;
     try{ await post({ op:'presence', device }); }catch{} }
   /* 현재 접속자 목록 */
   async function presence(){ try{ const d=await get('presence'); return (d&&d.presence)||[]; }catch{ return null; } }
 
-  return { getCfg, setCfg, configured, pushSettings, pullSettings, beat, presence };
+  /* 설정 자동 동기화: 팀 공통 설정이 바뀌면 공용에 자동 업로드(1.5초 디바운스) */
+  let pushTimer=null;
+  const _origSet = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(k, v){
+    _origSet(k, v);
+    if(!pulling && configured() && getCfg().autoPush!==false && SHARED_SETTING_KEYS.indexOf(k)>=0){
+      clearTimeout(pushTimer); pushTimer=setTimeout(()=>{ pushSettings().catch(()=>{}); }, 1500);
+    }
+  };
+
+  return { getCfg, setCfg, configured, pushSettings, pullSettings, beat, presence, collGet, collPush, collDel };
 })();

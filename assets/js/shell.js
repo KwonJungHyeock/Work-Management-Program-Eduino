@@ -148,7 +148,8 @@ function bootShell(){
             <br>· <b>Vercel 백엔드(권장)</b>: 아래 <b>[Vercel 백엔드 사용]</b> 클릭 (Vercel에 KV 스토어 연결 필요, CORS 없음·자동)
             <br>· 구글시트: <span class="mono" style="font-size:11.5px">google-apps-script-sync.gs</span> 배포 후 <span class="mono">/exec</span> URL 입력</p>
           <label class="fld" style="margin-bottom:10px">웹 앱 URL<input type="text" id="mSyncUrl" placeholder="https://script.google.com/macros/s/……/exec"></label>
-          <label class="chk" style="margin-bottom:10px;font-size:13px"><input type="checkbox" id="mAutoPull"> 접속(부팅) 시 공용 설정 자동으로 받기</label>
+          <label class="chk" style="margin-bottom:8px;font-size:13px"><input type="checkbox" id="mAutoPull"> 접속(부팅) 시 공용 설정 자동으로 받기</label>
+          <label class="chk" style="margin-bottom:10px;font-size:13px"><input type="checkbox" id="mAutoPush"> 설정 변경 시 공용에 자동으로 올리기 <span class="muted" style="font-weight:400">(수동 [올리기] 불필요)</span></label>
           <div class="note" style="font-size:12px;margin-bottom:10px"><b>[공용에 올리기]</b> 하면 올라가는 항목: <span id="mSyncItems"></span></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button class="btn sm" id="mSyncVercel">${icon('cloud')}Vercel 백엔드 사용</button>
@@ -194,19 +195,21 @@ function bootShell(){
     ov.querySelector('#mSyncItems').textContent = items.length?items.join(' · '):'(아직 저장된 설정 없음 — 각 기능에서 설정 후 올리기)';
 
     // 공용 동기화 값 채우기 + 핸들러
-    const scfg = (window.SyncStore?SyncStore.getCfg():{url:'',autoPull:false});
+    const scfg = (window.SyncStore?SyncStore.getCfg():{url:'',autoPull:false,autoPush:true});
     ov.querySelector('#mSyncUrl').value = scfg.url||'';
     ov.querySelector('#mAutoPull').checked = !!scfg.autoPull;
+    ov.querySelector('#mAutoPush').checked = scfg.autoPush!==false;
     const sStat = ov.querySelector('#mSyncStat');
-    ov.querySelector('#mSyncVercel').onclick = ()=>{ ov.querySelector('#mSyncUrl').value='/api/store'; ov.querySelector('#mAutoPull').checked=true;
-      SyncStore.setCfg({ url:'/api/store', autoPull:true }); renderInteg(); sStat.innerHTML='Vercel 백엔드(<span class="mono">/api/store</span>)로 설정됨 · [공용에 올리기]로 첫 업로드'; toast('Vercel 백엔드로 설정'); };
-    ov.querySelector('#mSyncSave').onclick = ()=>{ SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked }); sStat.textContent='저장했습니다'; renderInteg(); toast('공용 동기화 설정 저장'); };
+    const readCfg = ()=>({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked, autoPush:ov.querySelector('#mAutoPush').checked });
+    ov.querySelector('#mSyncVercel').onclick = ()=>{ ov.querySelector('#mSyncUrl').value='/api/store'; ov.querySelector('#mAutoPull').checked=true; ov.querySelector('#mAutoPush').checked=true;
+      SyncStore.setCfg({ url:'/api/store', autoPull:true, autoPush:true }); renderInteg(); sStat.innerHTML='Vercel 백엔드(<span class="mono">/api/store</span>)로 설정됨 · [공용에 올리기]로 첫 업로드'; toast('Vercel 백엔드로 설정'); };
+    ov.querySelector('#mSyncSave').onclick = ()=>{ SyncStore.setCfg(readCfg()); sStat.textContent='저장했습니다'; renderInteg(); toast('공용 동기화 설정 저장'); };
     ov.querySelector('#mSyncPush').onclick = async(e)=>{ const b=e.currentTarget; b.disabled=true; sStat.textContent='올리는 중…';
-      SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked });
+      SyncStore.setCfg(readCfg());
       try{ const r=await SyncStore.pushSettings(); sStat.textContent = r.saved?`설정 ${r.saved}개 올림${r.unconfirmed?' (시트에서 확인)':''}`:'올릴 설정 없음'; }
       catch(err){ sStat.textContent='실패: '+err.message; } b.disabled=false; };
     ov.querySelector('#mSyncPull').onclick = async(e)=>{ const b=e.currentTarget; b.disabled=true; sStat.textContent='받는 중…';
-      SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked });
+      SyncStore.setCfg(readCfg());
       try{ const r=await SyncStore.pullSettings(); sStat.textContent=`설정 ${r.applied}개 적용 · 새로고침합니다`;
         if(r.applied) setTimeout(()=>location.reload(),700); else sStat.textContent='받을 공용 설정이 없습니다'; }
       catch(err){ sStat.textContent='실패: '+err.message; b.disabled=false; } };
