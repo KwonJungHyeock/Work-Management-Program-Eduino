@@ -93,18 +93,11 @@ const NAV = [
       { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
       { key:'md.order',   name:'입점사 발주',      icon:'truck' },
   ]},
-  { dept:'design', name:'디자인', full:'디자인', icon:'palette', soon:true, items:[
-      { key:'design.asset',  name:'에셋 관리', soon:true },
-      { key:'design.banner', name:'배너 문구', soon:true },
-  ]},
-  { dept:'acct', name:'경리', full:'회계/정산', icon:'calc', soon:true, items:[
-      { key:'acct.ledger', name:'매출·매입 집계', soon:true },
-      { key:'acct.settle', name:'정산표', soon:true },
-  ]},
   { dept:'admin', name:'관리자', full:'계정 관리', icon:'shield', adminOnly:true, items:[
       { key:'admin.users', name:'팀원 계정', icon:'users' },
   ]},
 ];
+/* 디자인·경리는 개발 예정 — 사이드바에서 숨김(백업은 backup/first-draft/에 보존) */
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }

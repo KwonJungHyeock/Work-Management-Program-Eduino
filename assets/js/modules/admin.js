@@ -53,10 +53,7 @@
               <label class="fld">접속코드
                 <span style="display:flex;gap:6px"><input type="text" id="fCode" placeholder="접속코드" style="flex:1">
                   <button type="button" class="btn sm" id="genCode" title="랜덤 생성">${icon('refresh')}</button></span></label>
-              <div style="display:flex;gap:8px">
-                <button class="btn pri" id="saveUser">${icon('check')}저장</button>
-                <button class="btn" id="clearForm">새로</button>
-              </div>
+              <div><button class="btn pri" id="saveUser">${icon('check')}저장</button></div>
             </div>
             <div class="muted" id="admStat" style="font-size:12.5px;margin-top:10px"></div>
           </div>
@@ -72,7 +69,6 @@
       const $=s=>root.querySelector(s);
       let editing=null;
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
-      $('#clearForm').onclick=()=>resetForm();
       function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs';
         $('#fId').disabled=false; $('#editHint').textContent=''; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';

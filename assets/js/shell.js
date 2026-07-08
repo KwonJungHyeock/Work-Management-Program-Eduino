@@ -67,22 +67,29 @@ function bootShell(){
   $('devRole').textContent = (me.user && (deptLabel[me.user.dept] || (me.user.role==='admin'?'관리자':'')) ) || '이 PC';
   $('devAv').textContent = uName.replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,2).toUpperCase() || 'PC';
 
+  // 직무별 권한 (CS는 CS만 · MD는 MD만 · 관리자는 전체)
+  const isAdmin = !!(me.user && me.user.role==='admin');
+  const myDept = me.user && me.user.dept;
+  const deptAllowed = (d)=> isAdmin || d===myDept;
+  const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
+    if(d==='admin') return isAdmin;
+    if(d==='cs'||d==='md') return deptAllowed(d);
+    return isAdmin; };
+
   // 내비게이션
-  const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', design:'#b07cff', acct:'#42c98a', admin:'#f0a020' };
+  const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', admin:'#f0a020' };
   const nav = $('nav');
   NAV.forEach(g=>{
-    if(g.adminOnly && !(me.user && me.user.role==='admin')) return;   // 관리자 전용 그룹은 관리자에게만
-    const grp = el('div','nav-group'+(g.soon?' soon':''));
+    if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
+    if(!g.adminOnly && !deptAllowed(g.dept)) return; // 내 직무 그룹만 노출
+    const grp = el('div','nav-group');
     grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
-    grp.innerHTML = `<div class="nav-glabel">${icon(g.icon)}<span class="txt">${esc(g.name)} · ${esc(g.full)}</span>
-      ${g.soon?'<span class="badge soon cnt">예정</span>':''}</div>`;
+    grp.innerHTML = `<div class="nav-glabel"><span class="gi">${icon(g.icon)}</span>
+      <span class="gtx"><b>${esc(g.name)}</b><small>${esc(g.full)}</small></span></div>`;
     g.items.forEach(it=>{
-      const soon = g.soon || it.soon;
-      const item = el('div','nav-item'+(soon?' soon':''));
-      item.dataset.key = it.key;
-      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>${soon?'<span class="badge soon">예정</span>':''}`;
-      if(!soon) item.onclick = ()=>{ location.hash = it.key; };
-      else item.onclick = ()=>toast('개발 예정 기능입니다');
+      const item = el('div','nav-item'); item.dataset.key = it.key;
+      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>`;
+      item.onclick = ()=>{ location.hash = it.key; };
       grp.appendChild(item);
     });
     nav.appendChild(grp);
@@ -92,10 +99,19 @@ function bootShell(){
   $('navToggle').onclick = ()=>app.classList.toggle('nav-collapsed');
   $('presence').onclick = ()=>toast('여러 PC의 실시간 접속 현황은 서버 연동(개발 예정) 후 제공됩니다');
 
-  function firstKey(){ for(const g of NAV) if(!g.soon) for(const it of g.items) if(!it.soon) return it.key; }
+  function firstKey(){
+    for(const g of NAV){
+      if(g.adminOnly && !isAdmin) continue;
+      if(!g.adminOnly && !deptAllowed(g.dept)) continue;
+      if(g.items && g.items.length) return g.items[0].key;
+    }
+    return '';
+  }
 
   function route(){
-    const key = location.hash.replace('#','') || firstKey();
+    let key = location.hash.replace('#','') || firstKey();
+    if(key && !canAccess(key)){ const fk=firstKey(); if(fk && fk!==key){ location.hash=fk; return; }
+      const main=$('main'); main.className='main sc'; main.innerHTML=`<div class="view"><div class="empty">${icon('shield')}<div>이 기능에 접근 권한이 없습니다.</div></div></div>`; return; }
     const mod = MODULES[key];
     // 활성 표시
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on', n.dataset.key===key));
