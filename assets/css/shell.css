@@ -122,10 +122,10 @@
 /* 설정 백업/복원 모달 */
 .modal-ov{position:fixed;inset:0;z-index:200;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;padding:20px;animation:mfade .14s ease}
 @keyframes mfade{from{opacity:0}to{opacity:1}}
-.modal{width:100%;max-width:520px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 64px rgba(16,24,40,.28);overflow:hidden}
-.modal-hd{display:flex;align-items:center;gap:9px;padding:15px 18px;border-bottom:1px solid var(--line);font-size:15.5px;background:var(--panel-2)}
+.modal{width:100%;max-width:520px;max-height:calc(100vh - 40px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 64px rgba(16,24,40,.28);overflow:hidden}
+.modal-hd{flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:15px 18px;border-bottom:1px solid var(--line);font-size:15.5px;background:var(--panel-2)}
 .modal-hd .btn{margin-left:auto}
-.modal-bd{padding:18px}
+.modal-bd{flex:1 1 auto;overflow-y:auto;padding:18px}
 
 /* 접속자 현황 팝오버 */
 .presence-pop{z-index:210;min-width:210px;max-width:280px;background:#fff;border:1px solid var(--line);border-radius:11px;
