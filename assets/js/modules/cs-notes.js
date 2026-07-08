@@ -99,8 +99,8 @@
 
       let tab='memo', filter='전체', lastAgent=store(STORE.csAgent).get(CS_AGENTS[0]);
       let typeEdit=false;
-      // 폼 상태 (토글/날짜는 저장 후에도 유지되는 컨텍스트)
-      let form={ category:getTypes()[0], customerType:'', prodCategory:'', date:todayStr() };
+      // 폼 상태 (분류·상담사·날짜는 저장 후에도 유지되는 컨텍스트)
+      let form={ category:getTypes()[0], customerType:'', prodCategory:'', date:todayStr(), agent:lastAgent };
 
       root.innerHTML=`
       <style>
@@ -117,40 +117,41 @@
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
         .q-hd .kbd b{background:#fff;border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
-        /* 토글 그룹 (전화하면서 바로 클릭) */
-        .tgl-row{margin-bottom:16px}
-        .tgl-cap-row{display:flex;align-items:center;margin-bottom:9px}
-        .tgl-cap{font-size:13.5px;font-weight:800;color:var(--muted);letter-spacing:.01em;display:flex;align-items:center;gap:7px}
-        .tgl-cap .req{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 7px}
-        .tgl-cap .opt{font-size:11.5px;font-weight:600;color:var(--faint)}
-        .tgl-group{display:flex;gap:8px;flex-wrap:wrap}
-        .tgl{display:inline-flex;align-items:center;gap:6px;padding:11px 17px;border:2px solid var(--line-strong);border-radius:11px;background:#fff;
-          font-size:15px;font-weight:700;color:var(--ink-2);cursor:pointer;transition:.1s;user-select:none;line-height:1.1}
-        .tgl:hover{border-color:var(--faint);background:var(--panel-2)}
-        .tgl.on{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 3px 12px rgba(227,30,36,.28)}
-        .tgl .q-del{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;
-          background:var(--line-strong);color:#fff;font-size:11px;font-weight:800}
-        .tgl.on .q-del{background:rgba(255,255,255,.35)}
-        .tgl-edit{margin-left:auto;background:none;border:0;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
-        .tgl-edit:hover{background:var(--hover);color:var(--red)} .tgl-edit.on{color:var(--red)}
-        .tgl-add{display:flex;gap:8px;align-items:center}
-        .tgl-add input{height:auto;padding:10px 12px;font-size:14.5px;width:140px}
+        /* 빠른 입력 2단 레이아웃 (오른쪽 메타 패널로 공간 활용) */
+        .q-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:22px;align-items:start}
+        @media(max-width:920px){.q-grid{grid-template-columns:1fr}}
+        .q-main{display:flex;flex-direction:column;gap:17px}
+        /* 섹션 라벨 (정제된 엔터프라이즈 톤) */
+        .q-sec-cap{font-size:11.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+        .q-sec-cap .req{font-size:10px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:4px;padding:2px 6px;letter-spacing:.02em}
+        .q-sec-cap .opt{font-size:11px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
+        /* 칩(토글) — 선택 시 소프트 틴트 + 컬러 보더 */
+        .chips{display:flex;gap:7px;flex-wrap:wrap}
+        .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;
+          font-size:13.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:.1s;user-select:none;line-height:1.2}
+        .chip:hover{border-color:var(--faint);background:var(--panel-2)}
+        .chip.on{border-color:var(--red);background:var(--red-soft);color:var(--red);font-weight:700;box-shadow:inset 0 0 0 1px var(--red)}
+        .chip .q-del{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+          background:var(--line-strong);color:#fff;font-size:10px;font-weight:800}
+        .chip.on .q-del{background:var(--red);color:#fff}
+        .sec-edit{margin-left:auto;background:none;border:0;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px;text-transform:none;letter-spacing:0}
+        .sec-edit:hover{background:var(--hover);color:var(--red)} .sec-edit.on{color:var(--red)}
+        .chip-add{display:flex;gap:6px;align-items:center}
+        .chip-add input{height:auto;padding:8px 10px;font-size:13.5px;width:118px}
         /* 내용/답변 */
-        .q-label{font-size:13.5px;font-weight:800;color:var(--muted);margin:18px 0 9px;display:flex;align-items:center;gap:7px}
-        .q-label .req{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 7px}
-        .q-label .opt{font-size:11.5px;font-weight:600;color:var(--faint)}
-        .q-memo{width:100%;min-height:120px;font-size:16px;line-height:1.6;padding:15px;border:2px solid #f3c7c9;border-radius:13px;background:#fffcfc;resize:vertical}
-        .q-memo::placeholder{color:#c9b3b4}
-        .q-memo:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft);background:#fff}
-        .q-ans{width:100%;min-height:70px;font-size:15px;line-height:1.55;padding:13px;border:1.5px solid var(--line-strong);border-radius:11px;resize:vertical}
-        .q-ans:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
-        .q-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:18px 0}
-        .q-fields .cap{display:block;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;line-height:20px;margin-bottom:6px}
-        .q-fields .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px}
-        .q-fields input{height:46px;font-size:15.5px}
-        .q-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:16px;border-top:1px solid var(--line-2)}
-        .q-cb{font-size:15px;font-weight:700}
-        .q-cb input{width:20px;height:20px}
+        .q-memo{width:100%;min-height:150px;font-size:15px;line-height:1.6;padding:14px;border:1.5px solid var(--line-strong);border-radius:10px;background:#fff;resize:vertical}
+        .q-memo:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+        .q-ans{width:100%;min-height:82px;font-size:14px;line-height:1.55;padding:12px;border:1.5px solid var(--line-strong);border-radius:10px;resize:vertical}
+        .q-ans:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+        /* 우측 메타 패널 */
+        .q-side{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px}
+        .q-side .cap{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+        .q-side .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:4px;text-transform:none;letter-spacing:0}
+        .q-side input[type=text],.q-side input[type=date]{height:42px;font-size:14.5px;width:100%}
+        .q-agents{display:flex;flex-wrap:wrap;gap:7px}
+        .q-cb{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;padding:2px 0;cursor:pointer}
+        .q-cb input{width:18px;height:18px}
+        .q-save{width:100%;justify-content:center;margin-top:2px}
         /* 연동 가이드 */
         .guide{counter-reset:step;display:grid;gap:14px;margin:6px 0 4px;padding:0}
         .guide li{list-style:none;position:relative;padding-left:40px;min-height:28px;font-size:14.5px;line-height:1.75}
@@ -200,42 +201,43 @@
               <span class="kbd">저장 후 자동 초기화 · <b>Ctrl</b>+<b>Enter</b> 저장</span></div>
             <div class="q-bd">
               <form id="qform">
-                <div class="tgl-row">
-                  <div class="tgl-cap-row"><span class="tgl-cap">분류 <span class="req">필수</span></span>
-                    <button type="button" class="tgl-edit" id="typeEdit">분류 편집</button></div>
-                  <div class="tgl-group" id="catGroup"></div>
-                </div>
-                <div class="tgl-row">
-                  <div class="tgl-cap-row"><span class="tgl-cap">고객유형 <span class="opt">선택 · 다시 누르면 해제</span></span></div>
-                  <div class="tgl-group" id="custGroup"></div>
-                </div>
-                <div class="tgl-row">
-                  <div class="tgl-cap-row"><span class="tgl-cap">상품분류 <span class="opt">선택 · 다시 누르면 해제</span></span></div>
-                  <div class="tgl-group" id="prodGroup"></div>
-                </div>
+                <div class="q-grid">
+                  <div class="q-main">
+                    <div>
+                      <div class="q-sec-cap">분류 <span class="req">필수</span>
+                        <button type="button" class="sec-edit" id="typeEdit">편집</button></div>
+                      <div class="chips" id="catGroup"></div>
+                    </div>
+                    <div>
+                      <div class="q-sec-cap">고객유형 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="chips" id="custGroup"></div>
+                    </div>
+                    <div>
+                      <div class="q-sec-cap">상품분류 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="chips" id="prodGroup"></div>
+                    </div>
+                    <div>
+                      <div class="q-sec-cap">내용 <span class="req">필수</span></div>
+                      <textarea id="fContent" class="q-memo" placeholder="문의 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
+                    </div>
+                    <div>
+                      <div class="q-sec-cap">답변 <span class="opt">선택</span></div>
+                      <textarea id="fAnswer" class="q-ans" placeholder="응대/답변 내용 (나중에 채워도 됩니다)"></textarea>
+                    </div>
+                  </div>
 
-                <div class="q-label">내용 <span class="req">필수</span></div>
-                <textarea id="fContent" class="q-memo" placeholder="문의 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
-
-                <div class="q-label">답변 <span class="opt">선택</span></div>
-                <textarea id="fAnswer" class="q-ans" placeholder="응대/답변 내용 (나중에 채워도 됩니다)"></textarea>
-
-                <div class="q-fields">
-                  <label><span class="cap">상담사</span>
-                    <input list="agentList" id="fAgent" value="${esc(lastAgent)}" autocomplete="off">
-                    <datalist id="agentList">${CS_AGENTS.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></label>
-                  <label><span class="cap">연락처 <em>선택</em></span>
-                    <input type="text" id="fContact" placeholder="010-0000-0000"></label>
-                  <label><span class="cap">주문자/학교/업체명 <em>선택</em></span>
-                    <input type="text" id="fName" placeholder="예: 에듀이노초 / 홍길동"></label>
-                  <label><span class="cap">상품코드 <em>선택</em></span>
-                    <input type="text" id="fProdCode" placeholder="예: A-100"></label>
-                  <label><span class="cap">날짜</span>
-                    <input type="date" id="fDate" value="${esc(form.date)}"></label>
-                </div>
-                <div class="q-actions">
-                  <label class="chk q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
-                  <button type="submit" class="btn pri lg" style="margin-left:auto;min-width:180px">${icon('save')}저장 <span style="opacity:.7;font-weight:500;font-size:12px">Ctrl+Enter</span></button>
+                  <aside class="q-side">
+                    <div>
+                      <span class="cap">상담사</span>
+                      <div class="q-agents" id="agentGroup"></div>
+                    </div>
+                    <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
+                    <div><span class="cap">연락처 <em>선택</em></span><input type="text" id="fContact" placeholder="010-0000-0000"></div>
+                    <div><span class="cap">주문자/학교/업체명 <em>선택</em></span><input type="text" id="fName" placeholder="예: 에듀이노초 / 홍길동"></div>
+                    <div><span class="cap">상품코드 <em>선택</em></span><input type="text" id="fProdCode" placeholder="예: A-100"></div>
+                    <label class="q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
+                    <button type="submit" class="btn pri lg q-save">${icon('save')}저장 <span style="opacity:.7;font-weight:500;font-size:12px">Ctrl+Enter</span></button>
+                  </aside>
                 </div>
               </form>
             </div>
@@ -249,13 +251,13 @@
           </div>
           <div id="noteList"></div>`;
 
-        /* --- 분류 토글 (편집 가능) --- */
+        /* --- 분류 칩 (편집 가능) --- */
         const catGroup=body.querySelector('#catGroup');
         function renderCat(){
           const types=getTypes();
           if(!types.includes(form.category)) form.category=types[0];
           catGroup.innerHTML='';
-          types.forEach(t=>{ const b=el('button','tgl'+(t===form.category?' on':'')); b.type='button';
+          types.forEach(t=>{ const b=el('button','chip'+(t===form.category?' on':'')); b.type='button';
             b.innerHTML=`<span>${esc(t)}</span>${typeEdit&&types.length>1?`<span class="q-del" title="삭제">✕</span>`:''}`;
             b.onclick=(e)=>{
               if(e.target.classList.contains('q-del')){ const nt=types.filter(x=>x!==t); setTypes(nt); if(form.category===t)form.category=nt[0]; renderCat(); renderFilters(); return; }
@@ -264,7 +266,7 @@
             };
             catGroup.appendChild(b);
           });
-          if(typeEdit){ const add=el('div','tgl-add');
+          if(typeEdit){ const add=el('div','chip-add');
             add.innerHTML=`<input type="text" id="newType" placeholder="새 분류" maxlength="12">
               <button type="button" class="btn pri sm" id="addTypeBtn">${icon('plus')}추가</button>`;
             const doAdd=()=>{ const v=add.querySelector('#newType').value.trim();
@@ -277,26 +279,36 @@
           }
         }
         body.querySelector('#typeEdit').onclick=(e)=>{ typeEdit=!typeEdit;
-          e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'분류 편집';
+          e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'편집';
           renderCat(); };
         renderCat();
 
-        /* --- 고객유형 / 상품분류 토글 (단일선택 · 다시 누르면 해제) --- */
+        /* --- 고객유형 / 상품분류 칩 (단일선택 · 다시 누르면 해제) --- */
         function renderChoice(sel, options, key){
           const g=body.querySelector(sel); g.innerHTML='';
-          options.forEach(o=>{ const b=el('button','tgl'+(form[key]===o?' on':'')); b.type='button'; b.textContent=o;
+          options.forEach(o=>{ const b=el('button','chip'+(form[key]===o?' on':'')); b.type='button'; b.textContent=o;
             b.onclick=()=>{ form[key] = (form[key]===o?'':o); renderChoice(sel,options,key); };
             g.appendChild(b); });
         }
         renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
         renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
 
+        /* --- 상담사 칩 (고정 목록 · 단일선택 · 마지막값 기억) --- */
+        function renderAgents(){
+          const g=body.querySelector('#agentGroup'); g.innerHTML='';
+          if(!CS_AGENTS.includes(form.agent)) form.agent=CS_AGENTS.includes(lastAgent)?lastAgent:CS_AGENTS[0];
+          CS_AGENTS.forEach(a=>{ const b=el('button','chip'+(form.agent===a?' on':'')); b.type='button'; b.textContent=a;
+            b.onclick=()=>{ form.agent=a; store(STORE.csAgent).set(a); lastAgent=a; renderAgents(); };
+            g.appendChild(b); });
+        }
+        renderAgents();
+
         // 저장
         const form_el=body.querySelector('#qform');
         const submit=()=>{
           const content=body.querySelector('#fContent').value.trim();
           if(!content){ body.querySelector('#fContent').focus(); toast('내용을 입력하세요'); return; }
-          const agent=body.querySelector('#fAgent').value.trim()||'-';
+          const agent=form.agent||lastAgent||'-';
           store(STORE.csAgent).set(agent); lastAgent=agent;
           form.date=body.querySelector('#fDate').value||todayStr();
           const rec={ id:uuid(), createdAt:nowISO(),
