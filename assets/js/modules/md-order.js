@@ -209,8 +209,8 @@
           form.code=''; codeEl.value=''; $f('#fOrderer').value=''; $f('#fShipInfo').value=''; $f('#fQty').value=1;
           refreshLookup(); renderAll(); codeEl.focus();
           const cfg=getCfg();
-          if(cfg.autoSend && cfg.sheetUrl){ toast('추가 · 시트 전송 중…');
-            sendOrders([rec]).then(r=>{ renderAll(); toast(r.ok?(r.unconfirmed?'시트로 전송함 (시트에서 확인)':'시트에 자동 전송됨'):'시트 전송 실패 — 미전송으로 보관'); });
+          if(cfg.autoSend && cfg.sheetUrl){ toast('추가 · '+SHEET_MSG.sending);
+            sendOrders([rec]).then(r=>{ renderAll(); toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(1):SHEET_MSG.ok(1)):SHEET_MSG.fail(r.error)); });
           } else toast(cfg.sheetUrl?'발주 목록에 추가 (수동 전송 대기)':'발주 목록에 추가');
         }
         $f('#addOrder').onclick=addOrder;
@@ -274,7 +274,7 @@
           tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
             <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
             <td style="max-width:360px">${esc(o.name)}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
-            <td>${o.synced?'<span class="badge live">전송됨</span>':'<span class="badge soon">미전송</span>'}</td>
+            <td>${o.synced?`<span class="badge live">${SHEET_MSG.badgeDone}</span>`:`<span class="badge soon">${SHEET_MSG.badgePending}</span>`}</td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
           tr.querySelector('button').onclick=()=>{ orders.splice(i,1); saveOrders(); renderAll(); };
           tb.appendChild(tr); });
@@ -288,16 +288,16 @@
 
       async function sendToSheet(){
         const cfg=getCfg(), stat=body.querySelector('#sheetStat');
-        if(!cfg.sheetUrl){ stat.innerHTML='<span style="color:var(--red)">연동 설정 탭에서 시트 URL을 먼저 등록하세요.</span>'; return; }
+        if(!cfg.sheetUrl){ stat.innerHTML=`<span style="color:var(--red)">${SHEET_MSG.noUrl}.</span>`; return; }
         const pending=orders.filter(o=>!o.synced);
-        if(!pending.length){ stat.innerHTML='<span style="color:var(--ok)">모든 발주가 이미 시트에 전송되었습니다.</span>'; return; }
-        stat.textContent=`전송 중… (${pending.length}건)`;
+        if(!pending.length){ stat.innerHTML=`<span style="color:var(--ok)">${SHEET_MSG.allSent}.</span>`; return; }
+        stat.textContent=`${SHEET_MSG.sending} (${pending.length}건)`;
         const r=await sendOrders(pending); renderAll();
         stat.innerHTML = r.ok
-          ? (r.unconfirmed ? `<span style="color:var(--ok)">${r.sent}건 전송함 — 응답 확인 불가하니 <b>시트에서 확인</b>하세요.</span>`
-                           : `<span style="color:var(--ok)">${r.sent}건을 시트에 추가했습니다.</span>`)
-          : `<span style="color:var(--red)">전송 실패: ${esc(r.error)} (복사/CSV로 대체 가능)</span>`;
-        if(r.ok) toast(r.unconfirmed?'시트로 전송함 (시트 확인 요망)':'시트로 전송 완료');
+          ? (r.unconfirmed ? `<span style="color:var(--ok)">${esc(SHEET_MSG.unconf(r.sent))}</span>`
+                           : `<span style="color:var(--ok)">${esc(SHEET_MSG.ok(r.sent))}</span>`)
+          : `<span style="color:var(--red)">${esc(SHEET_MSG.fail(r.error))} (복사/CSV로 대체 가능)</span>`;
+        if(r.ok) toast(r.unconfirmed?SHEET_MSG.unconf(r.sent):SHEET_MSG.ok(r.sent));
       }
 
       /* ---------------- 상품 마스터 ---------------- */

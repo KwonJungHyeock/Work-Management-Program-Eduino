@@ -401,7 +401,7 @@
           // 실시간 모드면 즉시 전송
           const cfg=getCfg();
           if(cfg.syncMode==='realtime' && DESTINATIONS[ACTIVE_DEST].configured(cfg)){
-            syncRecords([rec]).then(r=>{ renderList(); renderSyncBar(); if(!r.ok) toast('시트 전송 실패 — 로컬 보관됨'); });
+            syncRecords([rec]).then(r=>{ renderList(); renderSyncBar(); if(!r.ok) toast(SHEET_MSG.fail()); });
           }
         };
         form_el.addEventListener('submit',e=>{ e.preventDefault(); submit(); });
@@ -430,7 +430,7 @@
       }
       function noteCard(r){
         const c=el('div','note-card');
-        const sync = r.syncedAt?'<span class="badge synced">동기화됨</span>':'<span class="badge pending">미동기화</span>';
+        const sync = r.syncedAt?`<span class="badge synced">${SHEET_MSG.badgeDone}</span>`:`<span class="badge pending">${SHEET_MSG.badgePending}</span>`;
         const meta=[r.agent, r.name, r.contact, r.prodCategory, r.prodCode].filter(Boolean).map(esc).join(' · ');
         c.innerHTML=`
           <div class="tm">${timeHM(r.createdAt)}</div>
@@ -492,12 +492,12 @@
         if(!DESTINATIONS[ACTIVE_DEST].configured(cfg)){
           slot.innerHTML=`<div class="syncbar">${icon('alert')}구글 시트가 아직 연결되지 않았습니다. <b>연동 설정</b> 탭에서 시트 URL을 등록하세요.</div>`; return;
         }
-        if(n===0){ slot.innerHTML=`<div class="syncbar ok">${icon('checkCircle')}모든 기록이 시트에 동기화되었습니다.</div>`; return; }
-        slot.innerHTML=`<div class="syncbar">${icon('cloudUp')}미동기화 <b>${n}건</b>${cfg.syncMode==='realtime'?' (실시간 전송 실패분)':''}
-          <button class="btn sm" id="syncNow" style="margin-left:auto">${icon('cloudUp')}시트로 동기화</button></div>`;
-        slot.querySelector('#syncNow').onclick=async(e)=>{ const btn=e.currentTarget; btn.disabled=true; btn.textContent='전송 중…';
+        if(n===0){ slot.innerHTML=`<div class="syncbar ok">${icon('checkCircle')}${SHEET_MSG.allSent}.</div>`; return; }
+        slot.innerHTML=`<div class="syncbar">${icon('cloudUp')}미전송 <b>${n}건</b>${cfg.syncMode==='realtime'?' (실시간 전송 실패분)':''}
+          <button class="btn sm" id="syncNow" style="margin-left:auto">${icon('cloudUp')}시트로 전송</button></div>`;
+        slot.querySelector('#syncNow').onclick=async(e)=>{ const btn=e.currentTarget; btn.disabled=true; btn.textContent=SHEET_MSG.sending;
           const r=await syncRecords(unsynced()); renderList(); renderSyncBar();
-          toast(r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트에서 확인하세요`:`${r.synced}건 동기화 완료`):('동기화 실패: '+r.error)); };
+          toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error)); };
       }
 
       /* ---------------- 처리 대기 탭 (후속조치 큐) ---------------- */
@@ -562,7 +562,7 @@
               <button class="btn" id="editTpl">${icon('settings')}양식 편집</button>
               <button class="btn" id="copySum">${icon('copy')}텍스트 복사</button>
               <button class="btn pri" id="saveTxt">${icon('download')}메모장 저장(.txt)</button>
-              <button class="btn" id="pushSum">${icon('cloudUp')}미동기화분 시트 전송</button></div>
+              <button class="btn" id="pushSum">${icon('cloudUp')}미전송분 시트 전송</button></div>
           </div>
           <div id="tplBox" class="hidden"></div>
           <div id="sumWrap"></div>`;
@@ -572,7 +572,7 @@
         body.querySelector('#editTpl').onclick=openTpl;
         body.querySelector('#pushSum').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false; renderSum();
-          toast(r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트 확인`:`${r.synced}건 전송 완료`):('전송 실패: '+r.error)); };
+          toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error)); };
         renderSum();
         function dayNotes(){ return getNotes().filter(r=>todayStr(r.createdAt)===date); }
         function agg(list){
@@ -688,7 +688,7 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="cfgSave">${icon('check')}저장</button>
                 <button class="btn" id="cfgTest">${icon('cloud')}연결 테스트</button>
-                <button class="btn" id="cfgPush">${icon('cloudUp')}미동기화 전체 전송</button>
+                <button class="btn" id="cfgPush">${icon('cloudUp')}미전송분 전체 전송</button>
                 <span class="muted" id="cfgStat" style="font-size:13px"></span>
               </div>
             </div>
@@ -716,7 +716,7 @@
         };
         body.querySelector('#cfgPush').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false;
-          body.querySelector('#cfgStat').textContent = r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트 확인`:`${r.synced}건 전송 완료`):('전송 실패: '+r.error); };
+          body.querySelector('#cfgStat').textContent = r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error); };
       }
 
       draw();

@@ -42,6 +42,17 @@ const DEFAULT_PLATFORMS = [
 /* 발주표 컬럼: 카페24 자동 '상품코드'가 아니라 '자체상품코드'를 사용 */
 const ORDER_SHEET_COLS = ['일자','구분','주문경로','주문자명','입점사명','정산구분','자체상품코드','품명','수량','출고송장/입고','발주','배송정보/비고'];
 const SETTLE_TYPES = ['선결제','월정산'];
+
+/* 구글시트 전송 문구 — CS·MD 공통 (워딩/방식 통일) */
+const SHEET_MSG = {
+  badgeDone:'전송됨', badgePending:'미전송',
+  sending:  '시트로 전송 중…',
+  ok:       n=>`시트에 전송했습니다 · ${n}건`,
+  unconf:   n=>`시트로 전송함 · ${n}건 (시트에서 확인)`,
+  fail:     e=>`시트 전송 실패 — 로컬에 보관됨${e?` · ${e}`:''}`,
+  allSent:  '모든 항목이 시트에 전송되었습니다',
+  noUrl:    '연동 설정에서 시트 URL을 먼저 등록하세요',
+};
 /* 상품 마스터 · selfCode(자체상품코드)가 기준 · code(카페24 상품코드)는 참고용(선택) · 실제 데이터는 임포트로 교체 */
 const DEFAULT_MD_PRODUCTS = [
   { selfCode:'P-U22',  code:'', vendor:'아이씨뱅큐', settle:'월정산', name:'Nextion HMI LCD(정전식 터치, 7인치 NX8048P070-011C, 스마트형)', ship:'' },
