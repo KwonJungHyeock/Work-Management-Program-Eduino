@@ -159,12 +159,13 @@
           <div class="out-tbl" style="max-height:none;margin-bottom:22px"><table class="tbl" id="ordTable"></table></div>
 
           <div class="fieldset fs-green">
-            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트용 (입점사명·정산구분·품명 자동)
+            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트용 (입점사명·정산구분·품명·배송비 자동)
               <span class="hint" style="display:flex;gap:6px">
                 <button class="btn sm" id="sheetCopy">${icon('copy')}복사</button>
                 <button class="btn sm" id="sheetCsv">${icon('download')}CSV</button>
                 <button class="btn sm pri" id="sheetSend">${icon('cloudUp')}시트로 전송</button></span></div>
             <div class="fs-bd"><div class="out-tbl"><table class="tbl" id="sheetTable"></table></div>
+              <div class="note" style="margin-top:10px"><b>출고송장/입고</b> 칸에는 <b>배송비</b>가 먼저 들어갑니다. 이후 실제 출고 시 담당자가 이 칸을 <b>송장번호로 덮어쓰면</b> 됩니다.</div>
               <div class="muted" id="sheetStat" style="font-size:12.5px;margin-top:8px"></div></div>
           </div>
 
@@ -225,9 +226,11 @@
       }
 
       function sheetRowsFor(list){
+        // 출고송장/입고 칸: 발주 시 배송비를 먼저 채우고(담당자가 나중에 송장번호로 덮어씀)
         return list.map(o=>ORDER_SHEET_COLS.map(c=>({
           '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
-          '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,'출고송장/입고':'',
+          '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,
+          '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`,
           '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
       }
       function sheetData(){ return { cols:ORDER_SHEET_COLS, rows:sheetRowsFor(orders) }; }
