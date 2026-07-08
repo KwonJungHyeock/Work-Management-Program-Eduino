@@ -51,6 +51,7 @@ const DEFAULT_MD_PRODUCTS = [
 ];
 /* 입점사별 배송비(vat포함) · 상품에 개별 배송비가 있으면 그 값이 우선 */
 const DEFAULT_MD_VENDORS = [
+  { name:'자사',       ship:0 },
   { name:'삼쩜일사',   ship:5100 },
   { name:'아이씨뱅큐', ship:3000 },
   { name:'퓨나스',     ship:3000 },

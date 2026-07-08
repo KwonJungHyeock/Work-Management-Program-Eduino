@@ -46,7 +46,8 @@
       // 마이그레이션: 자체상품코드 비어있고 카페24코드만 있으면 왼쪽(자체)로 이동 + 정산구분 정리
       (function migrate(){ let changed=false;
         products.forEach(p=>{ if(!(p.selfCode||'').trim() && (p.code||'').trim()){ p.selfCode=p.code; p.code=''; changed=true; }
-          const ns=normSettle(p.settle); if(ns!==p.settle){ p.settle=ns; changed=true; } });
+          const ns=normSettle(p.settle); if(ns!==p.settle){ p.settle=ns; changed=true; }
+          if(!(p.vendor||'').trim() && /^[A-E]-/i.test((p.selfCode||'').trim())){ p.vendor='자사'; changed=true; } });
         if(changed) prodDB().set(products); })();
       const markMasterDirty=()=>{ dirtyMaster=true; const d=body.querySelector('#mDirty'); if(d)d.style.display=''; };
       const markVendorDirty=()=>{ dirtyVendor=true; const d=body.querySelector('#vDirty'); if(d)d.style.display=''; };
@@ -57,28 +58,45 @@
       const prodMap=()=>{ const m={}; products.forEach(p=>{ const s=(p.selfCode||'').trim(), c=(p.code||'').trim();
         if(s) m[s]=p; if(c && !m[c]) m[c]=p; }); return m; };
       const vendorShip=n=>{ const v=vendors.find(x=>x.name===n); return v?Number(v.ship)||0:0; };
-      const shipFor=p=>{ const o=Number(p&&p.ship); return o>0?o:vendorShip(p&&p.vendor); };
+      // A~E 로 시작하는 자체상품코드 = 자사 상품 → 입점사명 '자사'
+      const isJasa=c=>/^[A-E]-/i.test(String(c||'').trim());
+      const vendorName=p=>((p&&p.vendor||'').trim())||(isJasa(p&&p.selfCode)?'자사':'');
+      const shipFor=p=>{ const o=Number(p&&p.ship); return o>0?o:vendorShip(vendorName(p)); };
 
       root.innerHTML=`
       <style>
         .ord-hd{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 22px 0}
         .ord-hd .tt{font-size:19px;font-weight:800}.ord-hd .ds{font-size:13.5px;color:var(--muted);margin-top:3px}
-        .ord-tabs{display:flex;gap:4px;margin-top:14px}
-        .ord-tabs .t{padding:10px 16px;font-size:14.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
-        .ord-tabs .t.on{color:var(--red);border-bottom-color:var(--red)}
+        /* 탭 (알약형) */
+        .ord-tabs{display:flex;gap:6px;margin-top:14px;padding-bottom:12px}
+        .ord-tabs .t{display:flex;align-items:center;gap:6px;padding:8px 16px;font-size:14px;font-weight:700;color:var(--muted);
+          cursor:pointer;border-radius:9px 9px 0 0;border:1px solid transparent;border-bottom:none;position:relative;transition:.12s}
+        .ord-tabs .t:hover{background:var(--hover);color:var(--ink)}
+        .ord-tabs .t.on{color:var(--red);background:var(--red-soft)}
+        .ord-tabs .t.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-12px;height:3px;background:var(--red);border-radius:3px}
         .ord-body{padding:20px 22px;max-width:1240px}
-        .code-in{font-size:19px;font-weight:800;font-family:var(--mono);height:52px;letter-spacing:.02em}
-        .lookup{display:flex;align-items:center;padding:12px 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel-2);min-height:64px;font-size:14px}
-        .lookup.ok{border-color:#9fd8b7;background:var(--ok-bg)}
+        .code-in{font-size:20px;font-weight:800;font-family:var(--mono);height:54px;letter-spacing:.03em;border-width:2px}
+        .code-in:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+        /* 자동 조회 */
+        .lookup{display:flex;align-items:center;padding:13px 16px;border-radius:11px;border:1.5px solid var(--line);background:var(--panel-2);min-height:66px;font-size:14px;transition:.14s}
+        .lookup.ok{border-color:#8fd3ab;background:linear-gradient(0deg,var(--ok-bg),#f4fbf6)}
         .lookup.bad{border-color:#eecac6;background:#fdeef0;color:var(--red);font-weight:600}
         .lk{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0}
         .lk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .lk-vn{font-weight:800;font-size:18px;color:var(--ink);white-space:nowrap;letter-spacing:-.01em}
         .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
-        .lookup .pill{white-space:nowrap;background:#fff;font-weight:600;border-color:#bcd9c8}
+        .lookup .pill{white-space:nowrap;background:#fff;font-weight:600;border-color:#b7dcc6}
         .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
-        .out-tbl{overflow:auto;max-height:300px;border:1px solid var(--line);border-radius:8px}
+        /* 표 */
+        .out-tbl{overflow:auto;max-height:320px;border:1px solid var(--line);border-radius:9px;box-shadow:var(--sh-sm)}
+        .out-tbl table.tbl th{background:#eef1f5}
+        .out-tbl table.tbl tbody tr:nth-child(even){background:var(--zebra)}
         .mini{font-size:11px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+        /* 자사/입점사 배지 */
+        .vbadge{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;border-radius:5px;background:var(--info-bg);color:var(--info);margin-left:4px}
+        .vbadge.jasa{background:#eae4ff;color:#5b3fc4}
+        /* 섹션 스텝 통일 */
+        .fs-hd .step{box-shadow:0 2px 6px rgba(16,24,40,.18)}
       </style>
       <div class="ord-hd">
         <div class="tt">입점사 발주</div>
@@ -159,7 +177,7 @@
           const sh=shipFor(p);
           box.className='lookup ok';
           box.innerHTML=`<div class="lk">
-            <div class="lk-top"><span class="lk-vn">${esc(p.vendor)}</span>
+            <div class="lk-top"><span class="lk-vn">${esc(vendorName(p)||'입점사 미지정')}</span>
               <span class="pill">정산 <b>${esc(p.settle)}</b></span>
               <span class="pill">배송비 <b>${fmtNum(sh)}원</b></span></div>
             <div class="lk-name">${esc(p.name)}</div></div>`;
@@ -173,7 +191,7 @@
           if(!p){ toast('미등록 상품코드입니다'); refreshLookup(); codeEl.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(),
-            vendor:p.vendor, settle:p.settle, selfCode:p.selfCode||p.code, code:p.code, name:p.name,
+            vendor:vendorName(p), settle:p.settle, selfCode:p.selfCode||p.code, code:p.code, name:p.name,
             qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim(), synced:false };
           orders.push(rec); saveOrders();
           // 코드/주문자/배송정보만 비우고 구분·경로·일자 유지
@@ -241,7 +259,7 @@
         if(!orders.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
         orders.forEach((o,i)=>{ const tr=el('tr');
           tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
-            <td><b>${esc(o.vendor)}</b></td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
+            <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
             <td style="max-width:360px">${esc(o.name)}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
             <td>${o.synced?'<span class="badge live">전송됨</span>':'<span class="badge soon">미전송</span>'}</td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
@@ -326,7 +344,8 @@
         let added=0;
         dataRows.forEach(r=>{ if(!r.join('').trim()) return;
           const selfCode=g(r, keyIdx, '').trim(); if(!selfCode) return;
-          const rec={ selfCode, code:g(r,ci.code>=0&&ci.code!==keyIdx?ci.code:-1,''), vendor:g(r,ci.vendor,''),
+          const rec={ selfCode, code:g(r,ci.code>=0&&ci.code!==keyIdx?ci.code:-1,''),
+            vendor:g(r,ci.vendor,'')||(isJasa(selfCode)?'자사':''),
             settle:normSettle(g(r,ci.settle,'')) || SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
           const ex=products.find(p=>(p.selfCode||'').trim()===selfCode); if(ex){ Object.assign(ex,rec); } else { products.push(rec); }
           added++; });
