@@ -43,7 +43,9 @@
       const saveProducts=()=>prodDB().set(products);
       const saveVendors =()=>venDB().set(vendors);
       const saveOrders  =()=>ordDB().set(orders);
-      const prodMap=()=>Object.fromEntries(products.map(p=>[p.code.trim(),p]));
+      // 자체상품코드(selfCode)가 기준 · 카페24 상품코드(code)로도 찾히게 보조 매핑
+      const prodMap=()=>{ const m={}; products.forEach(p=>{ const s=(p.selfCode||'').trim(), c=(p.code||'').trim();
+        if(s) m[s]=p; if(c && !m[c]) m[c]=p; }); return m; };
       const vendorShip=n=>{ const v=vendors.find(x=>x.name===n); return v?Number(v.ship)||0:0; };
       const shipFor=p=>{ const o=Number(p&&p.ship); return o>0?o:vendorShip(p&&p.vendor); };
 
@@ -89,9 +91,9 @@
               <span class="muted" style="margin-left:auto;font-size:12.5px">코드 입력 후 <b>Enter</b> → 목록에 추가</span></div>
             <div class="card-bd">
               <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start">
-                <label class="fld">상품코드
-                  <input class="code-in" id="fCode" list="codeList" value="${esc(form.code)}" placeholder="예: P-AJ64" autocomplete="off">
-                  <datalist id="codeList">${products.map(p=>`<option value="${esc(p.code)}">${esc(p.vendor)} · ${esc(p.name).slice(0,30)}`).join('')}</datalist></label>
+                <label class="fld">자체상품코드
+                  <input class="code-in" id="fCode" list="codeList" value="${esc(form.code)}" placeholder="예: ED-1004" autocomplete="off">
+                  <datalist id="codeList">${products.map(p=>`<option value="${esc(p.selfCode||p.code)}">${esc(p.vendor)} · ${esc(p.name).slice(0,30)}`).join('')}</datalist></label>
                 <div><div class="mini" style="margin-bottom:6px">자동 조회</div><div class="lookup" id="lookup">상품코드를 입력하세요.</div></div>
               </div>
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:16px">
@@ -154,7 +156,7 @@
           if(!p){ toast('미등록 상품코드입니다'); refreshLookup(); codeEl.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(),
-            vendor:p.vendor, settle:p.settle, code:p.code, name:p.name,
+            vendor:p.vendor, settle:p.settle, selfCode:p.selfCode||p.code, code:p.code, name:p.name,
             qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim(), synced:false };
           orders.push(rec); saveOrders();
           // 코드/주문자/배송정보만 비우고 구분·경로·일자 유지
@@ -179,7 +181,7 @@
       function sheetRowsFor(list){
         return list.map(o=>ORDER_SHEET_COLS.map(c=>({
           '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
-          '정산구분':o.settle,'상품코드':o.code,'품명':o.name,'수량':o.qty,'출고송장/입고':'',
+          '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,'출고송장/입고':'',
           '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
       }
       function sheetData(){ return { cols:ORDER_SHEET_COLS, rows:sheetRowsFor(orders) }; }
@@ -203,13 +205,13 @@
       function renderOrders(){
         const t=body.querySelector('#ordTable'), cnt=body.querySelector('#ordCnt'); if(!t) return;
         if(cnt) cnt.textContent=`· ${orders.length}건`;
-        t.innerHTML=`<thead><tr><th>일자</th><th>구분</th><th>주문자</th><th>입점사</th><th>정산</th><th>상품코드</th><th>품명</th>
+        t.innerHTML=`<thead><tr><th>일자</th><th>구분</th><th>주문자</th><th>입점사</th><th>정산</th><th>자체상품코드</th><th>품명</th>
           <th class="num">수량</th><th class="num">배송비</th><th style="width:78px">시트</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
         if(!orders.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
         orders.forEach((o,i)=>{ const tr=el('tr');
           tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
-            <td><b>${esc(o.vendor)}</b></td><td>${esc(o.settle)}</td><td class="mono">${esc(o.code)}</td>
+            <td><b>${esc(o.vendor)}</b></td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
             <td style="max-width:360px">${esc(o.name)}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
             <td>${o.synced?'<span class="badge live">전송됨</span>':'<span class="badge soon">미전송</span>'}</td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
@@ -251,16 +253,17 @@
                 <button class="btn sm pri" id="saveProd">${icon('save')}저장</button></span></div>
             <div class="card-bd" style="padding:0"><div class="out-tbl" style="max-height:520px"><table class="tbl" id="prodTable"></table></div></div>
           </div>
-          <div class="note" style="margin-top:12px">엑셀/구글시트에서 <b>상품코드·입점사명·정산구분·품명</b> 열을 복사해 <b>붙여넣기</b>하거나 CSV로 불러오세요.
-            (헤더의 열 이름을 자동 인식합니다. 배송비 예외는 비워두면 입점사 기본 배송비를 사용합니다.)</div>
+          <div class="note" style="margin-top:12px"><b>자체상품코드</b>가 기준입니다(카페24 상품코드는 참고용·선택). 엑셀/구글시트에서
+            <b>자체상품코드·입점사명·정산구분·품명</b> 열을 복사해 <b>붙여넣기</b>하거나 CSV로 불러오세요.
+            헤더 이름(자체상품코드/자체코드/자사코드 등)을 자동 인식합니다. 배송비 예외는 비우면 입점사 기본 배송비를 사용합니다.</div>
           <div id="pasteBox" class="hidden" style="margin-top:14px"></div>`;
         renderProd();
         body.querySelector('#saveProd').onclick=()=>{ saveProducts(); saveVendors(); dirtyMaster=false;
           body.querySelector('#mDirty').style.display='none'; toast('저장되었습니다'); };
-        body.querySelector('#addProd').onclick=()=>{ products.unshift({code:'',vendor:'',settle:SETTLE_TYPES[0],name:'',ship:''}); markMasterDirty(); renderProd(); };
+        body.querySelector('#addProd').onclick=()=>{ products.unshift({selfCode:'',code:'',vendor:'',settle:SETTLE_TYPES[0],name:'',ship:''}); markMasterDirty(); renderProd(); };
         body.querySelector('#resetProd').onclick=()=>{ if(confirm('상품 마스터를 기본값으로 되돌릴까요?')){ products=DEFAULT_MD_PRODUCTS.map(p=>({...p})); saveProducts(); dirtyMaster=false; body.querySelector('#mDirty').style.display='none'; renderProd(); } };
-        body.querySelector('#expProd').onclick=()=>{ const cols=['상품코드','입점사명','정산구분','품명','배송비'];
-          const rows=products.map(p=>[p.code,p.vendor,p.settle,p.name,p.ship||'']);
+        body.querySelector('#expProd').onclick=()=>{ const cols=['자체상품코드','카페24코드','입점사명','정산구분','품명','배송비'];
+          const rows=products.map(p=>[p.selfCode||'',p.code||'',p.vendor,p.settle,p.name,p.ship||'']);
           downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`상품마스터_${todayStr()}.csv`); toast('CSV 저장'); };
         const file=body.querySelector('#csvFile');
         body.querySelector('#impFile').onclick=()=>file.click();
@@ -269,7 +272,7 @@
           const box=body.querySelector('#pasteBox'); box.classList.remove('hidden');
           box.innerHTML=`<div class="card"><div class="card-hd"><b>붙여넣기로 불러오기</b></div><div class="card-bd">
             <div class="muted" style="font-size:12.5px;margin-bottom:8px">구글시트/엑셀에서 범위를 복사해 아래에 붙여넣으세요. 첫 줄이 헤더면 자동 인식합니다.</div>
-            <textarea id="pasteArea" rows="6" placeholder="상품코드   입점사명   정산구분   품명"></textarea>
+            <textarea id="pasteArea" rows="6" placeholder="자체상품코드   입점사명   정산구분   품명"></textarea>
             <div style="display:flex;gap:8px;margin-top:10px"><button class="btn pri" id="pasteGo">불러오기</button>
               <button class="btn" id="pasteCancel">취소</button></div></div></div>`;
           box.querySelector('#pasteCancel').onclick=()=>{ box.classList.add('hidden'); box.innerHTML=''; };
@@ -280,17 +283,20 @@
         if(!rows.length){ toast('불러올 데이터가 없습니다'); return; }
         const norm=s=>String(s||'').replace(/\s/g,'').toLowerCase();
         const idxOf=(names)=>{ const h=rows[0].map(norm); for(const n of names){ const i=h.indexOf(norm(n)); if(i>=0) return i; } return -1; };
-        const ci={ code:idxOf(['상품코드','코드','품목코드']), vendor:idxOf(['입점사명','입점사','거래처']),
+        const ci={ selfCode:idxOf(['자체상품코드','자체코드','자사상품코드','자사코드','자체품목코드']),
+          code:idxOf(['상품코드','카페24코드','코드','품목코드']), vendor:idxOf(['입점사명','입점사','거래처']),
           settle:idxOf(['정산구분','정산']), name:idxOf(['품명','상품명','품목명']), ship:idxOf(['배송비','배송비예외']) };
-        const hasHeader = ci.code>=0 || ci.vendor>=0 || ci.name>=0;
+        const hasHeader = ci.selfCode>=0 || ci.code>=0 || ci.vendor>=0 || ci.name>=0;
         const dataRows = hasHeader ? rows.slice(1) : rows;
         const g=(r,i,def)=> i>=0&&i<r.length ? String(r[i]).trim() : def;
+        // 자체상품코드 열이 있으면 그것을 기준, 없으면 상품코드 열을 자체코드로 사용
+        const keyIdx = ci.selfCode>=0 ? ci.selfCode : (ci.code>=0 ? ci.code : 0);
         let added=0;
-        const map=prodMap();
         dataRows.forEach(r=>{ if(!r.join('').trim()) return;
-          const code=g(r, ci.code>=0?ci.code:0, '').trim(); if(!code) return;
-          const rec={ code, vendor:g(r,ci.vendor,''), settle:g(r,ci.settle,SETTLE_TYPES[0])||SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
-          const ex=products.find(p=>p.code.trim()===code); if(ex){ Object.assign(ex,rec); } else { products.push(rec); }
+          const selfCode=g(r, keyIdx, '').trim(); if(!selfCode) return;
+          const rec={ selfCode, code:g(r,ci.code>=0&&ci.code!==keyIdx?ci.code:-1,''), vendor:g(r,ci.vendor,''),
+            settle:g(r,ci.settle,SETTLE_TYPES[0])||SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
+          const ex=products.find(p=>(p.selfCode||'').trim()===selfCode); if(ex){ Object.assign(ex,rec); } else { products.push(rec); }
           added++; });
         syncVendorsFromProducts(); markMasterDirty(); renderProd();
         toast(`${added}건 불러왔습니다 · [저장]을 눌러 반영하세요`);
@@ -299,11 +305,12 @@
         products.forEach(p=>{ if(p.vendor && !names.has(p.vendor)){ vendors.push({name:p.vendor,ship:3000}); names.add(p.vendor); } }); }
       function renderProd(){
         const t=body.querySelector('#prodTable'); if(!t) return;
-        t.innerHTML=`<thead><tr><th style="width:120px">상품코드</th><th style="width:140px">입점사명</th><th style="width:90px">정산구분</th><th>품명</th><th style="width:110px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+        t.innerHTML=`<thead><tr><th style="width:120px">자체상품코드</th><th style="width:110px">카페24코드<div class="mini" style="font-weight:500">참고·선택</div></th><th style="width:140px">입점사명</th><th style="width:90px">정산구분</th><th>품명</th><th style="width:100px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
-        if(!products.length){ tb.innerHTML=`<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">상품이 없습니다. “행 추가” 또는 불러오기.</td></tr>`; return; }
+        if(!products.length){ tb.innerHTML=`<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">상품이 없습니다. “행 추가” 또는 불러오기.</td></tr>`; return; }
         products.forEach((p,i)=>{ const tr=el('tr');
-          tr.innerHTML=`<td><input type="text" data-k="code" value="${esc(p.code)}" class="mono"></td>
+          tr.innerHTML=`<td><input type="text" data-k="selfCode" value="${esc(p.selfCode||'')}" class="mono" style="font-weight:700"></td>
+            <td><input type="text" data-k="code" value="${esc(p.code||'')}" class="mono" style="color:var(--muted)"></td>
             <td><input type="text" data-k="vendor" value="${esc(p.vendor)}" list="venList"></td>
             <td><select data-k="settle">${SETTLE_TYPES.map(s=>`<option ${s===p.settle?'selected':''}>${s}</option>`).join('')}</select></td>
             <td><input type="text" data-k="name" value="${esc(p.name)}"></td>
