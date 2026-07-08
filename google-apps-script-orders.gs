@@ -66,13 +66,15 @@ function doPost(e) {
       return null;
     };
 
-    // 3) 들어온 각 행을 시트 열 순서에 맞춰 재배치
-    var width = header.length;
+    // 3) 들어온 각 행을 시트 열에 배치
+    //    - 헤더 이름이 매칭되면 그 칸에, 못 찾으면 원래 순서(포지셔널)로 넣어 값 유실 방지
+    var width = Math.max(header.length, cols.length);
     var out = rows.map(function (r) {
       var line = [];
       for (var i = 0; i < width; i++) line.push('');
       cols.forEach(function (cName, ci) {
         var col = alias(cName);
+        if (col == null) col = ci;           // 폴백: 원래 순서로
         if (col != null && col < width) line[col] = (r[ci] != null ? r[ci] : '');
       });
       return line;
