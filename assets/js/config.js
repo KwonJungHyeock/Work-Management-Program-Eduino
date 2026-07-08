@@ -37,6 +37,25 @@ const DEFAULT_PLATFORMS = [
   { id:'eduino', name:'에듀이노 쇼핑몰',    prefix:'에듀이노',short:'E',  color:'#e31e24', logo:'',                                  width:860,  maxH:0,    maxMB:0,  formats:['jpg','png','webp'] },
 ];
 
+/* 입점사 발주 자동화 --------------------------------------------------------- */
+/* 구글시트 발주표 컬럼 순서 (실제 시트에 맞춰 수정) */
+const ORDER_SHEET_COLS = ['일자','구분','주문경로','주문자명','입점사명','정산구분','상품코드','품명','수량','출고송장/입고','발주','배송정보/비고'];
+const SETTLE_TYPES = ['원','선'];
+/* 상품 마스터 (상품코드 → 입점사·정산구분·품명) · 실제 데이터는 임포트로 교체 */
+const DEFAULT_MD_PRODUCTS = [
+  { code:'P-U22',  vendor:'아이씨뱅큐', settle:'원', name:'Nextion HMI LCD(정전식 터치, 7인치 NX8048P070-011C, 스마트형)', ship:'' },
+  { code:'P-BH31', vendor:'퓨나스',     settle:'원', name:'[LEGO] 스파이크 프라임 미디엄 앵글 모터', ship:'' },
+  { code:'P-BA10', vendor:'새온',       settle:'원', name:'[알티노] 언플러그드 크레용 / 교재', ship:'' },
+  { code:'P-AJ64', vendor:'삼쩜일사',   settle:'선', name:'[로봇과 함께하는 인공지능 교육 12차시 태블릿&크롬북 활용 교재] 카미봇파이 워크북', ship:'' },
+];
+/* 입점사별 배송비(vat포함) · 상품에 개별 배송비가 있으면 그 값이 우선 */
+const DEFAULT_MD_VENDORS = [
+  { name:'삼쩜일사',   ship:5100 },
+  { name:'아이씨뱅큐', ship:3000 },
+  { name:'퓨나스',     ship:3000 },
+  { name:'새온',       ship:3000 },
+];
+
 /* 프로그램 명칭 */
 const APP_NAME = '에듀이노 통합 업무관리';
 const APP_NAME_FULL = '에듀이노 통합 업무관리 프로그램';
@@ -61,6 +80,7 @@ const NAV = [
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
       { key:'md.product', name:'상품 데이터 관리', icon:'grid' },
       { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
+      { key:'md.order',   name:'입점사 발주',      icon:'truck' },
   ]},
   { dept:'design', name:'디자인', full:'디자인', icon:'palette', soon:true, items:[
       { key:'design.asset',  name:'에셋 관리', soon:true },
@@ -77,6 +97,9 @@ const STORE = {
   device:   'eduino.device',    // 기기 이름 (이 PC에 고정 저장)
   platforms:'eduino.platforms', // 플랫폼 세팅 오버라이드
   mdPresets:'eduino.md.presets', // 플랫폼 프리셋
+  mdProducts:'eduino.md.products', // 상품 마스터
+  mdVendors:'eduino.md.vendors',   // 입점사 배송비
+  mdOrderCfg:'eduino.md.order.cfg', // 발주 구글시트 연동 설정
   csTpl:    'eduino.cs.templates',
   csNotes:  'eduino.cs.notes',       // 상담 메모 레코드 배열
   csNoteCfg:'eduino.cs.notes.cfg',   // { sheetUrl, syncMode }
