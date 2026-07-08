@@ -75,20 +75,32 @@ function nowISO(){ return new Date().toISOString(); }
 function todayStr(d){ const x=d?new Date(d):new Date(); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
 function timeHM(iso){ const d=new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
 
-/* ---- 인증 / 기기 ---- */
+/* ---- 인증 / 계정 (관리자 발급 · 서버 검증) ---- */
 const Auth = {
   device(){ return store(STORE.device).get(null); },
   setDevice(name){ store(STORE.device).set(name); },
   current(){ return store(STORE.session).get(null); },
-  login(code){
-    if(code !== ACCESS_CODE) return false;
-    store(STORE.session).set({ device: Auth.device(), code:true, ts: Date.now() });
-    return true;
+  user(){ const s=this.current(); return s && s.user; },
+  isAdmin(){ const u=this.user(); return !!(u && u.role==='admin'); },
+  adminAuth(){ const s=this.current(); return s && s.adminAuth; },
+  async login(loginId, code){
+    try{
+      const res=await fetch('/api/auth',{ method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ op:'login', loginId, code }) });
+      let d=null; try{ d=await res.json(); }catch{}
+      if(!res.ok && !d) return { ok:false, error:'서버 오류('+res.status+')' };
+      if(!d || !d.ok) return { ok:false, error:(d&&d.error)||'로그인 실패' };
+      const session={ user:d.user, ts:Date.now() };
+      if(d.user.role==='admin') session.adminAuth={ loginId, code };
+      store(STORE.session).set(session);
+      store(STORE.device).set(d.user.name || loginId);   // 접속자 현황용 표시 이름
+      return { ok:true, user:d.user };
+    }catch(err){ return { ok:false, error:'서버 연결 실패 — 잠시 후 다시 시도하세요' }; }
   },
   logout(){ store(STORE.session).del(); },
 };
 function requireAuth(base){
   const s = Auth.current();
-  if(!s || !Auth.device()){ location.href = base+'index.html'; return null; }
-  return { device: Auth.device() };
+  if(!s || !s.user){ location.href = base+'index.html'; return null; }
+  return { user:s.user, device: s.user.name || (s.user.loginId||'') };
 }

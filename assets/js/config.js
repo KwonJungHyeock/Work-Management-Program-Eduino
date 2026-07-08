@@ -101,6 +101,9 @@ const NAV = [
       { key:'acct.ledger', name:'매출·매입 집계', soon:true },
       { key:'acct.settle', name:'정산표', soon:true },
   ]},
+  { dept:'admin', name:'관리자', full:'계정 관리', icon:'shield', adminOnly:true, items:[
+      { key:'admin.users', name:'팀원 계정', icon:'users' },
+  ]},
 ];
 
 const STORE = {

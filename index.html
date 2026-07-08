@@ -20,30 +20,21 @@
     <div class="auth-top">
       <div class="auth-brand"><img class="auth-logo" src="assets/brand/eduino-mark.svg" alt="에듀이노"><div class="nm">에듀이노</div>
         <div class="tag">통합 업무관리</div></div>
-      <div class="auth-steps"><div class="st on" id="st1"></div><div class="st" id="st2"></div></div>
-      <div class="auth-title" id="aTitle">사내 접속코드 입력</div>
-      <div class="auth-desc" id="aDesc">회사에서 공유한 10자리 접속코드를 입력하세요.</div>
+      <div class="auth-title" id="aTitle">로그인</div>
+      <div class="auth-desc" id="aDesc">관리자에게 발급받은 아이디와 접속코드를 입력하세요.</div>
     </div>
     <div class="auth-body">
-      <!-- Step 1: 접속코드 -->
-      <form id="step1">
+      <form id="loginForm">
+        <label class="fld" style="margin-bottom:12px">아이디
+          <input type="text" id="loginId" placeholder="예: cs.kim" autocomplete="username" autofocus></label>
         <label class="fld" style="margin-bottom:4px">접속코드
-          <input type="password" id="code" class="code-in" maxlength="10" placeholder="••••••••••" autocomplete="off" autofocus></label>
+          <input type="password" id="code" class="code-in" placeholder="••••••••" autocomplete="current-password"></label>
         <div class="auth-err" id="err1"></div>
-        <button type="submit" class="btn pri lg block">확인</button>
-      </form>
-      <!-- Step 2: 기기 이름 -->
-      <form id="step2" class="hidden">
-        <label class="fld" style="margin-bottom:4px">이 PC의 기기 이름
-          <input type="text" id="dev" maxlength="24" placeholder="예: MD-PC-01" autocomplete="off"></label>
-        <div class="auth-desc" style="margin:2px 0 6px">브라우저는 실제 PC 이름을 읽을 수 없어, 이 PC를 구분할 이름을 한 번만 정합니다. (이 PC에 저장됩니다)</div>
-        <div class="dev-suggest" id="devSuggest"></div>
-        <div class="auth-err" id="err2"></div>
-        <button type="submit" class="btn pri lg block" style="margin-top:10px">시작하기</button>
+        <button type="submit" class="btn pri lg block" id="loginBtn">로그인</button>
       </form>
     </div>
     <div class="auth-foot">
-      <b>초안(Draft) 안내</b> — 현재 DB 없이 브라우저에서 동작합니다. 초기 접속코드는 <code>robodyne12</code> 입니다.
+      팀장(관리자)은 <b>관리자 계정</b>으로 로그인해 <b>팀원 계정</b>을 발급할 수 있습니다.
     </div>
   </div>
 </div>
@@ -57,35 +48,17 @@
     intro.addEventListener('click',hide); setTimeout(hide,2200);
   })();
 
-  if(Auth.current() && Auth.device()) location.href='app.html';
+  if(Auth.current() && Auth.user()) location.href='app.html';
 
-  const goStep2=()=>{
-    $('step1').classList.add('hidden'); $('step2').classList.remove('hidden');
-    $('st2').classList.add('on'); $('aTitle').textContent='기기 이름 설정';
-    $('aDesc').textContent='이 PC를 구분할 이름을 정하면 접속 화면에 표시됩니다.';
-    const pre=Auth.device(); if(pre) $('dev').value=pre;
-    $('dev').focus();
-    const sug=['MD-PC-01','CS-PC-01','경리-PC','디자인-PC','대표-노트북'];
-    $('devSuggest').innerHTML=sug.map(s=>`<span class="pill">${s}</span>`).join('');
-    $('devSuggest').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{ $('dev').value=p.textContent; });
-  };
-
-  $('step1').addEventListener('submit',e=>{
+  $('loginForm').addEventListener('submit',async e=>{
     e.preventDefault();
-    const code=$('code').value.trim();
-    if(code.length!==10){ $('err1').textContent='접속코드는 10자리입니다.'; return; }
-    if(code!==ACCESS_CODE){ $('err1').textContent='접속코드가 올바르지 않습니다.'; $('code').select(); return; }
-    $('err1').textContent='';
-    if(Auth.device()){ Auth.login(code); location.href='app.html'; }
-    else goStep2();
-  });
-
-  $('step2').addEventListener('submit',e=>{
-    e.preventDefault();
-    const name=$('dev').value.trim();
-    if(name.length<2){ $('err2').textContent='기기 이름을 2자 이상 입력하세요.'; return; }
-    Auth.setDevice(name); Auth.login($('code').value.trim());
-    location.href='app.html';
+    const loginId=$('loginId').value.trim(), code=$('code').value.trim();
+    const btn=$('loginBtn'), err=$('err1');
+    if(!loginId || !code){ err.textContent='아이디와 접속코드를 입력하세요.'; return; }
+    err.textContent=''; btn.disabled=true; btn.textContent='확인 중…';
+    const r=await Auth.login(loginId, code);
+    if(r.ok){ location.href='app.html'; return; }
+    err.textContent=r.error||'로그인에 실패했습니다.'; btn.disabled=false; btn.textContent='로그인'; $('code').select();
   });
 </script>
 </body>

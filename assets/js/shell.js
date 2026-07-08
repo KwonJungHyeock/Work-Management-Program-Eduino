@@ -35,7 +35,7 @@ function bootShell(){
         <span class="dot"></span><span id="presenceTxt">이 기기만 접속 중</span></div>
       <div class="device">
         <div class="av" id="devAv"></div>
-        <div class="meta"><b id="devName"></b><br><small>이 PC</small></div>
+        <div class="meta"><b id="devName"></b><br><small id="devRole">이 PC</small></div>
       </div>
     </header>
     <main class="main sc" id="main"></main>
@@ -60,14 +60,18 @@ function bootShell(){
   function playIntro(then){ intro.classList.add('show'); setTimeout(()=>{ intro.classList.remove('show'); if(then)then(); }, 1400); }
   $('brandBtn').onclick=()=>playIntro(()=>{ location.hash=''; });
 
-  // 기기 정보
-  $('devName').textContent = me.device;
-  $('devAv').textContent = me.device.replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,2).toUpperCase() || 'PC';
+  // 로그인 사용자 정보
+  const deptLabel = { cs:'CS · 고객 상담', md:'MD · 상품 기획', admin:'관리자' };
+  const uName = (me.user && me.user.name) || me.device || '';
+  $('devName').textContent = uName;
+  $('devRole').textContent = (me.user && (deptLabel[me.user.dept] || (me.user.role==='admin'?'관리자':'')) ) || '이 PC';
+  $('devAv').textContent = uName.replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,2).toUpperCase() || 'PC';
 
   // 내비게이션
-  const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', design:'#b07cff', acct:'#42c98a' };
+  const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', design:'#b07cff', acct:'#42c98a', admin:'#f0a020' };
   const nav = $('nav');
   NAV.forEach(g=>{
+    if(g.adminOnly && !(me.user && me.user.role==='admin')) return;   // 관리자 전용 그룹은 관리자에게만
     const grp = el('div','nav-group'+(g.soon?' soon':''));
     grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
     grp.innerHTML = `<div class="nav-glabel">${icon(g.icon)}<span class="txt">${esc(g.name)} · ${esc(g.full)}</span>
@@ -113,8 +117,8 @@ function bootShell(){
   }
   function setStatus(){
     $('status').innerHTML =
-      `<div class="seg">${icon('monitor')}<span>기기</span><b>${esc(me.device)}</b></div>
-       <div class="seg ok">${icon('check')}<span>접속 코드 인증됨</span></div>
+      `<div class="seg">${icon('monitor')}<span>사용자</span><b>${esc(uName)}</b>${me.user&&me.user.dept?`<span>· ${esc(deptLabel[me.user.dept]||me.user.dept)}</span>`:''}</div>
+       <div class="seg ok">${icon('check')}<span>로그인됨</span></div>
        <div class="seg">${icon('users')}<span>접속</span><b>${presenceCount}</b><span>${presenceCount>1?'명':'(이 기기)'}</span></div>
        <div class="sp"></div>
        <div class="seg">${esc(APP_NAME)} · 초안(Draft)</div>`;
