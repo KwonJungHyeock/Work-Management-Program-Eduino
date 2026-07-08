@@ -7,6 +7,13 @@ window.MODULES = window.MODULES || {};
 function bootShell(){
   const me = requireAuth('');
   if(!me) return;
+  let presenceCount = 1;
+
+  // 공용 설정 자동 받기(옵션): 세션당 1회, 적용되면 새로고침 후 최신 설정으로 렌더
+  if(window.SyncStore && SyncStore.configured() && SyncStore.getCfg().autoPull && !sessionStorage.getItem('eduino.pulled')){
+    sessionStorage.setItem('eduino.pulled','1');
+    SyncStore.pullSettings().then(r=>{ if(r && r.applied) location.reload(); }).catch(()=>{});
+  }
 
   const app = el('div','app'); app.id='app';
   app.innerHTML = `
@@ -108,7 +115,7 @@ function bootShell(){
     $('status').innerHTML =
       `<div class="seg">${icon('monitor')}<span>기기</span><b>${esc(me.device)}</b></div>
        <div class="seg ok">${icon('check')}<span>접속 코드 인증됨</span></div>
-       <div class="seg">${icon('users')}<span>접속</span><b>1</b><span>(이 기기)</span></div>
+       <div class="seg">${icon('users')}<span>접속</span><b>${presenceCount}</b><span>${presenceCount>1?'명':'(이 기기)'}</span></div>
        <div class="sp"></div>
        <div class="seg">${esc(APP_NAME)} · 초안(Draft)</div>`;
   }
@@ -129,9 +136,41 @@ function bootShell(){
             <input type="file" id="mFile" accept=".json,application/json" class="hidden">
           </div>
           <div class="note warn" style="margin-top:12px;font-size:12.5px">불러오기를 하면 현재 이 브라우저의 설정을 <b>덮어씁니다</b>. 필요하면 먼저 내보내기로 백업하세요. (상담 메모 등 데이터도 함께 포함됩니다)</div>
+
+          <div style="border-top:1px solid var(--line);margin:16px 0 14px"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <b style="font-size:14px">공용(구글) 동기화</b>
+            <span class="badge ${SyncStore&&SyncStore.configured()?'live':'soon'}" style="margin-left:auto">${SyncStore&&SyncStore.configured()?'연결됨':'미연결'}</span>
+          </div>
+          <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">전용 구글시트(공용 저장소)에 <b>팀 공통 설정</b>을 올려두면, 4명이 같은 설정을 쓰고 캐시가 지워져도 <b>[받기]</b>로 복원됩니다. 접속자 현황도 함께 표시됩니다. 설치 코드는 저장소의 <span class="mono" style="font-size:11.5px">google-apps-script-sync.gs</span>.</p>
+          <label class="fld" style="margin-bottom:10px">웹 앱 URL<input type="text" id="mSyncUrl" placeholder="https://script.google.com/macros/s/……/exec"></label>
+          <label class="chk" style="margin-bottom:10px;font-size:13px"><input type="checkbox" id="mAutoPull"> 접속(부팅) 시 공용 설정 자동으로 받기</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn sm" id="mSyncSave">${icon('check')}저장</button>
+            <button class="btn sm pri" id="mSyncPush">${icon('cloudUp')}공용에 올리기</button>
+            <button class="btn sm" id="mSyncPull">${icon('download')}공용 설정 받기</button>
+            <button class="btn sm" id="mSyncCode">${icon('copy')}설치 코드 복사</button>
+            <span class="muted" id="mSyncStat" style="font-size:12.5px"></span>
+          </div>
         </div>
       </div>`;
     document.body.appendChild(ov);
+    // 공용 동기화 값 채우기 + 핸들러
+    const scfg = (window.SyncStore?SyncStore.getCfg():{url:'',autoPull:false});
+    ov.querySelector('#mSyncUrl').value = scfg.url||'';
+    ov.querySelector('#mAutoPull').checked = !!scfg.autoPull;
+    const sStat = ov.querySelector('#mSyncStat');
+    ov.querySelector('#mSyncSave').onclick = ()=>{ SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked }); sStat.textContent='저장했습니다'; toast('공용 동기화 설정 저장'); };
+    ov.querySelector('#mSyncPush').onclick = async(e)=>{ const b=e.currentTarget; b.disabled=true; sStat.textContent='올리는 중…';
+      SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked });
+      try{ const r=await SyncStore.pushSettings(); sStat.textContent = r.saved?`설정 ${r.saved}개 올림${r.unconfirmed?' (시트에서 확인)':''}`:'올릴 설정 없음'; }
+      catch(err){ sStat.textContent='실패: '+err.message; } b.disabled=false; };
+    ov.querySelector('#mSyncPull').onclick = async(e)=>{ const b=e.currentTarget; b.disabled=true; sStat.textContent='받는 중…';
+      SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked });
+      try{ const r=await SyncStore.pullSettings(); sStat.textContent=`설정 ${r.applied}개 적용 · 새로고침합니다`;
+        if(r.applied) setTimeout(()=>location.reload(),700); else sStat.textContent='받을 공용 설정이 없습니다'; }
+      catch(err){ sStat.textContent='실패: '+err.message; b.disabled=false; } };
+    ov.querySelector('#mSyncCode').onclick = async()=>{ try{ const r=await fetch('google-apps-script-sync.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
     const close=()=>ov.remove();
     ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
     ov.querySelector('#mClose').onclick=close;
@@ -155,7 +194,26 @@ function bootShell(){
       rd.readAsText(f,'utf-8'); };
   }
 
+  // ---- 접속자 현황 (공용 저장소 연동 시) ----
+  function startPresence(){
+    if(!(window.SyncStore && SyncStore.configured())) return;
+    const txt=$('presenceTxt'), box=$('presence');
+    async function tick(){
+      await SyncStore.beat();
+      const list=await SyncStore.presence();
+      if(!list) return;
+      presenceCount = Math.max(1, list.length);
+      const names = list.map(p=>p.device).filter(Boolean);
+      txt.textContent = `${presenceCount}명 접속 중`;
+      box.title = '접속 중: ' + (names.join(', ')||'—');
+      setStatus();
+    }
+    box.onclick = ()=>{ toast('접속 현황 새로고침…'); tick(); };
+    tick();
+    setInterval(tick, 60000);
+  }
+
   window.addEventListener('hashchange', route);
-  setStatus(); route();
+  setStatus(); route(); startPresence();
 }
 document.addEventListener('DOMContentLoaded', bootShell);

@@ -118,4 +118,12 @@ const STORE = {
   csAgents: 'eduino.cs.notes.agents',// 상담사 목록(사용자 편집)
   csTypes:  'eduino.cs.notes.types', // 문의유형 목록(사용자 편집)
   csSumTpl: 'eduino.cs.notes.sumtpl',// 일일 결산 저장 양식(커스텀)
+  syncCfg:  'eduino.sync.cfg',       // 공용 저장소(구글) 연동 { url, autoPull }
 };
+
+/* 공용(구글) 동기화 대상 = 팀 공통 설정만 (기기/세션/상담·발주 거래데이터 제외) */
+const SHARED_SETTING_KEYS = [
+  STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
+  STORE.mdOrderCfg, STORE.csTpl, STORE.csNoteCfg, STORE.csAgents,
+  STORE.csTypes, STORE.csSumTpl,
+];
