@@ -13,16 +13,21 @@
       configured: cfg => !!(cfg && cfg.sheetUrl),
       /* records 를 Apps Script 웹앱(doPost)으로 전송. id 기준 upsert 이므로 재시도해도 중복 없음 */
       async send(records, cfg){
-        const res = await fetch(cfg.sheetUrl, {
-          method:'POST',
-          headers:{'Content-Type':'text/plain;charset=utf-8'}, // 프리플라이트 회피(단순 요청)
-          body: JSON.stringify({ records }),
-        });
-        let data=null; try{ data = await res.json(); }catch{}
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        if(data && data.ok===false) throw new Error(data.error||'시트 처리 실패(보호된 시트 등)');
-        // 응답을 못 읽어도(res.ok) 성공으로 간주 → id upsert 라 중복 위험 없음
-        return { syncedIds: (data && data.synced) ? data.synced : records.map(r=>r.id) };
+        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ records }) };
+        try{
+          const res = await fetch(cfg.sheetUrl, opts);
+          if(!res.ok) throw new Error('HTTP '+res.status);
+          let data=null; try{ data = await res.json(); }catch{}
+          if(data && data.ok===false) throw new Error(data.error||'시트 처리 실패(보호된 시트 등)');
+          return { syncedIds: (data && data.synced) ? data.synced : records.map(r=>r.id) };
+        }catch(err){
+          // Apps Script POST 는 CORS 로 응답을 못 읽는 경우가 많음 → no-cors 로 전송(id upsert 라 재전송 안전)
+          if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){
+            await fetch(cfg.sheetUrl, {...opts, mode:'no-cors'});
+            return { syncedIds: records.map(r=>r.id) };
+          }
+          throw err;
+        }
       },
     },
     notion: {  // 2단계 자리표시 (인터페이스만)

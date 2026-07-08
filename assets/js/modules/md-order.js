@@ -181,7 +181,7 @@
           refreshLookup(); renderAll(); codeEl.focus();
           const cfg=getCfg();
           if(cfg.autoSend && cfg.sheetUrl){ toast('추가 · 시트 전송 중…');
-            sendOrders([rec]).then(r=>{ renderAll(); toast(r.ok?'시트에 자동 전송됨':'시트 전송 실패 — 미전송으로 보관'); });
+            sendOrders([rec]).then(r=>{ renderAll(); toast(r.ok?(r.unconfirmed?'시트로 전송함 (시트에서 확인)':'시트에 자동 전송됨'):'시트 전송 실패 — 미전송으로 보관'); });
           } else toast(cfg.sheetUrl?'발주 목록에 추가 (수동 전송 대기)':'발주 목록에 추가');
         }
         $f('#addOrder').onclick=addOrder;
@@ -206,14 +206,24 @@
       async function sendOrders(list){
         const cfg=getCfg(); if(!cfg.sheetUrl) return {ok:false,error:'시트 URL 미설정'};
         const targets=list.filter(o=>!o.synced); if(!targets.length) return {ok:true,sent:0};
-        try{ const res=await fetch(cfg.sheetUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-            body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})});
+        const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})};
+        try{ const res=await fetch(cfg.sheetUrl, opts);
           if(!res.ok) throw new Error('HTTP '+res.status);
           let data=null; try{ data=await res.json(); }catch{}
           if(data && data.ok===false) throw new Error(data.error||'시트 처리 실패(보호된 시트 등)');
           targets.forEach(o=>o.synced=true); saveOrders();
           return {ok:true, sent:(data&&data.added)||targets.length};
-        }catch(err){ return {ok:false, error:err.message||'전송 실패'}; }
+        }catch(err){
+          // Apps Script는 POST 응답에 CORS 헤더가 없어 브라우저가 못 읽음 → no-cors 로 전송(응답 확인 불가)
+          if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){
+            try{ await fetch(cfg.sheetUrl, {...opts, mode:'no-cors'});
+              targets.forEach(o=>o.synced=true); saveOrders();
+              return {ok:true, sent:targets.length, unconfirmed:true};
+            }catch(e2){ return {ok:false, error:e2.message||'전송 실패'}; }
+          }
+          return {ok:false, error:err.message||'전송 실패'};
+        }
       }
       function ecData(){
         const byV={}; orders.forEach(o=>{ if(!byV[o.vendor]) byV[o.vendor]=vendorShip(o.vendor); });
@@ -252,9 +262,11 @@
         if(!pending.length){ stat.innerHTML='<span style="color:var(--ok)">모든 발주가 이미 시트에 전송되었습니다.</span>'; return; }
         stat.textContent=`전송 중… (${pending.length}건)`;
         const r=await sendOrders(pending); renderAll();
-        stat.innerHTML = r.ok ? `<span style="color:var(--ok)">${r.sent}건을 시트에 추가했습니다.</span>`
+        stat.innerHTML = r.ok
+          ? (r.unconfirmed ? `<span style="color:var(--ok)">${r.sent}건 전송함 — 응답 확인 불가하니 <b>시트에서 확인</b>하세요.</span>`
+                           : `<span style="color:var(--ok)">${r.sent}건을 시트에 추가했습니다.</span>`)
           : `<span style="color:var(--red)">전송 실패: ${esc(r.error)} (복사/CSV로 대체 가능)</span>`;
-        if(r.ok) toast('시트로 전송 완료');
+        if(r.ok) toast(r.unconfirmed?'시트로 전송함 (시트 확인 요망)':'시트로 전송 완료');
       }
 
       /* ---------------- 상품 마스터 ---------------- */
