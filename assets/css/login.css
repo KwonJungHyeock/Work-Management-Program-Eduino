@@ -13,29 +13,44 @@
 @keyframes introFade{to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.intro-mark,.intro-sub,.intro-tip{animation:none;opacity:1}.intro-mark .bar{animation:none;transform:none}}
 
-/* 로그인 / 기기 등록 화면 */
-.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
-  background:radial-gradient(1200px 600px at 70% -10%,#2b3444 0%,#1a1f28 45%,#14181f 100%)}
-.auth-card{width:380px;max-width:100%;background:var(--panel);border:1px solid var(--line);
-  border-radius:14px;box-shadow:var(--sh-lg);overflow:hidden}
-.auth-top{padding:22px 26px 6px}
-.auth-brand{display:flex;align-items:center;gap:11px;margin-bottom:14px}
-.auth-logo{width:40px;height:auto}
-.auth-brand .nm{font-size:20px;font-weight:800;letter-spacing:-.02em}
-.auth-brand .tag{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.1em;
-  color:var(--faint);text-transform:uppercase}
-.auth-title{font-size:15px;font-weight:700;margin-top:6px}
-.auth-desc{font-size:12.5px;color:var(--muted);margin-top:3px}
-.auth-body{padding:16px 26px 24px}
-.auth-body .fld{margin-bottom:12px}
-.code-in{letter-spacing:.35em;font-family:var(--mono);font-size:16px;text-align:center;height:44px}
-.auth-err{min-height:18px;font-size:12px;color:var(--red);font-weight:600;margin:2px 0 8px}
-.auth-steps{display:flex;gap:6px;margin-bottom:16px}
-.auth-steps .st{flex:1;height:4px;border-radius:3px;background:var(--line)}
-.auth-steps .st.on{background:var(--red)}
-.auth-foot{padding:12px 26px;border-top:1px solid var(--line);background:var(--panel-2);
-  font-size:11.5px;color:var(--faint);line-height:1.7}
-.auth-foot code{background:#fff;border:1px solid var(--line);padding:.1em .45em;border-radius:4px;color:var(--muted)}
-.dev-suggest{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.dev-suggest .pill{cursor:pointer}
-.dev-suggest .pill:hover{border-color:var(--red);color:var(--red)}
+/* 로그인 화면 — 여유로운 2단 레이아웃 */
+.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(1200px 620px at 72% -12%,#2b3444 0%,#1a1f28 46%,#0f1319 100%)}
+.auth-card{display:grid;grid-template-columns:1.05fr .95fr;width:940px;max-width:100%;min-height:580px;
+  background:var(--panel);border:1px solid rgba(255,255,255,.06);border-radius:22px;overflow:hidden;
+  box-shadow:0 44px 110px rgba(0,0,0,.52)}
+
+/* 좌측 브랜드 히어로 */
+.auth-hero{position:relative;overflow:hidden;padding:56px 50px;color:#eef1f6;display:flex;flex-direction:column;
+  background:linear-gradient(158deg,#26303f 0%,#1a212c 58%,#151a22 100%)}
+.auth-hero::after{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border-radius:50%;
+  background:radial-gradient(circle,rgba(227,30,36,.24),transparent 70%);pointer-events:none}
+.auth-hero .hero-logo{width:58px;height:auto;margin-bottom:30px;position:relative}
+.auth-hero .hero-nm{font-size:36px;font-weight:800;letter-spacing:-.025em;line-height:1.08}
+.auth-hero .hero-tag{font-size:15.5px;color:#aab2be;margin-top:10px;font-weight:600;letter-spacing:.01em}
+.auth-hero .hero-points{list-style:none;padding:0;margin:34px 0 0;display:flex;flex-direction:column;gap:14px}
+.auth-hero .hero-points li{display:flex;align-items:center;gap:12px;font-size:14px;color:#c2c9d3;font-weight:500}
+.auth-hero .hero-points .dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex:none;box-shadow:0 0 0 4px rgba(227,30,36,.16)}
+.auth-hero .hero-desc{font-size:13px;line-height:1.7;color:#8a93a0;margin-top:auto;padding-top:26px}
+
+/* 우측 로그인 폼 */
+.auth-panel{padding:60px 52px;display:flex;flex-direction:column;justify-content:center;background:var(--panel)}
+.auth-title{font-size:27px;font-weight:800;letter-spacing:-.015em}
+.auth-desc{font-size:14px;color:var(--muted);margin-top:9px;line-height:1.6}
+.auth-panel form{margin-top:30px}
+.auth-panel .fld{display:block;margin-bottom:17px;font-size:13px;font-weight:700;color:var(--ink-2)}
+.auth-panel .fld input{width:100%;height:52px;font-size:16px;margin-top:8px;border-radius:12px;padding:0 16px}
+.auth-panel .fld input:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+.code-in{letter-spacing:.12em;font-family:var(--mono)}
+.auth-err{min-height:20px;font-size:13px;color:var(--red);font-weight:600;margin:0 0 8px}
+.auth-panel .btn.lg.block{height:54px;font-size:16.5px;border-radius:12px;font-weight:700}
+.auth-foot{margin-top:28px;padding-top:20px;border-top:1px solid var(--line);
+  font-size:12.5px;color:var(--faint);line-height:1.7}
+
+@media(max-width:780px){
+  .auth-card{grid-template-columns:1fr;width:440px;min-height:0}
+  .auth-hero{padding:38px 36px 32px}
+  .auth-hero .hero-points,.auth-hero .hero-desc{display:none}
+  .auth-hero .hero-nm{font-size:30px}
+  .auth-panel{padding:34px 36px 40px}
+}

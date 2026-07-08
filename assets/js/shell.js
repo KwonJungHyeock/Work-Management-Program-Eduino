@@ -67,28 +67,30 @@ function bootShell(){
   $('devRole').textContent = (me.user && (deptLabel[me.user.dept] || (me.user.role==='admin'?'관리자':'')) ) || '이 PC';
   $('devAv').textContent = uName.replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,2).toUpperCase() || 'PC';
 
-  // 직무별 권한 (CS는 CS만 · MD는 MD만 · 관리자는 전체)
+  // 계정 권한 (관리자가 기능별로 부여 · 관리자는 전체)
   const isAdmin = !!(me.user && me.user.role==='admin');
   const myDept = me.user && me.user.dept;
-  const deptAllowed = (d)=> isAdmin || d===myDept;
+  const perms = Array.isArray(me.user && me.user.perms) ? me.user.perms : null;
+  const hasPerm = (key)=>{ if(isAdmin) return true;
+    if(perms) return perms.includes(key);
+    return String(key||'').split('.')[0]===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
     if(d==='admin') return isAdmin;
-    if(d==='cs'||d==='md') return deptAllowed(d);
-    return isAdmin; };
+    return hasPerm(key); };
 
-  // 내비게이션
+  // 내비게이션 — CS·MD 섹션은 모두 표시하되, 권한 없는 기능은 잠금 표시
   const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', admin:'#f0a020' };
   const nav = $('nav');
   NAV.forEach(g=>{
     if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
-    if(!g.adminOnly && !deptAllowed(g.dept)) return; // 내 직무 그룹만 노출
     const grp = el('div','nav-group');
     grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
     grp.innerHTML = `<div class="nav-glabel"><span class="gi">${icon(g.icon)}</span>
       <span class="gtx"><b>${esc(g.name)}</b><small>${esc(g.full)}</small></span></div>`;
     g.items.forEach(it=>{
-      const item = el('div','nav-item'); item.dataset.key = it.key;
-      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>`;
+      const locked = g.dept!=='admin' && !hasPerm(it.key);
+      const item = el('div','nav-item'+(locked?' locked':'')); item.dataset.key = it.key;
+      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>${locked?`<span class="lock">${icon('lock')}</span>`:''}`;
       item.onclick = ()=>{ location.hash = it.key; };
       grp.appendChild(item);
     });
@@ -101,17 +103,23 @@ function bootShell(){
 
   function firstKey(){
     for(const g of NAV){
-      if(g.adminOnly && !isAdmin) continue;
-      if(!g.adminOnly && !deptAllowed(g.dept)) continue;
-      if(g.items && g.items.length) return g.items[0].key;
+      if(g.adminOnly){ if(isAdmin && g.items.length) return g.items[0].key; continue; }
+      for(const it of g.items) if(hasPerm(it.key)) return it.key;
     }
+    for(const g of NAV){ if(!g.adminOnly && g.items.length) return g.items[0].key; }  // 권한 없으면 첫 항목(잠금 화면)
     return '';
   }
 
   function route(){
     let key = location.hash.replace('#','') || firstKey();
-    if(key && !canAccess(key)){ const fk=firstKey(); if(fk && fk!==key){ location.hash=fk; return; }
-      const main=$('main'); main.className='main sc'; main.innerHTML=`<div class="view"><div class="empty">${icon('shield')}<div>이 기능에 접근 권한이 없습니다.</div></div></div>`; return; }
+    if(key && !canAccess(key)){
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on', n.dataset.key===key));
+      const main=$('main'); main.className='main sc';
+      main.innerHTML=`<div class="view"><div class="perm-deny">${icon('lock')}
+        <div class="pd-t">접근 권한이 없습니다</div>
+        <div class="pd-d">이 기능은 계정에 부여된 권한이 없습니다.<br>필요하시면 관리자(팀장)에게 요청하세요.</div></div></div>`;
+      setCrumb(key); return;
+    }
     const mod = MODULES[key];
     // 활성 표시
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on', n.dataset.key===key));

@@ -44,7 +44,7 @@ async function putAccount(a) { await redis(['HSET', ACCOUNTS_KEY, a.loginId, JSO
 async function delAccount(id) { await redis(['HDEL', ACCOUNTS_KEY, id]); }
 
 function isAdmin(body) { const a = (body && body.admin) || {}; return a.loginId === ADMIN_ID && String(a.code) === String(ADMIN_CODE); }
-function safeUser(acc, role) { return { loginId: acc.loginId, name: acc.name || acc.loginId, dept: acc.dept || '', role: role || acc.role || 'member', email: acc.email || '' }; }
+function safeUser(acc, role) { return { loginId: acc.loginId, name: acc.name || acc.loginId, dept: acc.dept || '', role: role || acc.role || 'member', email: acc.email || '', perms: Array.isArray(acc.perms) ? acc.perms : null }; }
 
 module.exports = async function handler(req, res) {
   try {
@@ -78,9 +78,10 @@ module.exports = async function handler(req, res) {
       if (!/^[a-zA-Z0-9._-]{2,30}$/.test(loginId)) return res.status(400).json({ ok: false, error: '아이디는 영문/숫자/._- 2~30자' });
       if (loginId === ADMIN_ID) return res.status(400).json({ ok: false, error: '예약된 아이디입니다' });
       if (!String(u.code || '').trim()) return res.status(400).json({ ok: false, error: '접속코드를 입력하세요' });
+      const perms = Array.isArray(u.perms) ? u.perms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
       const acc = {
         loginId, code: String(u.code), name: String(u.name || ''), dept: String(u.dept || ''),
-        email: String(u.email || ''), role: 'member', active: u.active !== false,
+        email: String(u.email || ''), role: 'member', active: u.active !== false, perms,
         createdAt: u.createdAt || new Date().toISOString(),
       };
       await putAccount(acc);

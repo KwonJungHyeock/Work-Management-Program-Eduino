@@ -15,6 +15,10 @@
   }
   const DEPTS=[['cs','CS · 고객 상담'],['md','MD · 상품 기획']];
   const deptLabel=d=>({cs:'CS',md:'MD'}[d]||d||'-');
+  // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD 기능에서 생성)
+  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md')
+    .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
+  const deptDefault=dept=>{ const g=FEATURES.find(x=>x.dept===dept); return g?g.items.map(it=>it.key):[]; };
   const randCode=()=>{ const s='ABCDEFGHJKLMNPRSTUVWXYZ23456789'; let o=''; for(let i=0;i<6;i++) o+=s[Math.floor((crypto.getRandomValues(new Uint32Array(1))[0]/4294967296)*s.length)]; return 'ED-'+o; };
 
   MODULES['admin.users']={
@@ -35,6 +39,15 @@
         .dept-badge.cs{background:#e7f0ff;color:#2d6cdf}.dept-badge.md{background:#ffe9ea;color:#e0313b}
         .u-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
         .u-form .fld{margin:0}
+        .perm-sec{margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px}
+        .perm-cap{font-size:13px;font-weight:800;margin-bottom:11px}
+        .perm-pick{display:flex;gap:22px;flex-wrap:wrap}
+        .perm-grp{min-width:180px}
+        .perm-gl{font-size:11px;font-weight:800;letter-spacing:.05em;margin-bottom:8px;text-transform:uppercase}
+        .perm-gl.cs{color:#2d6cdf}.perm-gl.md{color:#e0313b}
+        .perm-items{display:flex;flex-direction:column;gap:8px}
+        .perm-chk{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;font-weight:600;color:var(--ink-2)}
+        .perm-chk input{width:16px;height:16px}
       </style>
       <div class="adm-hd">
         <div class="tt">팀원 계정 관리</div>
@@ -53,9 +66,15 @@
               <label class="fld">접속코드
                 <span style="display:flex;gap:6px"><input type="text" id="fCode" placeholder="접속코드" style="flex:1">
                   <button type="button" class="btn sm" id="genCode" title="랜덤 생성">${icon('refresh')}</button></span></label>
-              <div><button class="btn pri" id="saveUser">${icon('check')}저장</button></div>
             </div>
-            <div class="muted" id="admStat" style="font-size:12.5px;margin-top:10px"></div>
+            <div class="perm-sec">
+              <div class="perm-cap">열람 권한 <span class="muted" style="font-weight:500">· 체크한 기능만 사용할 수 있습니다 (부서 선택 시 자동 체크)</span></div>
+              <div class="perm-pick" id="permPick"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;margin-top:16px">
+              <button class="btn pri" id="saveUser">${icon('check')}저장</button>
+              <span class="muted" id="admStat" style="font-size:12.5px"></span>
+            </div>
           </div>
         </div>
 
@@ -68,16 +87,23 @@
 
       const $=s=>root.querySelector(s);
       let editing=null;
+      function renderPerms(sel){ const box=$('#permPick'); const S=new Set(sel||[]);
+        box.innerHTML=FEATURES.map(g=>`<div class="perm-grp"><div class="perm-gl ${g.dept}">${esc(g.name)}</div>
+          <div class="perm-items">${g.items.map(it=>`<label class="perm-chk"><input type="checkbox" data-perm="${it.key}" ${S.has(it.key)?'checked':''}> ${esc(it.name)}</label>`).join('')}</div></div>`).join(''); }
+      const collectPerms=()=>[...$('#permPick').querySelectorAll('[data-perm]:checked')].map(c=>c.dataset.perm);
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
+      $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur]); };
       function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs';
-        $('#fId').disabled=false; $('#editHint').textContent=''; $('#fId').focus(); }
+        renderPerms(deptDefault('cs')); $('#fId').disabled=false; $('#editHint').textContent=''; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
         $('#fDept').value=u.dept||'cs'; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
+        renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'));
         $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
+      renderPerms(deptDefault('cs'));
 
       $('#saveUser').onclick=async()=>{
         const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value,
-          email:$('#fEmail').value.trim(), code:$('#fCode').value.trim() };
+          email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), perms:collectPerms() };
         if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--red)">아이디와 접속코드는 필수입니다.</span>'; return; }
         $('#admStat').textContent='저장 중…';
         try{ await authApi('saveUser',{user}); $('#admStat').innerHTML='<span style="color:var(--ok)">저장되었습니다.</span>'; resetForm(); load(); }

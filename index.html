@@ -17,24 +17,31 @@
 
 <div class="auth">
   <div class="auth-card">
-    <div class="auth-top">
-      <div class="auth-brand"><img class="auth-logo" src="assets/brand/eduino-mark.svg" alt="에듀이노"><div class="nm">에듀이노</div>
-        <div class="tag">통합 업무관리</div></div>
-      <div class="auth-title" id="aTitle">로그인</div>
-      <div class="auth-desc" id="aDesc">관리자에게 발급받은 아이디와 접속코드를 입력하세요.</div>
+    <div class="auth-hero">
+      <img class="hero-logo" src="assets/brand/eduino-mark.svg" alt="에듀이노">
+      <div class="hero-nm">에듀이노</div>
+      <div class="hero-tag">통합 업무관리 프로그램</div>
+      <ul class="hero-points">
+        <li><span class="dot"></span>CS · MD 업무를 한 곳에서</li>
+        <li><span class="dot"></span>팀 설정·접속 현황 실시간 공유</li>
+        <li><span class="dot"></span>관리자 계정 발급·권한 관리</li>
+      </ul>
+      <div class="hero-desc">사내 전용 시스템입니다. 계정은 관리자(팀장)가 발급합니다.</div>
     </div>
-    <div class="auth-body">
+    <div class="auth-panel">
+      <div class="auth-title">로그인</div>
+      <div class="auth-desc">관리자에게 발급받은 아이디와 접속코드를 입력하세요.</div>
       <form id="loginForm">
-        <label class="fld" style="margin-bottom:12px">아이디
+        <label class="fld">아이디
           <input type="text" id="loginId" placeholder="예: cs.kim" autocomplete="username" autofocus></label>
-        <label class="fld" style="margin-bottom:4px">접속코드
+        <label class="fld">접속코드
           <input type="password" id="code" class="code-in" placeholder="••••••••" autocomplete="current-password"></label>
         <div class="auth-err" id="err1"></div>
         <button type="submit" class="btn pri lg block" id="loginBtn">로그인</button>
       </form>
-    </div>
-    <div class="auth-foot">
-      팀장(관리자)은 <b>관리자 계정</b>으로 로그인해 <b>팀원 계정</b>을 발급할 수 있습니다.
+      <div class="auth-foot">
+        팀장(관리자)은 <b>관리자 계정</b>으로 로그인해 팀원 계정과 권한을 발급할 수 있습니다.
+      </div>
     </div>
   </div>
 </div>

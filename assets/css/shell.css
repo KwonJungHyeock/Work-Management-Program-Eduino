@@ -65,6 +65,20 @@
 .nav-collapsed .nav-item{justify-content:center;padding:11px 0}
 .nav-collapsed .nav-item .txt{display:none}
 .nav-collapsed .nav-item.on::before{left:0}
+/* 권한 없는(잠금) 메뉴 */
+.nav-item.locked{color:#6b7280}
+.nav-item.locked .ic{color:#5a6270}
+.nav-item.locked:hover{background:#242b36;color:#8b93a1}
+.nav-item.locked .lock{margin-left:auto;display:inline-flex}
+.nav-item.locked .lock .ic{font-size:14px;color:#5a6270}
+.nav-item.locked.on{background:#242b36;color:#9aa2b0;font-weight:600}
+.nav-item.locked.on::before{background:#5a6270}
+/* 권한 없음 화면 */
+.perm-deny{max-width:440px;margin:64px auto;text-align:center;color:var(--muted)}
+.perm-deny .ic{font-size:0}
+.perm-deny > .ic svg{width:46px;height:46px;color:var(--faint);margin-bottom:14px}
+.perm-deny .pd-t{font-size:19px;font-weight:800;color:var(--ink)}
+.perm-deny .pd-d{font-size:14px;line-height:1.7;margin-top:8px}
 .side-foot{flex:none;border-top:1px solid #2a3240;padding:10px}
 .side-foot .btn{background:transparent;border-color:#3a4353;color:#c7cdd6}
 .side-foot .btn:hover{background:#2a3240;border-color:#4a5365;color:#fff}
