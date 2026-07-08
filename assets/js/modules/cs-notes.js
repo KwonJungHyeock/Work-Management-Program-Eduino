@@ -129,15 +129,6 @@
 
       root.innerHTML=`
       <style>
-        .cs-head{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 22px 0}
-        .cs-head .tt{font-size:19px;font-weight:800}
-        .cs-head .ds{font-size:13.5px;color:var(--muted);margin-top:3px}
-        .cs-tabs{display:flex;gap:4px;margin-top:14px}
-        .cs-tabs .t{padding:10px 16px;font-size:14.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
-        .cs-tabs .t.on{color:var(--red);border-bottom-color:var(--red)}
-        .tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:5px;
-          border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:800;vertical-align:middle}
-        .cs-body{padding:20px 22px;max-width:1200px;margin:0 auto}
         /* 빠른 입력 (메모 중심) */
         .q-card{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
         .q-hd{display:flex;align-items:center;gap:9px;padding:14px 20px;background:var(--panel-2);border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
@@ -220,20 +211,20 @@
         .badge.pending{background:var(--warn-bg);color:var(--warn)}
         .badge.cb{background:#eae4ff;color:#5b3fc4}
       </style>
-      <div class="cs-head">
+      <div class="mhead">
         <div class="tt">상담 메모</div>
         <div class="ds">통화 중 분류·고객유형·상품분류를 바로 누르고 내용을 적으면(Ctrl+Enter 저장) 연동 시트에 그대로 기록됩니다.</div>
-        <div class="cs-tabs">
+        <div class="mtabs">
           <div class="t" data-t="memo">상담 메모</div>
           <div class="t" data-t="pending">처리 대기 <span class="tab-cnt" id="pendCnt" style="display:none"></span></div>
           <div class="t" data-t="summary">일일 결산</div>
           <div class="t" data-t="settings">연동 설정</div>
         </div>
       </div>
-      <div class="cs-body" id="csBody"></div>`;
+      <div class="mbody" id="csBody"></div>`;
       const body=root.querySelector('#csBody');
-      root.querySelectorAll('.cs-tabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
-        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.cs-tabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
+      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
+        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ updatePendCnt();
         return tab==='memo'?drawMemo(): tab==='pending'?drawPending(): tab==='summary'?drawSummary(): drawSettings(); };
       function updatePendCnt(){ const c=root.querySelector('#pendCnt'); if(!c) return;
@@ -545,7 +536,7 @@
             card.querySelector('[data-a=toggle]').onclick=()=>{ const arr=getNotes(); const t=arr.find(x=>x.id===r.id);
               if(t){ t.callbackDone=!t.callbackDone; t.callbackDoneAt=t.callbackDone?nowISO():null; t.callbackNote=inp.value; setNotes(arr); }
               renderPend(); updatePendCnt(); };
-            card.querySelector('[data-a=go]').onclick=()=>{ tab='memo'; root.querySelectorAll('.cs-tabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t==='memo')); draw(); };
+            card.querySelector('[data-a=go]').onclick=()=>{ tab='memo'; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t==='memo')); draw(); };
             box.appendChild(card);
           });
         }
@@ -659,14 +650,12 @@
             <div class="card-hd">${icon('link')}<b>연동 방법 — 처음 한 번만 (약 3분)</b>
               <button class="btn pri sm" id="copyCode" style="margin-left:auto">${icon('copy')}Apps Script 코드 복사</button></div>
             <div class="card-bd">
-              <ol class="guide">
-                <li>기록할 <b>구글 시트</b>를 엽니다. (1행 헤더: <span class="mono" style="font-size:12px">날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사</span>)</li>
-                <li>상단 메뉴 <span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> 를 클릭합니다.</li>
-                <li>편집기 내용을 모두 지우고, 위의 <b>[Apps Script 코드 복사]</b> 로 복사한 코드를 붙여넣기(<span class="k">Ctrl</span>+<span class="k">V</span>) 후 저장(<span class="k">Ctrl</span>+<span class="k">S</span>).</li>
-                <li>코드 상단 <span class="mono" style="font-size:12px">SHEET_NAME</span> 을 기록할 <b>탭 이름</b>으로 맞춥니다. (예: 테스트는 <span class="k">상담test</span>, 실제는 <span class="k">2026 CS 상담이력</span>)</li>
-                <li>오른쪽 위 <span class="k">배포</span> → <span class="k">새 배포</span> → 톱니바퀴(⚙) → <span class="k">웹 앱</span> 선택.</li>
-                <li>‘액세스 권한’을 <span class="k">모든 사용자</span> 로 바꾸고 <span class="k">배포</span>. (권한 승인 창이 뜨면 허용)</li>
-                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장]</b> → <b>[연결 테스트]</b>.</li>
+              <ol class="setup-guide">
+                <li>기록할 <b>구글 시트</b>를 엽니다. <span class="muted" style="font-size:12.5px">(1행 헤더: 날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사)</span></li>
+                <li><span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> → 편집기 내용을 지우고 위 <b>[Apps Script 코드 복사]</b> 붙여넣기 후 저장.</li>
+                <li>코드 상단 <span class="mono" style="font-size:12px">SHEET_NAME</span> 을 기록할 <b>탭 이름</b>으로 맞춥니다. <span class="muted" style="font-size:12.5px">(예: 상담test / 2026 CS 상담이력)</span></li>
+                <li><span class="k">배포</span> → <span class="k">새 배포</span> → <span class="k">웹 앱</span> (실행: 나 / 액세스: <span class="k">모든 사용자</span>)로 배포. <span class="muted" style="font-size:12.5px">(권한 승인 창이 뜨면 허용)</span></li>
+                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장] → [연결 테스트]</b>.</li>
               </ol>
               <div class="note" style="margin-top:6px">시트 <b>1행 헤더 이름</b>을 읽어 칸을 맞추므로 열 순서가 달라도 정확히 들어갑니다.
                 각 기록은 숨은 <b>id</b> 열로 <b>중복 없이</b> 갱신되며, 전송이 실패해도 로컬에 안전하게 보관됩니다.</div>
@@ -676,7 +665,7 @@
           <div class="card" style="margin-bottom:16px;max-width:820px">
             <div class="card-hd">${icon('link')}<b>구글 시트 연결</b></div>
             <div class="card-bd">
-              <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 7번에서 복사한 주소</span>
+              <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 5번에서 복사한 주소</span>
                 <input type="text" id="cfgUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
               <div style="margin-bottom:16px">
                 <label class="fld" style="margin-bottom:8px">전송 방식</label>

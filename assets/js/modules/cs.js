@@ -13,13 +13,15 @@ MODULES['cs.templates'] = {
     if(items===null){ items = DEFAULTS.slice(); db.set(items); }
     let filter='전체';
 
-    root.innerHTML = `<div class="view">
-      <div class="view-hd"><div><div class="tt">답변 템플릿</div>
-        <div class="ds">자주 쓰는 CS 답변을 분류별로 저장하고 한 번에 복사합니다.</div></div>
-        <div class="actions"><button class="btn pri" id="add">${icon('plus')}새 템플릿</button></div></div>
-      <div id="cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
-      <div id="list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px"></div>
-    </div>`;
+    root.innerHTML = `
+      <div class="mhead pad"><div class="mhead-row">
+        <div><div class="tt">답변 템플릿</div>
+          <div class="ds">자주 쓰는 CS 답변을 분류별로 저장하고 한 번에 복사합니다.</div></div>
+        <div class="mhead-act"><button class="btn pri" id="add">${icon('plus')}새 템플릿</button></div></div></div>
+      <div class="mbody">
+        <div id="cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
+        <div id="list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px"></div>
+      </div>`;
     const catBar=root.querySelector('#cats'), list=root.querySelector('#list');
 
     const cats=()=>['전체',...new Set(items.map(i=>i.cat))];

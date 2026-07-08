@@ -66,16 +66,6 @@
 
       root.innerHTML=`
       <style>
-        .ord-hd{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 22px 0}
-        .ord-hd .tt{font-size:19px;font-weight:800}.ord-hd .ds{font-size:13.5px;color:var(--muted);margin-top:3px}
-        /* 탭 (알약형) */
-        .ord-tabs{display:flex;gap:6px;margin-top:14px;padding-bottom:12px}
-        .ord-tabs .t{display:flex;align-items:center;gap:6px;padding:8px 16px;font-size:14px;font-weight:700;color:var(--muted);
-          cursor:pointer;border-radius:9px 9px 0 0;border:1px solid transparent;border-bottom:none;position:relative;transition:.12s}
-        .ord-tabs .t:hover{background:var(--hover);color:var(--ink)}
-        .ord-tabs .t.on{color:var(--red);background:var(--red-soft)}
-        .ord-tabs .t.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-12px;height:3px;background:var(--red);border-radius:3px}
-        .ord-body{padding:20px 22px;max-width:1240px}
         .code-in{font-size:20px;font-weight:800;font-family:var(--mono);height:54px;letter-spacing:.03em;border-width:2px}
         .code-in:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
         /* 자동 조회 */
@@ -107,20 +97,20 @@
         /* 섹션 스텝 통일 */
         .fs-hd .step{box-shadow:0 2px 6px rgba(16,24,40,.18)}
       </style>
-      <div class="ord-hd">
+      <div class="mhead">
         <div class="tt">입점사 발주</div>
         <div class="ds">상품코드만 입력하면 입점사·정산구분·품명(구글시트)과 배송비(이카운트)가 자동으로 채워집니다.</div>
-        <div class="ord-tabs">
+        <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
           <div class="t" data-t="master">상품 마스터</div>
           <div class="t" data-t="vendor">입점사 정보</div>
           <div class="t" data-t="settings">연동 설정</div>
         </div>
       </div>
-      <div class="ord-body" id="ordBody"></div>`;
+      <div class="mbody" id="ordBody"></div>`;
       const body=root.querySelector('#ordBody');
-      root.querySelectorAll('.ord-tabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
-        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.ord-tabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
+      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
+        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=> tab==='entry'?drawEntry(): tab==='master'?drawMaster(): tab==='vendor'?drawVendors(): drawSettings();
 
       /* ---------------- 발주 입력 ---------------- */
@@ -490,11 +480,12 @@
             <div class="card-hd">${icon('link')}<b>구글시트 발주표 연동</b>
               <button class="btn pri sm" id="copyCode" style="margin-left:auto">${icon('copy')}Apps Script 코드 복사</button></div>
             <div class="card-bd">
-              <ol class="guide">
-                <li>발주표 <b>구글시트</b>를 열고 <span class="k">확장 프로그램</span> → <span class="k">Apps Script</span>.</li>
-                <li>기존 코드를 지우고 위의 <b>[Apps Script 코드 복사]</b>로 붙여넣기 후 저장.</li>
-                <li><span class="k">배포</span> → <span class="k">새 배포</span> → <span class="k">웹 앱</span>, 액세스 <span class="k">모든 사용자</span> 로 배포.</li>
-                <li>웹 앱 URL(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 저장 → 연결 테스트.</li>
+              <ol class="setup-guide">
+                <li>발주표 <b>구글 시트</b>를 엽니다. <span class="muted" style="font-size:12.5px">(1행 헤더: 일자·구분·주문경로·주문자명·입점사명·정산구분·자체상품코드·품명·수량·출고송장/입고·발주·배송정보/비고)</span></li>
+                <li><span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> → 편집기 내용을 지우고 위 <b>[Apps Script 코드 복사]</b> 붙여넣기 후 저장.</li>
+                <li>코드 상단 <span class="mono" style="font-size:12px">SHEET_NAME</span> 을 기록할 <b>탭 이름</b>으로 맞춥니다. <span class="muted" style="font-size:12.5px">(실제 발주표 탭 이름)</span></li>
+                <li><span class="k">배포</span> → <span class="k">새 배포</span> → <span class="k">웹 앱</span> (실행: 나 / 액세스: <span class="k">모든 사용자</span>)로 배포. <span class="muted" style="font-size:12.5px">(권한 승인 창이 뜨면 허용)</span></li>
+                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장] → [연결 테스트]</b>.</li>
               </ol>
               <label class="fld" style="margin:8px 0 12px">웹 앱 URL<input type="text" id="ordUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
               <div style="margin-bottom:14px">

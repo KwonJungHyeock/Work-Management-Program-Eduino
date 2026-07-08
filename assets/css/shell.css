@@ -132,6 +132,34 @@
   .nav-item{justify-content:center}
 }
 
+/* ===========================================================================
+   공통 모듈 헤더 · 탭 · 본문 (전 기능 디자인 통일)
+   각 모듈은 .mhead(제목/설명/액션) + .mtabs(탭) + .mbody(내용) 를 사용
+   =========================================================================== */
+.mhead{position:sticky;top:0;z-index:6;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 24px 0}
+.mhead.pad{padding-bottom:16px}
+.mhead-row{display:flex;align-items:flex-start;gap:14px}
+.mhead .tt{font-size:19px;font-weight:800;letter-spacing:-.01em}
+.mhead .ds{font-size:13.5px;color:var(--muted);margin-top:4px;line-height:1.5;max-width:860px}
+.mhead-act{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;flex:none}
+.mtabs{display:flex;gap:3px;margin-top:15px}
+.mtabs .t{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;font-size:14px;font-weight:700;color:var(--muted);
+  cursor:pointer;border-radius:9px 9px 0 0;position:relative;transition:.12s;white-space:nowrap;user-select:none}
+.mtabs .t:hover{color:var(--ink);background:var(--hover)}
+.mtabs .t.on{color:var(--red);background:var(--red-soft)}
+.mtabs .t.on::after{content:"";position:absolute;left:13px;right:13px;bottom:-1px;height:3px;background:var(--red);border-radius:3px 3px 0 0}
+.mtabs .tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
+  border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:800}
+.mbody{padding:22px 24px;max-width:1240px}
+/* 연동 설정 안내(공통) — 번호 스텝 */
+.setup-guide{counter-reset:step;display:grid;gap:13px;margin:4px 0;padding:0}
+.setup-guide li{list-style:none;position:relative;padding-left:40px;min-height:27px;font-size:14px;line-height:1.7}
+.setup-guide li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:0;width:26px;height:26px;
+  border-radius:50%;background:var(--red);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+.setup-guide b{color:var(--ink);font-weight:700}
+.setup-guide .k{display:inline-block;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:6px;
+  padding:1px 8px;font-size:13px;font-weight:700;white-space:nowrap;line-height:1.5}
+
 /* 설정 백업/복원 모달 */
 .modal-ov{position:fixed;inset:0;z-index:200;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;padding:20px;animation:mfade .14s ease}
 @keyframes mfade{from{opacity:0}to{opacity:1}}

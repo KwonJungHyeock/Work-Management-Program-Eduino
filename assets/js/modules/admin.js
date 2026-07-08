@@ -30,9 +30,6 @@
       }
       root.innerHTML=`
       <style>
-        .adm-hd{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 22px}
-        .adm-hd .tt{font-size:19px;font-weight:800}.adm-hd .ds{font-size:13.5px;color:var(--muted);margin-top:3px}
-        .adm-body{padding:20px 22px;max-width:1080px}
         .adm-tbl td,.adm-tbl th{vertical-align:middle}
         .code-cell{font-family:var(--mono);letter-spacing:.02em}
         .dept-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px}
@@ -49,11 +46,11 @@
         .perm-chk{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;font-weight:600;color:var(--ink-2)}
         .perm-chk input{width:16px;height:16px}
       </style>
-      <div class="adm-hd">
+      <div class="mhead pad">
         <div class="tt">팀원 계정 관리</div>
         <div class="ds">아이디·접속코드를 발급하면 팀원이 그 정보로 로그인합니다. 접속코드는 서버에서만 검증됩니다.</div>
       </div>
-      <div class="adm-body">
+      <div class="mbody">
         <div class="card" style="margin-bottom:18px">
           <div class="card-hd">${icon('plus')}<b>계정 발급 / 수정</b>
             <span class="muted" id="editHint" style="margin-left:auto;font-size:12.5px"></span></div>
@@ -129,7 +126,7 @@
               <td><span style="display:flex;gap:4px;justify-content:flex-end">
                 <button class="btn ghost sm" data-a="edit">수정</button>
                 <button class="btn ghost sm" data-a="del">${icon('trash')}</button></span></td>`;
-            tr.querySelector('[data-a=edit]').onclick=()=>{ fillForm(u); root.querySelector('.adm-body').scrollIntoView({behavior:'smooth',block:'start'}); };
+            tr.querySelector('[data-a=edit]').onclick=()=>{ fillForm(u); root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
             tr.querySelector('[data-a=del]').onclick=async()=>{ if(!confirm(`'${u.loginId}' 계정을 삭제할까요?`)) return;
               try{ await authApi('deleteUser',{loginId:u.loginId}); load(); }catch(err){ toast(err.message); } };
             tb.appendChild(tr);
