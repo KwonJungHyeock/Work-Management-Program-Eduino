@@ -16,10 +16,23 @@ const SETTINGS_KEY = 'eduino:settings';
 const PRESENCE_KEY = 'eduino:presence';
 const PRESENCE_TTL_MS = 3 * 60 * 1000; // 최근 3분 이내 하트비트 = 접속 중
 
+function kvCreds() {
+  const env = process.env;
+  let url = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL;
+  let token = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN;
+  // 커스텀 프리픽스(STORAGE_ 등)가 붙어도 자동 탐지: *_REST_API_URL / *_REST_API_TOKEN
+  if (!url || !token) {
+    for (const k of Object.keys(env)) {
+      if (!url && /REST_API_URL$/.test(k) && /^https?:\/\//.test(env[k] || '')) url = env[k];
+      if (!token && /(?:^|_)REST_API_TOKEN$/.test(k)) token = env[k];
+    }
+  }
+  return { url, token };
+}
+
 async function redis(command) {
-  // Vercel KV 또는 Upstash 통합 — 어느 쪽으로 연결해도 자동 인식
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Vercel KV 또는 Upstash 통합 — 어느 프리픽스로 연결해도 자동 인식
+  const { url, token } = kvCreds();
   if (!url || !token) { const e = new Error('KV_NOT_CONNECTED'); e.kv = true; throw e; }
   const r = await fetch(url, {
     method: 'POST',
