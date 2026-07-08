@@ -126,8 +126,10 @@ function bootShell(){
     const ov=el('div','modal-ov');
     ov.innerHTML=`
       <div class="modal">
-        <div class="modal-hd">${icon('save')}<b>설정 백업 / 복원</b><button class="btn ghost sm" id="mClose">${icon('x')}</button></div>
+        <div class="modal-hd">${icon('save')}<b>연동 상태 · 설정 백업</b><button class="btn ghost sm" id="mClose">${icon('x')}</button></div>
         <div class="modal-bd">
+          <div id="integStatus" style="margin-bottom:16px"></div>
+          <div style="border-top:1px solid var(--line);margin:0 0 14px"></div>
           <p style="font-size:13.5px;line-height:1.65;color:var(--ink-2)">이 프로그램은 백엔드 없이 <b>이 브라우저(이 PC)에만</b> 설정을 저장합니다. 브라우저 캐시를 지우면 설정이 사라지므로, 아래에서 <b>설정 파일(.json)</b>로 백업해 두세요. 다른 PC·직원과 세팅을 공유할 때도 이 파일을 쓰면 됩니다.</p>
           <div class="muted" style="font-size:12.5px;margin:10px 0">백업 대상: 플랫폼·상품 마스터·입점사·발주/CS 연동 설정·분류·상담사·결산 양식·상담 메모 등 저장된 <b>${keys.length}</b>개 항목</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -145,6 +147,7 @@ function bootShell(){
           <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">전용 구글시트(공용 저장소)에 <b>팀 공통 설정</b>을 올려두면, 4명이 같은 설정을 쓰고 캐시가 지워져도 <b>[받기]</b>로 복원됩니다. 접속자 현황도 함께 표시됩니다. 설치 코드는 저장소의 <span class="mono" style="font-size:11.5px">google-apps-script-sync.gs</span>.</p>
           <label class="fld" style="margin-bottom:10px">웹 앱 URL<input type="text" id="mSyncUrl" placeholder="https://script.google.com/macros/s/……/exec"></label>
           <label class="chk" style="margin-bottom:10px;font-size:13px"><input type="checkbox" id="mAutoPull"> 접속(부팅) 시 공용 설정 자동으로 받기</label>
+          <div class="note" style="font-size:12px;margin-bottom:10px"><b>[공용에 올리기]</b> 하면 올라가는 항목: <span id="mSyncItems"></span></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button class="btn sm" id="mSyncSave">${icon('check')}저장</button>
             <button class="btn sm pri" id="mSyncPush">${icon('cloudUp')}공용에 올리기</button>
@@ -155,12 +158,44 @@ function bootShell(){
         </div>
       </div>`;
     document.body.appendChild(ov);
+
+    // 연동 상태 (공용 저장소 · CS 상담 시트 · 발주 시트)
+    function renderInteg(){
+      const rows=[
+        { name:'공용 저장소', desc:'팀 설정 공유·접속자 현황', url:(window.SyncStore?SyncStore.getCfg().url:'') },
+        { name:'CS 상담 시트', desc:'상담 메모 기록',        url:(store(STORE.csNoteCfg).get({}).sheetUrl||'') },
+        { name:'발주 시트',    desc:'입점사 발주 기록',       url:(store(STORE.mdOrderCfg).get({}).sheetUrl||'') },
+      ];
+      const box=ov.querySelector('#integStatus');
+      box.innerHTML=`<div style="font-size:14px;font-weight:800;margin-bottom:9px">연동 상태</div>
+        <div class="integ-list">${rows.map((r,i)=>`
+          <div class="integ-row">
+            <span class="integ-dot ${r.url?'on':'off'}"></span>
+            <div class="integ-nm"><b>${esc(r.name)}</b><span>${esc(r.desc)}</span></div>
+            <span class="badge ${r.url?'live':'soon'}">${r.url?'연결됨':'미연결'}</span>
+            <button class="btn ghost sm" data-test="${i}" ${r.url?'':'disabled'}>테스트</button>
+          </div>`).join('')}</div>
+        <div class="muted" id="integStat" style="font-size:12px;margin-top:8px"></div>`;
+      box.querySelectorAll('[data-test]').forEach(b=>b.onclick=async()=>{
+        const r=rows[+b.dataset.test], st=box.querySelector('#integStat');
+        st.textContent=`${r.name} 테스트 중…`;
+        try{ const res=await fetch(r.url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
+          st.innerHTML = res.ok ? `<span style="color:var(--ok)">${esc(r.name)} 연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`
+                                : `<span style="color:var(--red)">${esc(r.name)} 응답 오류 HTTP ${res.status}</span>`;
+        }catch(err){ st.innerHTML=`<span style="color:var(--red)">${esc(r.name)} 연결 실패: ${esc(err.message)}</span>`; }
+      });
+    }
+    renderInteg();
+    // 올라가는 항목 목록
+    const items=SHARED_SETTING_KEYS.filter(k=>localStorage.getItem(k)!=null).map(k=>SHARED_LABELS[k]||k);
+    ov.querySelector('#mSyncItems').textContent = items.length?items.join(' · '):'(아직 저장된 설정 없음 — 각 기능에서 설정 후 올리기)';
+
     // 공용 동기화 값 채우기 + 핸들러
     const scfg = (window.SyncStore?SyncStore.getCfg():{url:'',autoPull:false});
     ov.querySelector('#mSyncUrl').value = scfg.url||'';
     ov.querySelector('#mAutoPull').checked = !!scfg.autoPull;
     const sStat = ov.querySelector('#mSyncStat');
-    ov.querySelector('#mSyncSave').onclick = ()=>{ SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked }); sStat.textContent='저장했습니다'; toast('공용 동기화 설정 저장'); };
+    ov.querySelector('#mSyncSave').onclick = ()=>{ SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked }); sStat.textContent='저장했습니다'; renderInteg(); toast('공용 동기화 설정 저장'); };
     ov.querySelector('#mSyncPush').onclick = async(e)=>{ const b=e.currentTarget; b.disabled=true; sStat.textContent='올리는 중…';
       SyncStore.setCfg({ url:ov.querySelector('#mSyncUrl').value.trim(), autoPull:ov.querySelector('#mAutoPull').checked });
       try{ const r=await SyncStore.pushSettings(); sStat.textContent = r.saved?`설정 ${r.saved}개 올림${r.unconfirmed?' (시트에서 확인)':''}`:'올릴 설정 없음'; }
@@ -195,22 +230,44 @@ function bootShell(){
   }
 
   // ---- 접속자 현황 (공용 저장소 연동 시) ----
+  let presencePop=null, lastPresence=null;
+  function renderPresencePop(){
+    if(!presencePop) return;
+    const list=lastPresence;
+    const bd = list==null ? '<div class="muted" style="padding:4px 2px">불러오는 중…</div>'
+      : (list.length ? list.map(p=>`<div class="pp-row"><span class="pp-dot"></span><b>${esc(p.device)}</b>${p.device===me.device?'<span class="pp-me">나</span>':''}</div>`).join('')
+                     : '<div class="muted" style="padding:4px 2px">표시할 접속자가 없습니다</div>');
+    presencePop.innerHTML=`<div class="pp-hd">접속자 현황${list?` <span class="muted">· ${list.length}명</span>`:''}</div><div class="pp-bd">${bd}</div>`;
+  }
+  function outsidePop(e){ const box=$('presence'); if(presencePop && !presencePop.contains(e.target) && !box.contains(e.target)) closePresencePop(); }
+  function closePresencePop(){ if(presencePop){ presencePop.remove(); presencePop=null; } document.removeEventListener('mousedown', outsidePop); }
+  function togglePresencePop(){
+    if(presencePop){ closePresencePop(); return; }
+    const box=$('presence'), r=box.getBoundingClientRect();
+    presencePop=el('div','presence-pop');
+    presencePop.style.cssText=`position:fixed;top:${Math.round(r.bottom+8)}px;right:${Math.round(window.innerWidth-r.right)}px`;
+    document.body.appendChild(presencePop); renderPresencePop();
+    SyncStore.presence().then(l=>{ lastPresence=l; renderPresencePop(); });
+    setTimeout(()=>document.addEventListener('mousedown', outsidePop),0);
+  }
   function startPresence(){
     if(!(window.SyncStore && SyncStore.configured())) return;
     const txt=$('presenceTxt'), box=$('presence');
     async function tick(){
+      if(document.hidden) return;               // 탭 숨김 시 폴링 절약(무료 한도 보호)
       await SyncStore.beat();
       const list=await SyncStore.presence();
       if(!list) return;
-      presenceCount = Math.max(1, list.length);
-      const names = list.map(p=>p.device).filter(Boolean);
-      txt.textContent = `${presenceCount}명 접속 중`;
-      box.title = '접속 중: ' + (names.join(', ')||'—');
-      setStatus();
+      lastPresence=list; presenceCount=Math.max(1, list.length);
+      txt.textContent=`${presenceCount}명 접속 중`;
+      box.title='클릭하면 접속자 목록 보기';
+      box.style.cursor='pointer';
+      setStatus(); renderPresencePop();
     }
-    box.onclick = ()=>{ toast('접속 현황 새로고침…'); tick(); };
+    box.onclick=togglePresencePop;
     tick();
     setInterval(tick, 60000);
+    document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });
   }
 
   window.addEventListener('hashchange', route);

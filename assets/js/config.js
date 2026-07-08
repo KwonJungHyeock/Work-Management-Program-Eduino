@@ -127,3 +127,16 @@ const SHARED_SETTING_KEYS = [
   STORE.mdOrderCfg, STORE.csTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl,
 ];
+/* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
+const SHARED_LABELS = {
+  [STORE.platforms]:'플랫폼 설정',
+  [STORE.mdPresets]:'플랫폼 프리셋',
+  [STORE.mdProducts]:'상품 마스터',
+  [STORE.mdVendors]:'입점사 정보(배송비·정책)',
+  [STORE.mdOrderCfg]:'발주 시트 연동 URL',
+  [STORE.csTpl]:'CS 답변 템플릿',
+  [STORE.csNoteCfg]:'CS 상담시트 연동 URL',
+  [STORE.csAgents]:'상담사 목록',
+  [STORE.csTypes]:'CS 분류',
+  [STORE.csSumTpl]:'결산 저장 양식',
+};
