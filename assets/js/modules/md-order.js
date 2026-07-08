@@ -12,7 +12,7 @@
   const getProducts=()=>prodDB().get(DEFAULT_MD_PRODUCTS.map(p=>({...p})));
   const getVendors =()=>venDB().get(DEFAULT_MD_VENDORS.map(v=>({...v})));
   const getOrders  =()=>ordDB().get([]);
-  const getCfg     =()=>cfgDB().get({sheetUrl:''});
+  const getCfg     =()=>cfgDB().get({sheetUrl:'', autoSend:true});
   const vat=g=>{ const gross=Number(g)||0; const tax=Math.round(gross/11); return {gross,tax,supply:gross-tax}; };
 
   /* 구분자 데이터 파서 (CSV / 붙여넣기 TSV) */
@@ -36,8 +36,10 @@
   MODULES['md.order']={
     title:'입점사 발주', icon:'truck',
     render(root){
-      let tab='entry';
+      let tab='entry', dirtyMaster=false, dirtyVendor=false;
       let products=getProducts(), vendors=getVendors(), orders=getOrders();
+      const markMasterDirty=()=>{ dirtyMaster=true; const d=body.querySelector('#mDirty'); if(d)d.style.display=''; };
+      const markVendorDirty=()=>{ dirtyVendor=true; const d=body.querySelector('#vDirty'); if(d)d.style.display=''; };
       const saveProducts=()=>prodDB().set(products);
       const saveVendors =()=>venDB().set(vendors);
       const saveOrders  =()=>ordDB().set(orders);
@@ -150,14 +152,18 @@
         function addOrder(){
           const code=codeEl.value.trim(); const p=prodMap()[code];
           if(!p){ toast('미등록 상품코드입니다'); refreshLookup(); codeEl.focus(); return; }
-          orders.push({ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
+          const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(),
             vendor:p.vendor, settle:p.settle, code:p.code, name:p.name,
-            qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim() });
-          saveOrders();
+            qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim(), synced:false };
+          orders.push(rec); saveOrders();
           // 코드/주문자/배송정보만 비우고 구분·경로·일자 유지
           form.code=''; codeEl.value=''; $f('#fOrderer').value=''; $f('#fShipInfo').value=''; $f('#fQty').value=1;
-          refreshLookup(); renderAll(); codeEl.focus(); toast('발주 목록에 추가했습니다');
+          refreshLookup(); renderAll(); codeEl.focus();
+          const cfg=getCfg();
+          if(cfg.autoSend && cfg.sheetUrl){ toast('추가 · 시트 전송 중…');
+            sendOrders([rec]).then(r=>{ renderAll(); toast(r.ok?'시트에 자동 전송됨':'시트 전송 실패 — 미전송으로 보관'); });
+          } else toast(cfg.sheetUrl?'발주 목록에 추가 (수동 전송 대기)':'발주 목록에 추가');
         }
         $f('#addOrder').onclick=addOrder;
         body.querySelector('.card-bd').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='fCode'){ e.preventDefault(); addOrder(); }});
@@ -170,12 +176,22 @@
         refreshLookup(); renderAll(); codeEl.focus();
       }
 
-      function sheetData(){
-        const rows=orders.map(o=>ORDER_SHEET_COLS.map(c=>({
+      function sheetRowsFor(list){
+        return list.map(o=>ORDER_SHEET_COLS.map(c=>({
           '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
           '정산구분':o.settle,'상품코드':o.code,'품명':o.name,'수량':o.qty,'출고송장/입고':'',
           '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
-        return { cols:ORDER_SHEET_COLS, rows };
+      }
+      function sheetData(){ return { cols:ORDER_SHEET_COLS, rows:sheetRowsFor(orders) }; }
+      async function sendOrders(list){
+        const cfg=getCfg(); if(!cfg.sheetUrl) return {ok:false,error:'시트 URL 미설정'};
+        const targets=list.filter(o=>!o.synced); if(!targets.length) return {ok:true,sent:0};
+        try{ const res=await fetch(cfg.sheetUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+            body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})});
+          if(!res.ok) throw new Error('HTTP '+res.status);
+          targets.forEach(o=>o.synced=true); saveOrders();
+          return {ok:true, sent:targets.length};
+        }catch(err){ return {ok:false, error:err.message||'전송 실패'}; }
       }
       function ecData(){
         const byV={}; orders.forEach(o=>{ if(!byV[o.vendor]) byV[o.vendor]=vendorShip(o.vendor); });
@@ -188,13 +204,14 @@
         const t=body.querySelector('#ordTable'), cnt=body.querySelector('#ordCnt'); if(!t) return;
         if(cnt) cnt.textContent=`· ${orders.length}건`;
         t.innerHTML=`<thead><tr><th>일자</th><th>구분</th><th>주문자</th><th>입점사</th><th>정산</th><th>상품코드</th><th>품명</th>
-          <th class="num">수량</th><th class="num">배송비</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+          <th class="num">수량</th><th class="num">배송비</th><th style="width:78px">시트</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
-        if(!orders.length){ tb.innerHTML=`<tr><td colspan="10" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
+        if(!orders.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
         orders.forEach((o,i)=>{ const tr=el('tr');
           tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
             <td><b>${esc(o.vendor)}</b></td><td>${esc(o.settle)}</td><td class="mono">${esc(o.code)}</td>
             <td style="max-width:360px">${esc(o.name)}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
+            <td>${o.synced?'<span class="badge live">전송됨</span>':'<span class="badge soon">미전송</span>'}</td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
           tr.querySelector('button').onclick=()=>{ orders.splice(i,1); saveOrders(); renderAll(); };
           tb.appendChild(tr); });
@@ -209,13 +226,13 @@
       async function sendToSheet(){
         const cfg=getCfg(), stat=body.querySelector('#sheetStat');
         if(!cfg.sheetUrl){ stat.innerHTML='<span style="color:var(--red)">연동 설정 탭에서 시트 URL을 먼저 등록하세요.</span>'; return; }
-        if(!orders.length){ toast('발주 목록이 비어 있습니다'); return; }
-        const {cols,rows}=sheetData(); stat.textContent='전송 중…';
-        try{ const res=await fetch(cfg.sheetUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({cols,rows})});
-          let d=null; try{d=await res.json();}catch{}
-          if(!res.ok) throw new Error('HTTP '+res.status);
-          stat.innerHTML=`<span style="color:var(--ok)">${(d&&d.added)||rows.length}건을 시트에 추가했습니다.</span>`; toast('시트로 전송 완료');
-        }catch(err){ stat.innerHTML=`<span style="color:var(--red)">전송 실패: ${esc(err.message)} (복사/CSV로 대체 가능)</span>`; }
+        const pending=orders.filter(o=>!o.synced);
+        if(!pending.length){ stat.innerHTML='<span style="color:var(--ok)">모든 발주가 이미 시트에 전송되었습니다.</span>'; return; }
+        stat.textContent=`전송 중… (${pending.length}건)`;
+        const r=await sendOrders(pending); renderAll();
+        stat.innerHTML = r.ok ? `<span style="color:var(--ok)">${r.sent}건을 시트에 추가했습니다.</span>`
+          : `<span style="color:var(--red)">전송 실패: ${esc(r.error)} (복사/CSV로 대체 가능)</span>`;
+        if(r.ok) toast('시트로 전송 완료');
       }
 
       /* ---------------- 상품 마스터 ---------------- */
@@ -223,21 +240,25 @@
         body.innerHTML=`
           <input type="file" id="csvFile" accept=".csv,text/csv" class="hidden">
           <div class="card">
-            <div class="card-hd">${icon('grid')}<b>상품 마스터</b> <span class="muted" style="font-size:12.5px">· 상품코드 → 입점사·정산구분·품명·(배송비 예외)</span>
+            <div class="card-hd">${icon('grid')}<b>상품 마스터</b>
+              <span class="badge soon" id="mDirty" style="display:${dirtyMaster?'':'none'}">● 저장 안 됨</span>
               <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn sm" id="addProd">${icon('plus')}행 추가</button>
                 <button class="btn sm" id="impFile">${icon('upload')}CSV 불러오기</button>
                 <button class="btn sm" id="impPaste">${icon('clipboard')}붙여넣기</button>
                 <button class="btn sm" id="expProd">${icon('download')}CSV 내보내기</button>
-                <button class="btn sm" id="resetProd">${icon('refresh')}기본값</button></span></div>
+                <button class="btn sm" id="resetProd">${icon('refresh')}기본값</button>
+                <button class="btn sm pri" id="saveProd">${icon('save')}저장</button></span></div>
             <div class="card-bd" style="padding:0"><div class="out-tbl" style="max-height:520px"><table class="tbl" id="prodTable"></table></div></div>
           </div>
           <div class="note" style="margin-top:12px">엑셀/구글시트에서 <b>상품코드·입점사명·정산구분·품명</b> 열을 복사해 <b>붙여넣기</b>하거나 CSV로 불러오세요.
             (헤더의 열 이름을 자동 인식합니다. 배송비 예외는 비워두면 입점사 기본 배송비를 사용합니다.)</div>
           <div id="pasteBox" class="hidden" style="margin-top:14px"></div>`;
         renderProd();
-        body.querySelector('#addProd').onclick=()=>{ products.unshift({code:'',vendor:'',settle:SETTLE_TYPES[0],name:'',ship:''}); saveProducts(); renderProd(); };
-        body.querySelector('#resetProd').onclick=()=>{ if(confirm('상품 마스터를 기본값으로 되돌릴까요?')){ products=DEFAULT_MD_PRODUCTS.map(p=>({...p})); saveProducts(); renderProd(); } };
+        body.querySelector('#saveProd').onclick=()=>{ saveProducts(); saveVendors(); dirtyMaster=false;
+          body.querySelector('#mDirty').style.display='none'; toast('저장되었습니다'); };
+        body.querySelector('#addProd').onclick=()=>{ products.unshift({code:'',vendor:'',settle:SETTLE_TYPES[0],name:'',ship:''}); markMasterDirty(); renderProd(); };
+        body.querySelector('#resetProd').onclick=()=>{ if(confirm('상품 마스터를 기본값으로 되돌릴까요?')){ products=DEFAULT_MD_PRODUCTS.map(p=>({...p})); saveProducts(); dirtyMaster=false; body.querySelector('#mDirty').style.display='none'; renderProd(); } };
         body.querySelector('#expProd').onclick=()=>{ const cols=['상품코드','입점사명','정산구분','품명','배송비'];
           const rows=products.map(p=>[p.code,p.vendor,p.settle,p.name,p.ship||'']);
           downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`상품마스터_${todayStr()}.csv`); toast('CSV 저장'); };
@@ -271,11 +292,11 @@
           const rec={ code, vendor:g(r,ci.vendor,''), settle:g(r,ci.settle,SETTLE_TYPES[0])||SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
           const ex=products.find(p=>p.code.trim()===code); if(ex){ Object.assign(ex,rec); } else { products.push(rec); }
           added++; });
-        saveProducts(); syncVendorsFromProducts(); renderProd();
-        toast(`${added}건 불러왔습니다`);
+        syncVendorsFromProducts(); markMasterDirty(); renderProd();
+        toast(`${added}건 불러왔습니다 · [저장]을 눌러 반영하세요`);
       }
       function syncVendorsFromProducts(){ const names=new Set(vendors.map(v=>v.name));
-        products.forEach(p=>{ if(p.vendor && !names.has(p.vendor)){ vendors.push({name:p.vendor,ship:3000}); names.add(p.vendor); } }); saveVendors(); }
+        products.forEach(p=>{ if(p.vendor && !names.has(p.vendor)){ vendors.push({name:p.vendor,ship:3000}); names.add(p.vendor); } }); }
       function renderProd(){
         const t=body.querySelector('#prodTable'); if(!t) return;
         t.innerHTML=`<thead><tr><th style="width:120px">상품코드</th><th style="width:140px">입점사명</th><th style="width:90px">정산구분</th><th>품명</th><th style="width:110px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
@@ -288,8 +309,8 @@
             <td><input type="text" data-k="name" value="${esc(p.name)}"></td>
             <td><input type="number" data-k="ship" value="${esc(p.ship||'')}" placeholder="기본"></td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
-          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ p[inp.dataset.k]=inp.value; saveProducts(); if(inp.dataset.k==='vendor')syncVendorsFromProducts(); });
-          tr.querySelector('button').onclick=()=>{ products.splice(i,1); saveProducts(); renderProd(); };
+          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ p[inp.dataset.k]=inp.value; if(inp.dataset.k==='vendor')syncVendorsFromProducts(); markMasterDirty(); });
+          tr.querySelector('button').onclick=()=>{ products.splice(i,1); markMasterDirty(); renderProd(); };
           tb.appendChild(tr); });
         let dl=body.querySelector('#venList'); if(!dl){ dl=el('datalist'); dl.id='venList'; body.appendChild(dl); }
         dl.innerHTML=vendors.map(v=>`<option value="${esc(v.name)}">`).join('');
@@ -300,13 +321,17 @@
         body.innerHTML=`
           <div class="card" style="max-width:720px">
             <div class="card-hd">${icon('truck')}<b>입점사별 배송비</b> <span class="muted" style="font-size:12.5px">· 단가(vat포함)</span>
-              <button class="btn sm" id="addVen" style="margin-left:auto">${icon('plus')}행 추가</button></div>
+              <span class="badge soon" id="vDirty" style="display:${dirtyVendor?'':'none'}">● 저장 안 됨</span>
+              <span style="margin-left:auto;display:flex;gap:6px">
+                <button class="btn sm" id="addVen">${icon('plus')}행 추가</button>
+                <button class="btn sm pri" id="saveVen">${icon('save')}저장</button></span></div>
             <div class="card-bd" style="padding:0"><table class="tbl" id="venTable"></table></div>
           </div>
           <div class="note" style="margin-top:12px;max-width:720px">배송비는 <b>입점사별 고정 금액</b>이 기본입니다. 특정 상품만 다르면 <b>상품 마스터</b>의 “배송비 예외”에 입력하세요.
-            공급가·부가세는 ÷11로 자동 분리됩니다.</div>`;
+            공급가·부가세는 ÷11로 자동 분리됩니다. 수정 후 <b>저장</b>을 눌러 반영하세요.</div>`;
         renderVen();
-        body.querySelector('#addVen').onclick=()=>{ vendors.push({name:'',ship:3000}); saveVendors(); renderVen(); };
+        body.querySelector('#saveVen').onclick=()=>{ saveVendors(); dirtyVendor=false; body.querySelector('#vDirty').style.display='none'; toast('저장되었습니다'); };
+        body.querySelector('#addVen').onclick=()=>{ vendors.push({name:'',ship:3000}); markVendorDirty(); renderVen(); };
       }
       function renderVen(){
         const t=body.querySelector('#venTable'); if(!t) return;
@@ -317,8 +342,8 @@
             <td><input type="number" data-k="ship" value="${esc(v.ship)}" style="text-align:right"></td>
             <td class="num mono">${fmtNum(s.supply)}</td><td class="num mono">${fmtNum(s.tax)}</td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
-          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value; saveVendors(); renderVen(); });
-          tr.querySelector('button').onclick=()=>{ vendors.splice(i,1); saveVendors(); renderVen(); };
+          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value; markVendorDirty(); renderVen(); });
+          tr.querySelector('button').onclick=()=>{ vendors.splice(i,1); markVendorDirty(); renderVen(); };
           tb.appendChild(tr); });
         if(!vendors.length) tb.innerHTML=`<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">입점사가 없습니다. “행 추가”.</td></tr>`;
       }
@@ -338,6 +363,13 @@
                 <li>웹 앱 URL(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 저장 → 연결 테스트.</li>
               </ol>
               <label class="fld" style="margin:8px 0 12px">웹 앱 URL<input type="text" id="ordUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
+              <div style="margin-bottom:14px">
+                <label class="fld" style="margin-bottom:8px">발주 입력 시</label>
+                <div style="display:flex;gap:20px;flex-wrap:wrap">
+                  <label class="chk"><input type="radio" name="autoSend" value="1" ${cfg.autoSend!==false?'checked':''}> 시트에 <b>자동 전송</b> (추가 즉시)</label>
+                  <label class="chk"><input type="radio" name="autoSend" value="0" ${cfg.autoSend===false?'checked':''}> 수동 (버튼으로 모아서 전송)</label>
+                </div>
+              </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="ordSave">${icon('check')}저장</button>
                 <button class="btn" id="ordTest">${icon('cloud')}연결 테스트</button>
@@ -347,7 +379,8 @@
           <div class="note" style="max-width:820px">이카운트는 현재 <b>복사/CSV</b>로 내보내 붙여넣습니다. (ECOUNT API 연동은 추후 어댑터로 추가 가능)
             발주표 시트는 헤더가 <span class="mono" style="font-size:12px">${esc(ORDER_SHEET_COLS.join(' · '))}</span> 순서면 그대로 쌓입니다.</div>`;
         body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-orders.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
-        body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({sheetUrl:body.querySelector('#ordUrl').value.trim()}); toast('저장했습니다'); };
+        body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ sheetUrl:body.querySelector('#ordUrl').value.trim(),
+          autoSend: body.querySelector('input[name=autoSend]:checked').value==='1' }); toast('저장했습니다'); };
         body.querySelector('#ordTest').onclick=async()=>{ const url=body.querySelector('#ordUrl').value.trim(), stat=body.querySelector('#ordStat');
           if(!url){ stat.textContent='URL을 입력하세요'; return; } stat.textContent='테스트 중…';
           try{ const res=await fetch(url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
