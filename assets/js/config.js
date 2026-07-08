@@ -68,9 +68,18 @@ const QUICK_LINKS = [
   { name:'카페24 관리자', short:'24', url:'https://eclogin.cafe24.com/Shop/?url=Init&login_mode=2&is_multi=F' },
 ];
 
-/* CS 상담 메모 — 수정이 잦은 값은 상수로 분리 */
-const CS_INQUIRY_TYPES = ['상품추천','후불','견적','기타'];
-const CS_AGENTS = ['김상담','이응대','박고객','최문의'];
+/* CS 상담 메모 — 연동 구글시트 컬럼(날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사)에 맞춘 값
+   · 수정이 잦은 값은 상수로 분리 (분류는 사용자가 화면에서 편집 가능) */
+const CS_INQUIRY_TYPES = ['후불','견적','상품/재고','주문/배송','기타'];   // 시트 '분류'
+const CS_CUSTOMER_TYPES = ['학교','개인','기관','업체','입점사','파트너사'];   // 시트 '고객유형'
+const CS_PRODUCT_CATEGORIES = ['자사키트','자사부품','입점사키트','입점사부품']; // 시트 '상품분류'
+const CS_AGENTS = ['함인영','신아름','송민희','박정길'];                      // 시트 '상담사'
+/* 상담 메모 내부필드 → 구글시트 헤더 이름 매핑 (Apps Script가 헤더 이름으로 칸을 맞춤) */
+const CS_SHEET_MAP = {
+  date:'날짜', category:'분류', contact:'연락처', customerType:'고객유형',
+  name:'주문자/학교/업체명', prodCategory:'상품분류', prodCode:'상품코드',
+  content:'내용', answer:'답변', agent:'상담사',
+};
 
 /* 좌측 내비게이션 구조 (활성: CS·MD / 예정: 디자인·경리)
    각 item.key 는 모듈 레지스트리(app.js MODULES) 키와 일치 */

@@ -1,9 +1,19 @@
 /* ===========================================================================
    CS · 상담 메모 & 일일 결산
+   - 연동 구글시트 컬럼에 맞춰 기록: 날짜·분류·연락처·고객유형·주문자/학교/업체명
+     ·상품분류·상품코드·내용·답변·상담사
    - 통화 중 빠른 입력(Ctrl+Enter 저장) → 로컬 저장 → 구글 시트 동기화
+   - 분류·고객유형·상품분류는 전화하면서 바로 누르는 토글 버튼
    - 저장/전송은 "destination" 추상화로 분리 (지금은 sheet, 이후 notion 추가)
    =========================================================================== */
 (function(){
+
+  /* 내부 레코드 → 구글시트 헤더 이름으로 매핑한 객체 (Apps Script가 헤더 이름으로 칸을 맞춤) */
+  function toSheetRecord(r){
+    const o={ id:r.id };
+    for(const k in CS_SHEET_MAP){ o[CS_SHEET_MAP[k]] = r[k]!=null ? r[k] : ''; }
+    return o;
+  }
 
   /* ---- 목적지(destination) 추상화 ----
      새 대상(예: 노션)은 여기 객체만 추가하면 됩니다. */
@@ -13,7 +23,8 @@
       configured: cfg => !!(cfg && cfg.sheetUrl),
       /* records 를 Apps Script 웹앱(doPost)으로 전송. id 기준 upsert 이므로 재시도해도 중복 없음 */
       async send(records, cfg){
-        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ records }) };
+        const payload = records.map(toSheetRecord);
+        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ records: payload }) };
         try{
           const res = await fetch(cfg.sheetUrl, opts);
           if(!res.ok) throw new Error('HTTP '+res.status);
@@ -24,7 +35,7 @@
           // Apps Script POST 는 CORS 로 응답을 못 읽는 경우가 많음 → no-cors 로 전송(id upsert 라 재전송 안전)
           if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){
             await fetch(cfg.sheetUrl, {...opts, mode:'no-cors'});
-            return { syncedIds: records.map(r=>r.id) };
+            return { syncedIds: records.map(r=>r.id), unconfirmed:true };
           }
           throw err;
         }
@@ -52,11 +63,11 @@
     if(!dest.configured(cfg)) return { ok:false, error:'시트 URL이 설정되지 않았습니다', synced:0 };
     if(!records.length) return { ok:true, synced:0 };
     try{
-      const { syncedIds } = await dest.send(records, cfg);
+      const { syncedIds, unconfirmed } = await dest.send(records, cfg);
       const set=new Set(syncedIds), stamp=nowISO(); const all=getNotes();
       all.forEach(r=>{ if(set.has(r.id)) r.syncedAt=stamp; });
       setNotes(all);
-      return { ok:true, synced:syncedIds.length };
+      return { ok:true, synced:syncedIds.length, unconfirmed };
     }catch(err){
       // 실패: 로컬 데이터는 그대로 보존 (재시도 가능)
       return { ok:false, error: err.message||'전송 실패', synced:0 };
@@ -67,12 +78,29 @@
   MODULES['cs.notes'] = {
     title:'상담 메모', icon:'clipboard',
     render(root){
-      // 문의유형 (사용자가 편집 가능 · 로컬 저장)
+      // 분류(문의유형) — 사용자가 편집 가능 · 로컬 저장
       const typesDB=store(STORE.csTypes);
+      // 옛 기본값(상품추천 등)이 저장돼 있으면 새 분류로 교체
+      (function migrateTypes(){ const cur=typesDB.get(null);
+        if(cur && (cur.includes('상품추천')||!cur.length)) typesDB.set(CS_INQUIRY_TYPES.slice()); })();
       const getTypes=()=> typesDB.get(CS_INQUIRY_TYPES.slice());
       const setTypes=(v)=> typesDB.set(v);
+
+      // 옛 레코드 스키마(type/memo/product) → 신규(category/content/prodCode) 마이그레이션
+      (function migrateNotes(){ const all=getNotes(); let ch=false;
+        all.forEach(r=>{
+          if(r.category==null && r.type!=null){ r.category=r.type; ch=true; }
+          if(r.content==null && r.memo!=null){ r.content=r.memo; ch=true; }
+          if(r.prodCode==null && r.product!=null){ r.prodCode=r.product; ch=true; }
+          if(r.date==null){ r.date=todayStr(r.createdAt); ch=true; }
+          ['customerType','prodCategory','name','answer'].forEach(k=>{ if(r[k]==null){ r[k]=''; ch=true; } });
+        });
+        if(ch) setNotes(all); })();
+
       let tab='memo', filter='전체', lastAgent=store(STORE.csAgent).get(CS_AGENTS[0]);
-      let formType=getTypes()[0], typeEdit=false;
+      let typeEdit=false;
+      // 폼 상태 (토글/날짜는 저장 후에도 유지되는 컨텍스트)
+      let form={ category:getTypes()[0], customerType:'', prodCategory:'', date:todayStr() };
 
       root.innerHTML=`
       <style>
@@ -89,35 +117,40 @@
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
         .q-hd .kbd b{background:#fff;border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
-        .q-label{font-size:13.5px;font-weight:800;color:var(--muted);margin-bottom:9px;display:flex;align-items:center;gap:7px;letter-spacing:.01em}
+        /* 토글 그룹 (전화하면서 바로 클릭) */
+        .tgl-row{margin-bottom:16px}
+        .tgl-cap-row{display:flex;align-items:center;margin-bottom:9px}
+        .tgl-cap{font-size:13.5px;font-weight:800;color:var(--muted);letter-spacing:.01em;display:flex;align-items:center;gap:7px}
+        .tgl-cap .req{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 7px}
+        .tgl-cap .opt{font-size:11.5px;font-weight:600;color:var(--faint)}
+        .tgl-group{display:flex;gap:8px;flex-wrap:wrap}
+        .tgl{display:inline-flex;align-items:center;gap:6px;padding:11px 17px;border:2px solid var(--line-strong);border-radius:11px;background:#fff;
+          font-size:15px;font-weight:700;color:var(--ink-2);cursor:pointer;transition:.1s;user-select:none;line-height:1.1}
+        .tgl:hover{border-color:var(--faint);background:var(--panel-2)}
+        .tgl.on{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 3px 12px rgba(227,30,36,.28)}
+        .tgl .q-del{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;
+          background:var(--line-strong);color:#fff;font-size:11px;font-weight:800}
+        .tgl.on .q-del{background:rgba(255,255,255,.35)}
+        .tgl-edit{margin-left:auto;background:none;border:0;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
+        .tgl-edit:hover{background:var(--hover);color:var(--red)} .tgl-edit.on{color:var(--red)}
+        .tgl-add{display:flex;gap:8px;align-items:center}
+        .tgl-add input{height:auto;padding:10px 12px;font-size:14.5px;width:140px}
+        /* 내용/답변 */
+        .q-label{font-size:13.5px;font-weight:800;color:var(--muted);margin:18px 0 9px;display:flex;align-items:center;gap:7px}
         .q-label .req{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 7px}
-        .q-types{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
-        .q-type{flex:1;min-width:130px;padding:17px 10px;border:2px solid var(--line-strong);border-radius:13px;background:#fff;font-size:17px;font-weight:800;color:var(--ink-2);cursor:pointer;transition:.12s}
-        .q-type:hover{border-color:var(--faint);background:var(--panel-2)}
-        .q-type.on{border-color:var(--red);background:var(--red);color:#fff;box-shadow:0 4px 16px rgba(227,30,36,.32)}
-        .q-memo{width:100%;min-height:150px;font-size:17px;line-height:1.6;padding:16px;border:2px solid #f3c7c9;border-radius:13px;background:#fffcfc;resize:vertical}
+        .q-label .opt{font-size:11.5px;font-weight:600;color:var(--faint)}
+        .q-memo{width:100%;min-height:120px;font-size:16px;line-height:1.6;padding:15px;border:2px solid #f3c7c9;border-radius:13px;background:#fffcfc;resize:vertical}
         .q-memo::placeholder{color:#c9b3b4}
         .q-memo:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft);background:#fff}
-        .q-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin:20px 0}
-        .q-fields .fld{font-size:13px}
+        .q-ans{width:100%;min-height:70px;font-size:15px;line-height:1.55;padding:13px;border:1.5px solid var(--line-strong);border-radius:11px;resize:vertical}
+        .q-ans:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+        .q-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:18px 0}
+        .q-fields .cap{display:block;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;line-height:20px;margin-bottom:6px}
+        .q-fields .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px}
         .q-fields input{height:46px;font-size:15.5px}
-        .q-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line-2)}
+        .q-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:16px;border-top:1px solid var(--line-2)}
         .q-cb{font-size:15px;font-weight:700}
         .q-cb input{width:20px;height:20px}
-        /* 필드 정렬: 캡션은 항상 1줄 → 입력칸 높이 정렬 */
-        .q-fields .fld{gap:8px}
-        .q-fields .cap{display:block;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;line-height:20px}
-        .q-fields .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px}
-        /* 유형 편집 */
-        .q-label-row{display:flex;align-items:center;margin-bottom:9px}
-        .q-edit{margin-left:auto;background:none;border:0;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
-        .q-edit:hover{background:var(--hover);color:var(--red)}
-        .q-edit.on{color:var(--red)}
-        .q-type .q-del{display:inline-flex;align-items:center;justify-content:center;margin-left:8px;width:20px;height:20px;
-          border-radius:50%;background:rgba(0,0,0,.12);color:#fff;font-size:12px;font-weight:800}
-        .q-type:not(.on) .q-del{background:var(--line-strong);color:#fff}
-        .q-addtype{display:flex;gap:8px;align-items:center;min-width:200px}
-        .q-addtype input{height:auto;padding:12px 12px;font-size:15px;width:150px}
         /* 연동 가이드 */
         .guide{counter-reset:step;display:grid;gap:14px;margin:6px 0 4px;padding:0}
         .guide li{list-style:none;position:relative;padding-left:40px;min-height:28px;font-size:14.5px;line-height:1.75}
@@ -126,11 +159,15 @@
           display:flex;align-items:center;justify-content:center}
         .guide b{color:var(--ink);font-weight:700}
         .guide .k{display:inline-block;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700;white-space:nowrap;line-height:1.5}
-        .note-card{display:grid;grid-template-columns:64px 92px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-bottom:8px}
+        /* 오늘 기록 카드 */
+        .note-card{display:grid;grid-template-columns:58px 96px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-bottom:8px}
         .note-card .tm{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13.5px;font-weight:600}
         .note-card .memo{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
-        .note-card .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
-        .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+        .note-card .ans{font-size:13px;line-height:1.5;color:var(--ink-2);margin-top:3px;white-space:pre-wrap;word-break:break-word}
+        .note-card .ans::before{content:"↳ 답변  ";color:var(--faint);font-weight:700}
+        .note-card .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+        .note-card .sub2{font-size:11.5px;color:var(--faint);margin-top:3px}
+        .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
         .sum-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff}
         .sum-card .lb{font-size:13px;color:var(--muted)}
         .sum-card .vl{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
@@ -142,7 +179,7 @@
       </style>
       <div class="cs-head">
         <div class="tt">상담 메모</div>
-        <div class="ds">통화 중 빠르게 기록하고(Ctrl+Enter 저장) 구글 시트로 자동 동기화합니다. 이중 입력이 필요 없습니다.</div>
+        <div class="ds">통화 중 분류·고객유형·상품분류를 바로 누르고 내용을 적으면(Ctrl+Enter 저장) 연동 시트에 그대로 기록됩니다.</div>
         <div class="cs-tabs">
           <div class="t" data-t="memo">상담 메모</div>
           <div class="t" data-t="summary">일일 결산</div>
@@ -163,21 +200,38 @@
               <span class="kbd">저장 후 자동 초기화 · <b>Ctrl</b>+<b>Enter</b> 저장</span></div>
             <div class="q-bd">
               <form id="qform">
-                <div class="q-label-row"><span class="q-label" style="margin:0">문의유형</span>
-                  <button type="button" class="q-edit" id="typeEdit">유형 편집</button></div>
-                <div class="q-types" id="typebtns"></div>
+                <div class="tgl-row">
+                  <div class="tgl-cap-row"><span class="tgl-cap">분류 <span class="req">필수</span></span>
+                    <button type="button" class="tgl-edit" id="typeEdit">분류 편집</button></div>
+                  <div class="tgl-group" id="catGroup"></div>
+                </div>
+                <div class="tgl-row">
+                  <div class="tgl-cap-row"><span class="tgl-cap">고객유형 <span class="opt">선택 · 다시 누르면 해제</span></span></div>
+                  <div class="tgl-group" id="custGroup"></div>
+                </div>
+                <div class="tgl-row">
+                  <div class="tgl-cap-row"><span class="tgl-cap">상품분류 <span class="opt">선택 · 다시 누르면 해제</span></span></div>
+                  <div class="tgl-group" id="prodGroup"></div>
+                </div>
 
-                <div class="q-label" style="margin-top:20px">메모 내용 <span class="req">필수</span></div>
-                <textarea id="fMemo" class="q-memo" placeholder="상담 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
+                <div class="q-label">내용 <span class="req">필수</span></div>
+                <textarea id="fContent" class="q-memo" placeholder="문의 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
+
+                <div class="q-label">답변 <span class="opt">선택</span></div>
+                <textarea id="fAnswer" class="q-ans" placeholder="응대/답변 내용 (나중에 채워도 됩니다)"></textarea>
 
                 <div class="q-fields">
-                  <label class="fld"><span class="cap">담당자</span>
+                  <label><span class="cap">상담사</span>
                     <input list="agentList" id="fAgent" value="${esc(lastAgent)}" autocomplete="off">
                     <datalist id="agentList">${CS_AGENTS.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></label>
-                  <label class="fld"><span class="cap">고객 연락처 <em>선택</em></span>
+                  <label><span class="cap">연락처 <em>선택</em></span>
                     <input type="text" id="fContact" placeholder="010-0000-0000"></label>
-                  <label class="fld"><span class="cap">상품/모델 <em>선택</em></span>
-                    <input type="text" id="fProduct" placeholder="예: 스타터 키트"></label>
+                  <label><span class="cap">주문자/학교/업체명 <em>선택</em></span>
+                    <input type="text" id="fName" placeholder="예: 에듀이노초 / 홍길동"></label>
+                  <label><span class="cap">상품코드 <em>선택</em></span>
+                    <input type="text" id="fProdCode" placeholder="예: A-100"></label>
+                  <label><span class="cap">날짜</span>
+                    <input type="date" id="fDate" value="${esc(form.date)}"></label>
                 </div>
                 <div class="q-actions">
                   <label class="chk q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
@@ -195,63 +249,82 @@
           </div>
           <div id="noteList"></div>`;
 
-        // 유형 버튼
-        const tb=body.querySelector('#typebtns');
-        function renderTypes(){
+        /* --- 분류 토글 (편집 가능) --- */
+        const catGroup=body.querySelector('#catGroup');
+        function renderCat(){
           const types=getTypes();
-          if(!types.includes(formType)) formType=types[0];
-          tb.innerHTML='';
-          types.forEach(t=>{ const b=el('button','q-type'+(t===formType?' on':''));
-            b.type='button'; b.innerHTML=`${esc(t)}${typeEdit&&types.length>1?`<span class="q-del" title="삭제">✕</span>`:''}`;
+          if(!types.includes(form.category)) form.category=types[0];
+          catGroup.innerHTML='';
+          types.forEach(t=>{ const b=el('button','tgl'+(t===form.category?' on':'')); b.type='button';
+            b.innerHTML=`<span>${esc(t)}</span>${typeEdit&&types.length>1?`<span class="q-del" title="삭제">✕</span>`:''}`;
             b.onclick=(e)=>{
-              if(e.target.classList.contains('q-del')){ const nt=types.filter(x=>x!==t); setTypes(nt); if(formType===t)formType=nt[0]; renderTypes(); renderFilters(); return; }
+              if(e.target.classList.contains('q-del')){ const nt=types.filter(x=>x!==t); setTypes(nt); if(form.category===t)form.category=nt[0]; renderCat(); renderFilters(); return; }
               if(typeEdit) return;
-              formType=t; renderTypes();
+              form.category=t; renderCat();
             };
-            tb.appendChild(b);
+            catGroup.appendChild(b);
           });
-          if(typeEdit){ const add=el('div','q-addtype');
-            add.innerHTML=`<input type="text" id="newType" placeholder="새 유형 이름" maxlength="12">
-              <button type="button" class="btn pri" id="addTypeBtn">${icon('plus')}추가</button>`;
+          if(typeEdit){ const add=el('div','tgl-add');
+            add.innerHTML=`<input type="text" id="newType" placeholder="새 분류" maxlength="12">
+              <button type="button" class="btn pri sm" id="addTypeBtn">${icon('plus')}추가</button>`;
             const doAdd=()=>{ const v=add.querySelector('#newType').value.trim();
-              if(!v) return; const cur=getTypes(); if(cur.includes(v)){ toast('이미 있는 유형입니다'); return; }
-              cur.push(v); setTypes(cur); renderTypes(); renderFilters();
-              const ni=tb.querySelector('#newType'); if(ni) ni.focus(); };
+              if(!v) return; const cur=getTypes(); if(cur.includes(v)){ toast('이미 있는 분류입니다'); return; }
+              cur.push(v); setTypes(cur); renderCat(); renderFilters();
+              const ni=catGroup.querySelector('#newType'); if(ni) ni.focus(); };
             add.querySelector('#addTypeBtn').onclick=doAdd;
             add.querySelector('#newType').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
-            tb.appendChild(add);
+            catGroup.appendChild(add);
           }
         }
         body.querySelector('#typeEdit').onclick=(e)=>{ typeEdit=!typeEdit;
-          e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'유형 편집';
-          renderTypes(); };
-        renderTypes();
+          e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'분류 편집';
+          renderCat(); };
+        renderCat();
+
+        /* --- 고객유형 / 상품분류 토글 (단일선택 · 다시 누르면 해제) --- */
+        function renderChoice(sel, options, key){
+          const g=body.querySelector(sel); g.innerHTML='';
+          options.forEach(o=>{ const b=el('button','tgl'+(form[key]===o?' on':'')); b.type='button'; b.textContent=o;
+            b.onclick=()=>{ form[key] = (form[key]===o?'':o); renderChoice(sel,options,key); };
+            g.appendChild(b); });
+        }
+        renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
+        renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
 
         // 저장
-        const form=body.querySelector('#qform');
+        const form_el=body.querySelector('#qform');
         const submit=()=>{
-          const memo=body.querySelector('#fMemo').value.trim();
-          if(!memo){ body.querySelector('#fMemo').focus(); toast('메모 내용을 입력하세요'); return; }
+          const content=body.querySelector('#fContent').value.trim();
+          if(!content){ body.querySelector('#fContent').focus(); toast('내용을 입력하세요'); return; }
           const agent=body.querySelector('#fAgent').value.trim()||'-';
           store(STORE.csAgent).set(agent); lastAgent=agent;
-          const rec={ id:uuid(), createdAt:nowISO(), type:formType, agent,
+          form.date=body.querySelector('#fDate').value||todayStr();
+          const rec={ id:uuid(), createdAt:nowISO(),
+            date:form.date, category:form.category,
             contact:body.querySelector('#fContact').value.trim(),
-            product:body.querySelector('#fProduct').value.trim(),
-            memo, callback:body.querySelector('#fCallback').checked, syncedAt:null };
+            customerType:form.customerType,
+            name:body.querySelector('#fName').value.trim(),
+            prodCategory:form.prodCategory,
+            prodCode:body.querySelector('#fProdCode').value.trim(),
+            content, answer:body.querySelector('#fAnswer').value.trim(),
+            agent, callback:body.querySelector('#fCallback').checked, syncedAt:null };
           const all=getNotes(); all.push(rec); setNotes(all);
-          // 폼 초기화 (유형·담당자 유지)
-          body.querySelector('#fContact').value=''; body.querySelector('#fProduct').value='';
-          body.querySelector('#fMemo').value=''; body.querySelector('#fCallback').checked=false;
-          body.querySelector('#fMemo').focus();
+          // 폼 초기화 (분류·상담사·날짜 유지 · 고객유형/상품분류/텍스트는 비움)
+          form.customerType=''; form.prodCategory='';
+          renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
+          renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
+          ['fContent','fAnswer','fContact','fName','fProdCode'].forEach(id=>body.querySelector('#'+id).value='');
+          body.querySelector('#fCallback').checked=false;
+          body.querySelector('#fContent').focus();
           renderList(); renderSyncBar(); toast('저장되었습니다');
-          // 실시간 모드면 즉시 전송 (폼은 이미 초기화되어 대기 불필요)
+          // 실시간 모드면 즉시 전송
           const cfg=getCfg();
           if(cfg.syncMode==='realtime' && DESTINATIONS[ACTIVE_DEST].configured(cfg)){
             syncRecords([rec]).then(r=>{ renderList(); renderSyncBar(); if(!r.ok) toast('시트 전송 실패 — 로컬 보관됨'); });
           }
         };
-        form.addEventListener('submit',e=>{ e.preventDefault(); submit(); });
-        form.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); submit(); } });
+        form_el.addEventListener('submit',e=>{ e.preventDefault(); submit(); });
+        form_el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); submit(); } });
 
         // 필터
         function renderFilters(){ const fbar=body.querySelector('#filters'); if(!fbar) return; fbar.innerHTML='';
@@ -261,7 +334,7 @@
         renderFilters();
 
         renderList(); renderSyncBar();
-        body.querySelector('#fMemo')?.focus();
+        body.querySelector('#fContent')?.focus();
       }
 
       function todayNotes(){ const t=todayStr(); return getNotes().filter(r=>todayStr(r.createdAt)===t); }
@@ -269,20 +342,21 @@
         const box=body.querySelector('#noteList'), cnt=body.querySelector('#todayCnt'); if(!box) return;
         let list=todayNotes().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
         if(cnt) cnt.textContent=`· 총 ${list.length}건`;
-        if(filter!=='전체') list=list.filter(r=>r.type===filter);
-        if(!list.length){ box.innerHTML=`<div class="empty">${icon('clipboard')}<div style="font-size:13.5px">${filter==='전체'?'오늘 기록이 아직 없습니다.':'해당 유형 기록이 없습니다.'}</div></div>`; return; }
+        if(filter!=='전체') list=list.filter(r=>r.category===filter);
+        if(!list.length){ box.innerHTML=`<div class="empty">${icon('clipboard')}<div style="font-size:13.5px">${filter==='전체'?'오늘 기록이 아직 없습니다.':'해당 분류 기록이 없습니다.'}</div></div>`; return; }
         box.innerHTML=''; list.forEach(r=>box.appendChild(noteCard(r)));
       }
       function noteCard(r){
         const c=el('div','note-card');
         const sync = r.syncedAt?'<span class="badge synced">동기화됨</span>':'<span class="badge pending">미동기화</span>';
+        const meta=[r.agent, r.name, r.contact, r.prodCategory, r.prodCode].filter(Boolean).map(esc).join(' · ');
         c.innerHTML=`
           <div class="tm">${timeHM(r.createdAt)}</div>
-          <div><span class="badge info">${esc(r.type)}</span></div>
+          <div><span class="badge info">${esc(r.category||'-')}</span>${r.customerType?`<div class="sub2">${esc(r.customerType)}</div>`:''}</div>
           <div>
-            <div class="memo">${esc(r.memo)}</div>
-            <div class="sub">${esc(r.agent)}${r.product?' · '+esc(r.product):''}${r.contact?' · '+esc(r.contact):''}
-              ${r.callback?' · <span class="badge cb">콜백 필요</span>':''} ${sync}</div>
+            <div class="memo">${esc(r.content||'')}</div>
+            ${r.answer?`<div class="ans">${esc(r.answer)}</div>`:''}
+            <div class="sub">${meta}${r.callback?' · <span class="badge cb">콜백 필요</span>':''} ${sync}</div>
           </div>
           <div style="display:flex;gap:4px">
             <button class="btn ghost sm" data-a="edit">수정</button>
@@ -292,16 +366,23 @@
         c.querySelector('[data-a=edit]').onclick=()=>editCard(c,r);
         return c;
       }
+      function selOpts(opts, val, blank){ return (blank?`<option value="">${blank}</option>`:'')+
+        [...new Set([...opts, val].filter(Boolean))].map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join(''); }
       function editCard(card,r){
         const box=el('div','note-card'); box.style.gridTemplateColumns='1fr';
         box.innerHTML=`
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:10px">
-            <label class="fld">유형<select id="eType">${[...new Set([...getTypes(),r.type])].map(t=>`<option ${t===r.type?'selected':''}>${esc(t)}</option>`).join('')}</select></label>
-            <label class="fld">담당자<input type="text" id="eAgent" value="${esc(r.agent)}"></label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px">
+            <label class="fld">분류<select id="eCat">${selOpts(getTypes(), r.category)}</select></label>
+            <label class="fld">고객유형<select id="eCust">${selOpts(CS_CUSTOMER_TYPES, r.customerType, '(없음)')}</select></label>
+            <label class="fld">상품분류<select id="eProdCat">${selOpts(CS_PRODUCT_CATEGORIES, r.prodCategory, '(없음)')}</select></label>
+            <label class="fld">상담사<input type="text" id="eAgent" value="${esc(r.agent||'')}"></label>
             <label class="fld">연락처<input type="text" id="eContact" value="${esc(r.contact||'')}"></label>
-            <label class="fld">상품<input type="text" id="eProduct" value="${esc(r.product||'')}"></label>
+            <label class="fld">주문자/학교/업체명<input type="text" id="eName" value="${esc(r.name||'')}"></label>
+            <label class="fld">상품코드<input type="text" id="eProdCode" value="${esc(r.prodCode||'')}"></label>
+            <label class="fld">날짜<input type="date" id="eDate" value="${esc(r.date||todayStr(r.createdAt))}"></label>
           </div>
-          <label class="fld" style="margin-bottom:10px">메모<textarea id="eMemo" rows="3">${esc(r.memo)}</textarea></label>
+          <label class="fld" style="margin-bottom:10px">내용<textarea id="eContent" rows="3">${esc(r.content||'')}</textarea></label>
+          <label class="fld" style="margin-bottom:10px">답변<textarea id="eAnswer" rows="2">${esc(r.answer||'')}</textarea></label>
           <div style="display:flex;align-items:center;gap:14px">
             <label class="chk"><input type="checkbox" id="eCb" ${r.callback?'checked':''}> 콜백 필요</label>
             <span style="margin-left:auto;display:flex;gap:6px">
@@ -311,9 +392,12 @@
         box.querySelector('#eCancel').onclick=()=>renderList();
         box.querySelector('#eSave').onclick=()=>{
           const all=getNotes(); const t=all.find(x=>x.id===r.id); if(t){
-            t.type=box.querySelector('#eType').value; t.agent=box.querySelector('#eAgent').value.trim()||'-';
-            t.contact=box.querySelector('#eContact').value.trim(); t.product=box.querySelector('#eProduct').value.trim();
-            t.memo=box.querySelector('#eMemo').value.trim(); t.callback=box.querySelector('#eCb').checked;
+            t.category=box.querySelector('#eCat').value; t.customerType=box.querySelector('#eCust').value;
+            t.prodCategory=box.querySelector('#eProdCat').value; t.agent=box.querySelector('#eAgent').value.trim()||'-';
+            t.contact=box.querySelector('#eContact').value.trim(); t.name=box.querySelector('#eName').value.trim();
+            t.prodCode=box.querySelector('#eProdCode').value.trim(); t.date=box.querySelector('#eDate').value||t.date;
+            t.content=box.querySelector('#eContent').value.trim(); t.answer=box.querySelector('#eAnswer').value.trim();
+            t.callback=box.querySelector('#eCb').checked;
             t.syncedAt=null; // 수정되었으므로 재동기화 필요
             setNotes(all);
           }
@@ -331,7 +415,7 @@
           <button class="btn sm" id="syncNow" style="margin-left:auto">${icon('cloudUp')}시트로 동기화</button></div>`;
         slot.querySelector('#syncNow').onclick=async(e)=>{ const btn=e.currentTarget; btn.disabled=true; btn.textContent='전송 중…';
           const r=await syncRecords(unsynced()); renderList(); renderSyncBar();
-          toast(r.ok?`${r.synced}건 동기화 완료`:('동기화 실패: '+r.error)); };
+          toast(r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트에서 확인하세요`:`${r.synced}건 동기화 완료`):('동기화 실패: '+r.error)); };
       }
 
       /* ---------------- 일일 결산 탭 ---------------- */
@@ -349,14 +433,17 @@
         body.querySelector('#copySum').onclick=()=>copyText(summaryText(date));
         body.querySelector('#pushSum').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false; renderSum();
-          toast(r.ok?`${r.synced}건 전송 완료`:('전송 실패: '+r.error)); };
+          toast(r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트 확인`:`${r.synced}건 전송 완료`):('전송 실패: '+r.error)); };
         renderSum();
         function dayNotes(){ return getNotes().filter(r=>todayStr(r.createdAt)===date); }
         function agg(list){
-          const byType={}; getTypes().forEach(t=>byType[t]=0);
-          const byAgent={}; let cbOpen=0;
-          list.forEach(r=>{ byType[r.type]=(byType[r.type]||0)+1; byAgent[r.agent]=(byAgent[r.agent]||0)+1; if(r.callback&&!r.done) cbOpen++; });
-          return { total:list.length, byType, byAgent, cbOpen };
+          const byCat={}; getTypes().forEach(t=>byCat[t]=0);
+          const byCust={}; CS_CUSTOMER_TYPES.forEach(t=>byCust[t]=0);
+          const byAgent={};
+          list.forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+1;
+            if(r.customerType) byCust[r.customerType]=(byCust[r.customerType]||0)+1;
+            byAgent[r.agent]=(byAgent[r.agent]||0)+1; });
+          return { total:list.length, byCat, byCust, byAgent };
         }
         function renderSum(){
           const list=dayNotes(), a=agg(list); const wrap=body.querySelector('#sumWrap');
@@ -364,26 +451,33 @@
           wrap.innerHTML=`
             <div class="sum-grid" style="margin-bottom:16px">
               <div class="sum-card"><div class="lb">총 상담 건수</div><div class="vl">${a.total}</div></div>
-              ${getTypes().map(t=>`<div class="sum-card"><div class="lb">${esc(t)}</div><div class="vl">${a.byType[t]||0}</div></div>`).join('')}
+              ${getTypes().map(t=>`<div class="sum-card"><div class="lb">${esc(t)}</div><div class="vl">${a.byCat[t]||0}</div></div>`).join('')}
               <div class="sum-card" style="border-color:#ead9b0;background:var(--warn-bg)"><div class="lb">콜백 필요</div><div class="vl" style="color:var(--warn)">${cbList.length}</div></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
-              <div class="card"><div class="card-hd"><b>담당자별 처리 건수</b></div><div class="card-bd" style="padding:0">
-                <table class="tbl"><thead><tr><th>담당자</th><th class="num">건수</th></tr></thead><tbody>
+              <div class="card"><div class="card-hd"><b>상담사별 처리 건수</b></div><div class="card-bd" style="padding:0">
+                <table class="tbl"><thead><tr><th>상담사</th><th class="num">건수</th></tr></thead><tbody>
                   ${Object.keys(a.byAgent).length?Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v}</td></tr>`).join(''):'<tr><td colspan="2" class="muted" style="text-align:center;padding:16px">기록 없음</td></tr>'}
                 </tbody></table></div></div>
-              <div class="card"><div class="card-hd"><b>콜백 필요 목록</b></div><div class="card-bd" style="padding:0">
-                <table class="tbl"><thead><tr><th>시각</th><th>유형</th><th>연락처</th><th>메모</th></tr></thead><tbody>
-                  ${cbList.length?cbList.sort((x,y)=>x.createdAt.localeCompare(y.createdAt)).map(r=>`<tr><td>${timeHM(r.createdAt)}</td><td>${esc(r.type)}</td><td>${esc(r.contact||'-')}</td><td>${esc(r.memo.slice(0,40))}</td></tr>`).join(''):'<tr><td colspan="4" class="muted" style="text-align:center;padding:16px">콜백 필요 없음</td></tr>'}
+              <div class="card"><div class="card-hd"><b>고객유형별 건수</b></div><div class="card-bd" style="padding:0">
+                <table class="tbl"><thead><tr><th>고객유형</th><th class="num">건수</th></tr></thead><tbody>
+                  ${CS_CUSTOMER_TYPES.some(t=>a.byCust[t])?CS_CUSTOMER_TYPES.filter(t=>a.byCust[t]).map(t=>`<tr><td>${esc(t)}</td><td class="num">${a.byCust[t]}</td></tr>`).join(''):'<tr><td colspan="2" class="muted" style="text-align:center;padding:16px">기록 없음</td></tr>'}
                 </tbody></table></div></div>
-            </div>`;
+            </div>
+            <div class="card" style="margin-top:16px"><div class="card-hd"><b>콜백 필요 목록</b></div><div class="card-bd" style="padding:0">
+              <table class="tbl"><thead><tr><th style="width:70px">시각</th><th style="width:90px">분류</th><th>주문자/업체</th><th>연락처</th><th>내용</th></tr></thead><tbody>
+                ${cbList.length?cbList.sort((x,y)=>x.createdAt.localeCompare(y.createdAt)).map(r=>`<tr><td>${timeHM(r.createdAt)}</td><td>${esc(r.category||'-')}</td><td>${esc(r.name||'-')}</td><td>${esc(r.contact||'-')}</td><td>${esc((r.content||'').slice(0,40))}</td></tr>`).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">콜백 필요 없음</td></tr>'}
+              </tbody></table></div></div>`;
         }
         function summaryText(d){
           const list=getNotes().filter(r=>todayStr(r.createdAt)===d), a=agg(list);
-          const lines=[`[${d} CS 상담 결산]`, `총 ${a.total}건`,
-            ...getTypes().map(t=>`- ${t}: ${a.byType[t]||0}건`),
-            `콜백 필요: ${list.filter(r=>r.callback).length}건`, '', '담당자별:',
-            ...Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`- ${k}: ${v}건`)];
+          const lines=[`[${d} CS 상담 결산]`, `총 ${a.total}건`, '', '■ 분류별',
+            ...getTypes().map(t=>`- ${t}: ${a.byCat[t]||0}건`),
+            '', '■ 고객유형별',
+            ...CS_CUSTOMER_TYPES.filter(t=>a.byCust[t]).map(t=>`- ${t}: ${a.byCust[t]}건`),
+            '', '■ 상담사별',
+            ...Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`- ${k}: ${v}건`),
+            '', `콜백 필요: ${list.filter(r=>r.callback).length}건`];
           return lines.join('\n');
         }
         window.__csSummaryText=summaryText; // (테스트 편의)
@@ -398,23 +492,23 @@
               <button class="btn pri sm" id="copyCode" style="margin-left:auto">${icon('copy')}Apps Script 코드 복사</button></div>
             <div class="card-bd">
               <ol class="guide">
-                <li>구글 드라이브에서 <b>기록용 구글 시트</b>를 하나 만들어 엽니다.</li>
+                <li>기록할 <b>구글 시트</b>를 엽니다. (1행 헤더: <span class="mono" style="font-size:12px">날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사</span>)</li>
                 <li>상단 메뉴 <span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> 를 클릭합니다.</li>
-                <li>편집기에 있던 내용을 모두 지우고, 위의 <b>[Apps Script 코드 복사]</b> 버튼을 눌러 복사한 코드를 붙여넣기(<span class="k">Ctrl</span>+<span class="k">V</span>) 후 저장(<span class="k">Ctrl</span>+<span class="k">S</span>)합니다.</li>
-                <li>오른쪽 위 <span class="k">배포</span> → <span class="k">새 배포</span> 를 클릭하고, 톱니바퀴(⚙) → <span class="k">웹 앱</span> 을 선택합니다.</li>
-                <li>‘액세스 권한’을 <span class="k">모든 사용자</span> 로 바꾸고 <span class="k">배포</span> 를 누릅니다. (권한 승인 창이 뜨면 허용)</li>
-                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span> 로 끝남)을 복사합니다.</li>
-                <li>그 URL을 아래 칸에 붙여넣고 <b>[저장]</b> → <b>[연결 테스트]</b> 를 눌러 <b style="color:var(--ok)">연결 성공</b> 이 뜨면 끝!</li>
+                <li>편집기 내용을 모두 지우고, 위의 <b>[Apps Script 코드 복사]</b> 로 복사한 코드를 붙여넣기(<span class="k">Ctrl</span>+<span class="k">V</span>) 후 저장(<span class="k">Ctrl</span>+<span class="k">S</span>).</li>
+                <li>코드 상단 <span class="mono" style="font-size:12px">SHEET_NAME</span> 을 기록할 <b>탭 이름</b>으로 맞춥니다. (예: 테스트는 <span class="k">상담test</span>, 실제는 <span class="k">2026 CS 상담이력</span>)</li>
+                <li>오른쪽 위 <span class="k">배포</span> → <span class="k">새 배포</span> → 톱니바퀴(⚙) → <span class="k">웹 앱</span> 선택.</li>
+                <li>‘액세스 권한’을 <span class="k">모든 사용자</span> 로 바꾸고 <span class="k">배포</span>. (권한 승인 창이 뜨면 허용)</li>
+                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장]</b> → <b>[연결 테스트]</b>.</li>
               </ol>
-              <div class="note" style="margin-top:6px">한 번 배포해두면 모든 직원이 같은 URL을 각자 <b>연동 설정</b>에 넣어 함께 사용할 수 있습니다.
-                같은 기록은 <b>중복 없이</b> 갱신되며, 전송이 실패해도 로컬에 안전하게 보관됩니다.</div>
+              <div class="note" style="margin-top:6px">시트 <b>1행 헤더 이름</b>을 읽어 칸을 맞추므로 열 순서가 달라도 정확히 들어갑니다.
+                각 기록은 숨은 <b>id</b> 열로 <b>중복 없이</b> 갱신되며, 전송이 실패해도 로컬에 안전하게 보관됩니다.</div>
             </div>
           </div>
 
           <div class="card" style="margin-bottom:16px;max-width:820px">
             <div class="card-hd">${icon('link')}<b>구글 시트 연결</b></div>
             <div class="card-bd">
-              <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 6번에서 복사한 주소</span>
+              <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 7번에서 복사한 주소</span>
                 <input type="text" id="cfgUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
               <div style="margin-bottom:16px">
                 <label class="fld" style="margin-bottom:8px">전송 방식</label>
@@ -436,7 +530,7 @@
             <div class="card-hd">${icon('link')}<b>노션 연동</b><span class="badge soon" style="margin-left:auto">예정</span></div>
             <div class="card-bd"><div class="muted" style="font-size:13.5px">저장/전송 로직은 목적지(destination) 추상화로 설계되어, 이후 노션 대상만 추가하면 됩니다. (현재 인터페이스만 존재)</div></div>
           </div>`;
-        body.querySelector('#copyCode').onclick=async(e)=>{ const btn=e.currentTarget;
+        body.querySelector('#copyCode').onclick=async(e)=>{
           try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; const t=await r.text(); copyText(t); }
           catch{ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 를 사용하세요'); } };
         body.querySelector('#cfgSave').onclick=()=>{
@@ -454,7 +548,7 @@
         };
         body.querySelector('#cfgPush').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false;
-          body.querySelector('#cfgStat').textContent = r.ok?`${r.synced}건 전송 완료`:('전송 실패: '+r.error); };
+          body.querySelector('#cfgStat').textContent = r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트 확인`:`${r.synced}건 전송 완료`):('전송 실패: '+r.error); };
       }
 
       draw();
