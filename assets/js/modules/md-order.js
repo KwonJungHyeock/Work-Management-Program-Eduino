@@ -37,7 +37,17 @@
     title:'입점사 발주', icon:'truck',
     render(root){
       let tab='entry', dirtyMaster=false, dirtyVendor=false;
+      // 정산구분 정규화: 옛 값 원/선 → 월정산/선결제
+      const normSettle=s=>{ s=String(s||'').trim();
+        if(s==='원'||s==='월'||s==='월정산') return '월정산';
+        if(s==='선'||s==='선결제') return '선결제';
+        return s; };
       let products=getProducts(), vendors=getVendors(), orders=getOrders();
+      // 마이그레이션: 자체상품코드 비어있고 카페24코드만 있으면 왼쪽(자체)로 이동 + 정산구분 정리
+      (function migrate(){ let changed=false;
+        products.forEach(p=>{ if(!(p.selfCode||'').trim() && (p.code||'').trim()){ p.selfCode=p.code; p.code=''; changed=true; }
+          const ns=normSettle(p.settle); if(ns!==p.settle){ p.settle=ns; changed=true; } });
+        if(changed) prodDB().set(products); })();
       const markMasterDirty=()=>{ dirtyMaster=true; const d=body.querySelector('#mDirty'); if(d)d.style.display=''; };
       const markVendorDirty=()=>{ dirtyVendor=true; const d=body.querySelector('#vDirty'); if(d)d.style.display=''; };
       const saveProducts=()=>prodDB().set(products);
@@ -305,7 +315,7 @@
         dataRows.forEach(r=>{ if(!r.join('').trim()) return;
           const selfCode=g(r, keyIdx, '').trim(); if(!selfCode) return;
           const rec={ selfCode, code:g(r,ci.code>=0&&ci.code!==keyIdx?ci.code:-1,''), vendor:g(r,ci.vendor,''),
-            settle:g(r,ci.settle,SETTLE_TYPES[0])||SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
+            settle:normSettle(g(r,ci.settle,'')) || SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
           const ex=products.find(p=>(p.selfCode||'').trim()===selfCode); if(ex){ Object.assign(ex,rec); } else { products.push(rec); }
           added++; });
         syncVendorsFromProducts(); markMasterDirty(); renderProd();
@@ -315,7 +325,7 @@
         products.forEach(p=>{ if(p.vendor && !names.has(p.vendor)){ vendors.push({name:p.vendor,ship:3000}); names.add(p.vendor); } }); }
       function renderProd(){
         const t=body.querySelector('#prodTable'); if(!t) return;
-        t.innerHTML=`<thead><tr><th style="width:120px">자체상품코드</th><th style="width:120px">카페24 상품코드<div class="mini" style="font-weight:500">참고·선택</div></th><th style="width:140px">입점사명</th><th style="width:100px">정산구분</th><th>품명</th><th style="width:100px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+        t.innerHTML=`<thead><tr><th style="width:120px">자체상품코드</th><th style="width:120px">카페24 상품코드<div class="mini" style="font-weight:500">참고·선택</div></th><th style="width:140px">입점사명</th><th style="width:118px">정산구분</th><th>품명</th><th style="width:100px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
         if(!products.length){ tb.innerHTML=`<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">상품이 없습니다. “행 추가” 또는 불러오기.</td></tr>`; return; }
         products.forEach((p,i)=>{ const tr=el('tr');
@@ -393,8 +403,11 @@
                 <span class="muted" id="ordStat" style="font-size:13px"></span></div>
             </div>
           </div>
+          <div class="note warn" style="max-width:820px;margin-bottom:12px"><b>Apps Script 코드가 업데이트되었습니다.</b>
+            시트에 값이 일부만 들어갔다면 → 위 <b>[Apps Script 코드 복사]</b>로 다시 복사해 붙여넣고 <b>재배포(배포 관리 → 새 버전)</b> 하세요.
+            이제 시트의 <b>1행 헤더 이름</b>을 읽어 열을 맞추므로, 시트 열 순서가 달라도 정확히 들어갑니다.</div>
           <div class="note" style="max-width:820px">이카운트는 현재 <b>복사/CSV</b>로 내보내 붙여넣습니다. (ECOUNT API 연동은 추후 어댑터로 추가 가능)
-            발주표 시트는 헤더가 <span class="mono" style="font-size:12px">${esc(ORDER_SHEET_COLS.join(' · '))}</span> 순서면 그대로 쌓입니다.</div>`;
+            발주표 시트 1행 헤더에 <span class="mono" style="font-size:12px">입점사명 · 정산구분 · 상품코드(또는 자체상품코드) · 품명 · 수량 · 배송정보/비고</span> 같은 이름이 있으면 그 칸으로 채워집니다.</div>`;
         body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-orders.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
         body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ sheetUrl:body.querySelector('#ordUrl').value.trim(),
           autoSend: body.querySelector('input[name=autoSend]:checked').value==='1' }); toast('저장했습니다'); };
