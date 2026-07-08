@@ -138,4 +138,89 @@
       load();
     }
   };
+
+  /* =========================================================================
+     관리자 · 공유 범위 (팀장 전용)
+     - 설정마다 "누가 공유받는가"(전사/CS/MD)를 지정
+     - 저장 시 규칙(shareMap)을 공용 저장소에 올리고, 설정을 새 범위 버킷으로 재배치
+     ========================================================================= */
+  MODULES['admin.share']={
+    title:'공유 범위', icon:'share',
+    render(root){
+      if(!Auth.isAdmin()){
+        root.innerHTML=`<div class="view"><div class="empty">${icon('shield')}<div style="font-size:14px">관리자(팀장)만 접근할 수 있는 화면입니다.</div></div></div>`;
+        return;
+      }
+      const SC=(typeof SHARE_SCOPES!=='undefined')?SHARE_SCOPES:[{id:'all',label:'전사'},{id:'cs',label:'CS'},{id:'md',label:'MD'}];
+      // shareMap(범위 규칙 자체)은 항상 전사 → 목록에서 제외
+      const ITEMS=SHARED_SETTING_KEYS.filter(k=>k!==STORE.shareMap);
+      const scopeOf=k=>(typeof shareScopeOf==='function')?shareScopeOf(k):'all';
+
+      root.innerHTML=`
+      <style>
+        .sh-tbl td,.sh-tbl th{vertical-align:middle}
+        .sh-tbl td.nm{font-weight:600;color:var(--ink)}
+        .sh-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
+        .sh-seg button{border:0;background:var(--panel);padding:7px 15px;font-size:13px;font-weight:700;
+          color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+        .sh-seg button:first-child{border-left:0}
+        .sh-seg button.on{background:var(--active-bg);color:var(--red)}
+        .sh-note{font-size:12.5px;color:var(--muted)}
+      </style>
+      <div class="mhead pad">
+        <div class="tt">공유 범위 설정</div>
+        <div class="ds">각 설정을 <b>누가 공유받을지</b> 정합니다. 전사는 모두, CS·MD는 해당 부서 팀원끼리만 동기화됩니다.</div>
+      </div>
+      <div class="mbody">
+        <div class="card">
+          <div class="card-hd">${icon('share')}<b>설정별 공유 범위</b>
+            <span class="muted" id="shStat" style="margin-left:auto;font-size:12.5px"></span></div>
+          <div class="card-bd" style="padding:0">
+            <table class="tbl sh-tbl"><thead><tr>
+              <th style="width:42%">설정 항목</th><th>공유 범위</th></tr></thead>
+              <tbody id="shBody"></tbody></table>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;margin-top:16px">
+          <button class="btn pri" id="shSave">${icon('check')}저장하고 재동기화</button>
+          <button class="btn ghost" id="shReset">기본값으로</button>
+          <span class="sh-note" id="shHint"></span>
+        </div>
+        <p class="sh-note" style="margin-top:14px">※ 저장하면 규칙이 전 기기에 반영되고, 각 설정이 새 범위로 즉시 재배치됩니다. 다른 부서 기기에는 다음 접속 시 정리됩니다.</p>
+      </div>`;
+
+      const $=s=>root.querySelector(s);
+      const draft={};   // 편집 중인 범위 (key→scope)
+      ITEMS.forEach(k=>{ draft[k]=scopeOf(k); });
+
+      function paint(){
+        $('#shBody').innerHTML=ITEMS.map(k=>{
+          const label=(typeof SHARED_LABELS!=='undefined'&&SHARED_LABELS[k])||k;
+          const seg=SC.map(s=>`<button data-k="${esc(k)}" data-s="${s.id}" class="${draft[k]===s.id?'on':''}">${esc(s.label)}</button>`).join('');
+          return `<tr><td class="nm">${esc(label)}</td><td><span class="sh-seg">${seg}</span></td></tr>`;
+        }).join('');
+        $('#shBody').querySelectorAll('.sh-seg button').forEach(b=>{
+          b.onclick=()=>{ draft[b.dataset.k]=b.dataset.s; paint(); };
+        });
+      }
+      paint();
+
+      $('#shReset').onclick=()=>{ ITEMS.forEach(k=>{ draft[k]=(typeof SHARE_DEFAULT!=='undefined'&&SHARE_DEFAULT[k])||'all'; }); paint(); $('#shHint').textContent='기본값으로 되돌렸습니다. [저장]을 눌러 적용하세요.'; };
+
+      $('#shSave').onclick=async()=>{
+        // 기본값과 다른 항목만 오버라이드로 저장 (간결하게 유지)
+        const ov={};
+        ITEMS.forEach(k=>{ const def=(typeof SHARE_DEFAULT!=='undefined'&&SHARE_DEFAULT[k])||'all'; if(draft[k]&&draft[k]!==def) ov[k]=draft[k]; });
+        store(STORE.shareMap).set(ov);        // shareMap 자체는 전사 공유(자동 업로드 트리거)
+        $('#shStat').textContent='재동기화 중…';
+        try{
+          if(window.SyncStore && SyncStore.configured()){ await SyncStore.pushSettings(); }
+          $('#shStat').innerHTML='<span style="color:var(--ok)">저장·재배치 완료</span>';
+          $('#shHint').textContent='';
+        }catch(err){
+          $('#shStat').innerHTML=`<span style="color:var(--danger)">${esc(err.message||'오류')}</span>`;
+        }
+      };
+    }
+  };
 })();

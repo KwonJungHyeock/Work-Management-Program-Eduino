@@ -109,8 +109,9 @@ const NAV = [
       { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
       { key:'md.order',   name:'입점사 발주',      icon:'truck' },
   ]},
-  { dept:'admin', name:'관리자', full:'계정 관리', icon:'shield', adminOnly:true, items:[
+  { dept:'admin', name:'관리자', full:'계정·공유', icon:'shield', adminOnly:true, items:[
       { key:'admin.users', name:'팀원 계정', icon:'users' },
+      { key:'admin.share', name:'공유 범위', icon:'share' },
   ]},
 ];
 /* 디자인·경리는 개발 예정 — 사이드바에서 숨김(백업은 backup/first-draft/에 보존) */
@@ -131,13 +132,43 @@ const STORE = {
   csTypes:  'eduino.cs.notes.types', // 문의유형 목록(사용자 편집)
   csSumTpl: 'eduino.cs.notes.sumtpl',// 일일 결산 저장 양식(커스텀)
   syncCfg:  'eduino.sync.cfg',       // 공용 저장소(구글) 연동 { url, autoPull }
+  shareMap: 'eduino.share.map',      // 공유 범위 오버라이드 { settingKey: 'all'|'cs'|'md' } (전사 공유)
 };
+
+/* 공유 범위 — 설정마다 "누가 공유받는가"를 지정 (①부서 단위)
+   all=전사 / cs=CS 부서 / md=MD 부서. 관리자가 [공유 범위] 화면에서 변경 가능. */
+const SHARE_SCOPES = [
+  { id:'all', label:'전사', dept:'home' },
+  { id:'cs',  label:'CS',   dept:'cs' },
+  { id:'md',  label:'MD',   dept:'md' },
+];
+/* 각 공유 설정의 기본 범위 (부서 전용 설정은 해당 부서끼리만) */
+const SHARE_DEFAULT = {
+  [STORE.platforms]:'md', [STORE.mdPresets]:'md', [STORE.mdProducts]:'md',
+  [STORE.mdVendors]:'md', [STORE.mdOrderCfg]:'md',
+  [STORE.csTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
+  [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
+  [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
+};
+/* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
+function shareScopeOf(key){
+  let ov={}; try{ ov=(store(STORE.shareMap).get({}))||{}; }catch(e){}
+  const sc=ov[key]||SHARE_DEFAULT[key]||'all';
+  return SHARE_SCOPES.some(s=>s.id===sc)?sc:'all';
+}
+/* 로그인 사용자가 받아볼 범위 목록 (관리자=전체, 팀원=전사+자기부서) */
+function myShareScopes(){
+  const u=(typeof Auth!=='undefined'&&Auth.user&&Auth.user())||null;
+  if(u&&u.role==='admin') return ['all','cs','md'];
+  if(u&&u.dept&&SHARE_SCOPES.some(s=>s.id===u.dept)) return ['all',u.dept];
+  return ['all'];
+}
 
 /* 공용(구글) 동기화 대상 = 팀 공통 설정만 (기기/세션/상담·발주 거래데이터 제외) */
 const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csNoteCfg, STORE.csAgents,
-  STORE.csTypes, STORE.csSumTpl,
+  STORE.csTypes, STORE.csSumTpl, STORE.shareMap,
 ];
 /* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
 const SHARED_LABELS = {
@@ -151,4 +182,5 @@ const SHARED_LABELS = {
   [STORE.csAgents]:'상담사 목록',
   [STORE.csTypes]:'CS 분류',
   [STORE.csSumTpl]:'결산 저장 양식',
+  [STORE.shareMap]:'공유 범위 규칙',
 };

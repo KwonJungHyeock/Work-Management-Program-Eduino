@@ -33,21 +33,37 @@ window.SyncStore = (function(){
     return res.json();
   }
 
-  /* 로컬의 팀 공통 설정을 공용 저장소로 올림 */
+  /* 로컬의 팀 공통 설정을 공용 저장소로 올림 — 설정마다 공유 범위별 버킷에 나눠 저장 */
   async function pushSettings(){
-    const entries={};
-    SHARED_SETTING_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v!=null) entries[k]=v; });
-    if(!Object.keys(entries).length) return { ok:true, saved:0 };
+    const groups={};   // scope → { key:value }
+    SHARED_SETTING_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v==null) return;
+      const sc=(typeof shareScopeOf==='function')?shareScopeOf(k):'all';
+      (groups[sc]=groups[sc]||{})[k]=v; });
+    const scopes=Object.keys(groups);
+    if(!scopes.length) return { ok:true, saved:0 };
     const device=store(STORE.device).get('');
-    const r=await post({ op:'setSettings', entries, device });
-    return { ok:true, saved:Object.keys(entries).length, unconfirmed:r&&r.unconfirmed };
+    let saved=0, unconf=false;
+    for(const sc of scopes){
+      const r=await post({ op:'setSettings', scope:sc, entries:groups[sc], device });
+      saved+=Object.keys(groups[sc]).length; if(r&&r.unconfirmed) unconf=true;
+    }
+    return { ok:true, saved, unconfirmed:unconf };
   }
-  /* 공용 저장소의 설정을 로컬로 받아 적용 (팀 공통 키만) */
+  /* 공용 저장소의 설정을 로컬로 받아 적용 — 내가 속한 범위(전사+부서)의 키만 */
   async function pullSettings(){
-    const d=await get('settings'); const s=(d&&d.settings)||{};
+    const scopes=(typeof myShareScopes==='function')?myShareScopes():['all','cs','md'];
+    const d=await get('settings&scope='+encodeURIComponent(scopes.join(','))); const s=(d&&d.settings)||{};
     let n=0; pulling=true;
-    try{ SHARED_SETTING_KEYS.forEach(k=>{ if(s[k]!=null){ localStorage.setItem(k, s[k]); n++; } }); }
-    finally{ pulling=false; }
+    try{
+      // 범위 규칙(shareMap)을 먼저 적용해야 이후 키들의 범위 판정이 최신값 기준이 됨
+      if(s[STORE.shareMap]!=null) localStorage.setItem(STORE.shareMap, s[STORE.shareMap]);
+      SHARED_SETTING_KEYS.forEach(k=>{
+        if(k===STORE.shareMap || s[k]==null) return;
+        const sc=(typeof shareScopeOf==='function')?shareScopeOf(k):'all';
+        if(scopes.indexOf(sc)<0) return;          // 내 범위가 아니면 건너뜀(마이그레이션 안전장치)
+        localStorage.setItem(k, s[k]); n++;
+      });
+    } finally{ pulling=false; }
     return { ok:true, applied:n };
   }
 

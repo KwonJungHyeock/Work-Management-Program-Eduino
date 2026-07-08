@@ -12,7 +12,13 @@
      POST /api/store { op:'presence', device }
    =========================================================================== */
 
-const SETTINGS_KEY = 'eduino:settings';
+const SETTINGS_KEY = 'eduino:settings';   // 전사(all) 버킷 = 레거시 키
+const SETTINGS_SCOPES = ['all', 'cs', 'md'];
+const settingsKey = (scope) => {
+  scope = String(scope || 'all');
+  if (SETTINGS_SCOPES.indexOf(scope) < 0) scope = 'all';
+  return scope === 'all' ? SETTINGS_KEY : SETTINGS_KEY + ':' + scope;
+};
 const PRESENCE_KEY = 'eduino:presence';
 const PRESENCE_TTL_MS = 3 * 60 * 1000; // 최근 3분 이내 하트비트 = 접속 중
 
@@ -46,11 +52,25 @@ async function redis(command) {
 
 function arrToObj(arr) { const o = {}; if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1]; return o; }
 
-async function getSettings() { return arrToObj(await redis(['HGETALL', SETTINGS_KEY])); }
-async function setSettings(entries) {
+// 요청한 범위들(쉼표구분)을 병합해서 반환 — 예: scope='all,cs'
+async function getSettings(scopeStr) {
+  let scopes = String(scopeStr || 'all').split(',').map(s => s.trim()).filter(s => SETTINGS_SCOPES.indexOf(s) >= 0);
+  if (!scopes.length) scopes = ['all'];
+  const out = {};
+  for (const sc of scopes) Object.assign(out, arrToObj(await redis(['HGETALL', settingsKey(sc)])));
+  return out;
+}
+async function setSettings(scope, entries) {
   const keys = Object.keys(entries || {}); if (!keys.length) return 0;
-  const cmd = ['HSET', SETTINGS_KEY]; keys.forEach(k => cmd.push(k, String(entries[k])));
-  await redis(cmd); return keys.length;
+  const target = settingsKey(scope);
+  const cmd = ['HSET', target]; keys.forEach(k => cmd.push(k, String(entries[k])));
+  await redis(cmd);
+  // 다른 범위 버킷에 남아있는 동일 키 제거 → 키는 항상 한 버킷에만 존재(범위 변경/마이그레이션 정리)
+  for (const sc of SETTINGS_SCOPES) {
+    const kk = settingsKey(sc); if (kk === target) continue;
+    try { await redis(['HDEL', kk, ...keys]); } catch (e) {}
+  }
+  return keys.length;
 }
 async function getPresence() {
   const map = arrToObj(await redis(['HGETALL', PRESENCE_KEY]));
@@ -79,14 +99,14 @@ module.exports = async function handler(req, res) {
       const type = (req.query && req.query.type) || 'all';
       const out = { ok: true };
       if (type === 'coll') { out.items = await collGet(req.query.coll); return res.status(200).json(out); }
-      if (type === 'settings' || type === 'all') out.settings = await getSettings();
+      if (type === 'settings' || type === 'all') out.settings = await getSettings((req.query && req.query.scope) || 'all');
       if (type === 'presence' || type === 'all') out.presence = await getPresence();
       return res.status(200).json(out);
     }
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       if (body.op === 'setSettings') {
-        const n = await setSettings(body.entries || {});
+        const n = await setSettings(body.scope || 'all', body.entries || {});
         return res.status(200).json({ ok: true, saved: n });
       }
       if (body.op === 'presence') {
