@@ -217,16 +217,15 @@
         a.innerHTML=`${icon('external')}${esc(l.name)}`; ql.appendChild(a); });
 
       // 통계 카드
-      function renderStats(nUnreadNotice, nMemo){
+      function renderStats(nUnreadNotice, nMemo, nCbOpen){
         const notes=localNotes();
-        const myCb=notes.filter(r=>r.callback&&!r.callbackDone).length;
         const todayCs=notes.filter(r=>todayStr(r.createdAt)===todayStr()).length;
         const cards=[
           { k:'home.notice', ic:'megaphone', l:'새 공지', v:nUnreadNotice, c:'var(--red)' },
           { k:'home.memo',   ic:'send',      l:'새 메모', v:nMemo, c:'#5b3fc4' },
         ];
         if(u.dept==='cs'||u.role==='admin'){
-          cards.push({ k:'cs.notes', ic:'clipboard', l:'내 처리대기', v:myCb, c:'#b26a00' });
+          cards.push({ k:'cs.notes', ic:'clipboard', l:'미처리 콜백', v:nCbOpen, c:'#b26a00' });
           cards.push({ k:'cs.notes', ic:'headset', l:'오늘 상담', v:todayCs, c:'#4d9bff' });
         }
         const row=root.querySelector('#statRow'); row.innerHTML='';
@@ -239,7 +238,7 @@
       (async()=>{
         const raw=await collGet('notice');
         const box=root.querySelector('#dNotice');
-        if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0); }
+        if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0,0); }
         else {
           const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
           const unread=list.filter(n=>!(n.readBy||[]).includes(u.loginId)).length;
@@ -249,10 +248,12 @@
               <span class="dt">${esc(n.title||'(제목 없음)')}</span><span class="dm">${esc(dateShort(n.createdAt))}</span></div>`;
           }).join('') : `<div class="muted" style="padding:10px">공지가 없습니다.</div>`;
           box.querySelectorAll('[data-go]').forEach(r=>r.onclick=()=>location.hash='home.notice');
-          // 메모 카운트도 함께
+          // 메모·미처리 콜백 카운트도 함께
           const memos=await collGet('memo');
           const nMemo=(memos||[]).filter(m=>!m.done && (visibleTo(m.to||'all',u)) && m.author!==u.loginId).length;
-          renderStats(unread, nMemo);
+          const cbs=await collGet('callbacks');
+          const nCb=(cbs||[]).filter(c=>!c.done).length;
+          renderStats(unread, nMemo, nCb);
         }
       })();
 

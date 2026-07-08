@@ -6,7 +6,7 @@
   /* 뉴트럴(슬레이트) 스케일 */
   --bg:#eceef1; --panel:#ffffff; --panel-2:#f7f8fa;
   --line:#e2e5ea; --line-2:#eceef1; --line-strong:#cfd4da;
-  --ink:#1c2430; --ink-2:#3b4453; --muted:#6b7480; --faint:#98a0ab;
+  --ink:#151d27; --ink-2:#333c4a; --muted:#69727e; --faint:#98a0ab;
   --hover:#f2f4f7; --active-bg:#fdecec; --zebra:#fafbfc;
   /* 브랜드/상태 */
   --red:#e31e24; --red-dk:#c2181d; --red-soft:#fdecec;
@@ -47,6 +47,7 @@ h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em}
   white-space:nowrap;transition:background .12s,border-color .12s,color .12s,box-shadow .12s}
 .btn:hover{background:var(--panel-2);border-color:var(--faint)}
 .btn:active{background:var(--hover)}
+.btn:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .btn.pri{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
 .btn.pri:hover{background:var(--red-dk);border-color:var(--red-dk)}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}

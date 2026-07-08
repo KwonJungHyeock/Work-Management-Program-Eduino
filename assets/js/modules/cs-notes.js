@@ -66,6 +66,14 @@
   };
   const ACTIVE_DEST = 'sheet';
 
+  /* ---- 처리대기 공용 큐 (/api/store 컬렉션 'callbacks') · 팀 공유 ---- */
+  const Q = {
+    async list(){ try{ const r=await fetch('/api/store?type=coll&coll=callbacks'); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch{ return null; } },
+    push(item){ try{ return fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'callbacks',item})}); }catch{} },
+    del(id){ try{ return fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collDel',coll:'callbacks',id})}); }catch{} },
+  };
+  async function fetchRoster(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch{ return []; } }
+
   /* ---- 데이터/동기화 ---- */
   const notesDB = ()=>store(STORE.csNotes);
   const cfgDB   = ()=>store(STORE.csNoteCfg);
@@ -172,7 +180,7 @@
         .q-save{width:100%;justify-content:center;margin-top:2px}
         .side-cap-row{display:flex;align-items:center;margin-bottom:6px}
         /* 처리 대기 카드 */
-        .pend-card{display:grid;grid-template-columns:1fr 190px;gap:14px;align-items:start;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:9px}
+        .pend-card{display:grid;grid-template-columns:1fr 210px;gap:14px;align-items:start;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:9px}
         .pend-card.done{opacity:.62;background:var(--panel-2)}
         .pend-card .pc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
         .pend-card .pc-name{font-weight:700}
@@ -182,6 +190,9 @@
         .pend-card .pc-note input{margin-top:8px;width:100%;height:36px;font-size:13px}
         .pend-card .pc-side{display:flex;flex-direction:column;gap:7px;align-items:stretch}
         .pend-card .pc-meta{font-size:12.5px;color:var(--muted);text-align:right}
+        .pend-card .pc-asg{font-size:11.5px;font-weight:700;color:var(--info);background:var(--info-bg);border-radius:5px;padding:1px 7px;display:inline-flex;align-items:center;gap:3px}
+        .pend-card .pc-asg svg{width:12px;height:12px}
+        .pend-card .pc-asgsel{height:32px;font-size:12.5px;width:100%}
         /* 결산 양식 토큰 */
         .tpl-tokens{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
         .chip.sm{padding:5px 10px;font-size:12px;font-family:var(--mono)}
@@ -219,8 +230,9 @@
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ updatePendCnt();
         return tab==='memo'?drawMemo(): tab==='pending'?drawPending(): tab==='summary'?drawSummary(): drawSettings(); };
-      function updatePendCnt(){ const c=root.querySelector('#pendCnt'); if(!c) return;
-        const n=getNotes().filter(r=>r.callback&&!r.callbackDone).length;
+      async function updatePendCnt(){ const c=root.querySelector('#pendCnt'); if(!c) return;
+        const list=await Q.list(); if(!list){ c.style.display='none'; return; }
+        const n=list.filter(r=>!r.done).length;
         c.textContent=n||''; c.style.display=n?'':'none'; }
 
       /* ---------------- 상담 메모 탭 ---------------- */
@@ -373,6 +385,9 @@
             content, answer:body.querySelector('#fAnswer').value.trim(),
             agent, callback:body.querySelector('#fCallback').checked, syncedAt:null };
           const all=getNotes(); all.push(rec); setNotes(all);
+          // 콜백(후속조치) 체크 시 → 팀 공용 처리대기 큐에 등록
+          if(rec.callback){ Q.push({ id:rec.id, category:rec.category, name:rec.name, contact:rec.contact,
+            content:rec.content, agent:rec.agent, createdAt:rec.createdAt, done:false, assignee:'', assigneeName:'', note:'' }); }
           // 폼 초기화 (분류·상담사·날짜 유지 · 고객유형/상품분류/텍스트는 비움)
           form.customerType=''; form.prodCategory='';
           renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
@@ -483,56 +498,64 @@
           toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error)); };
       }
 
-      /* ---------------- 처리 대기 탭 (후속조치 큐) ---------------- */
+      /* ---------------- 처리 대기 탭 (팀 공용 콜백 큐) ---------------- */
       function drawPending(){
-        let pf='wait'; // wait | done | all
+        let pf='wait'; // wait | mine | done | all
+        let items=null, roster=[];
+        const meName=(Auth.user&&Auth.user()||{}).name||'';
         body.innerHTML=`
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
             <h3 style="font-size:16px">처리 대기 <span class="muted" id="pendSummary" style="font-weight:500;font-size:13.5px"></span></h3>
             <div style="margin-left:auto;display:flex;gap:6px" id="pendFilters"></div>
           </div>
-          <div class="note" style="margin-bottom:14px">상담 메모에서 <b>후속조치(콜백) 필요</b>로 체크한 건이 여기에 모입니다. 처리 완료하면 <b>완료</b>를 눌러 목록에서 내리세요. (담당자·연락처와 함께 처리 메모를 남길 수 있습니다.)</div>
-          <div id="pendList"></div>`;
+          <div class="note" style="margin-bottom:14px">상담 메모에서 <b>후속조치(콜백) 필요</b>로 체크한 건이 <b>팀 공용</b>으로 모입니다. 담당자를 지정하고, 처리하면 <b>완료</b>로 내리세요.</div>
+          <div id="pendList"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
         function renderFilters(){ const f=body.querySelector('#pendFilters'); f.innerHTML='';
-          [['wait','대기중'],['done','완료'],['all','전체']].forEach(([k,l])=>{ const b=el('button','btn sm'+(pf===k?' pri':''),l);
+          [['wait','대기중'],['mine','내 담당'],['done','완료'],['all','전체']].forEach(([k,l])=>{ const b=el('button','btn sm'+(pf===k?' pri':''),l);
             b.onclick=()=>{ pf=k; renderFilters(); renderPend(); }; f.appendChild(b); }); }
         function daysWaiting(iso){ return Math.max(0, Math.floor((Date.now()-new Date(iso).getTime())/86400000)); }
+        async function reload(){ items=await Q.list(); renderPend(); }
+        function saveItem(it){ Q.push(it); updatePendCnt(); }
         function renderPend(){
           const box=body.querySelector('#pendList'), sm=body.querySelector('#pendSummary');
-          const all=getNotes().filter(r=>r.callback);
-          const waitN=all.filter(r=>!r.callbackDone).length;
-          if(sm) sm.textContent=`· 대기 ${waitN}건 / 전체 ${all.length}건`;
-          let list=all.filter(r=> pf==='wait'?!r.callbackDone : pf==='done'?r.callbackDone : true);
-          list.sort((a,b)=> (a.callbackDone-b.callbackDone) || a.createdAt.localeCompare(b.createdAt));
-          if(!list.length){ box.innerHTML=`<div class="empty">${icon('checkCircle')}<div style="font-size:13.5px">${pf==='wait'?'처리할 후속조치가 없습니다.':'해당 항목이 없습니다.'}</div></div>`; return; }
+          if(items===null){ box.innerHTML=`<div class="empty">${icon('alert')}<div style="font-size:13.5px">공용 저장소에 연결되지 않았습니다. (배포 환경에서 표시됩니다)</div></div>`; if(sm)sm.textContent=''; return; }
+          const waitN=items.filter(r=>!r.done).length;
+          if(sm) sm.textContent=`· 대기 ${waitN}건 / 전체 ${items.length}건`;
+          let list=items.filter(r=> pf==='wait'?!r.done : pf==='done'?r.done : pf==='mine'?(!r.done && r.assigneeName===meName) : true);
+          list.sort((a,b)=> (a.done-b.done) || String(a.createdAt).localeCompare(String(b.createdAt)));
+          if(!list.length){ box.innerHTML=`<div class="empty">${icon('checkCircle')}<div style="font-size:13.5px">${pf==='wait'?'처리할 후속조치가 없습니다.':pf==='mine'?'내 담당 건이 없습니다.':'해당 항목이 없습니다.'}</div></div>`; return; }
           box.innerHTML=''; list.forEach(r=>{
-            const d=daysWaiting(r.createdAt); const card=el('div','pend-card'+(r.callbackDone?' done':''));
+            const d=daysWaiting(r.createdAt); const card=el('div','pend-card'+(r.done?' done':''));
+            const opts=['<option value="">담당 미지정</option>',...roster.map(p=>`<option ${p.name===r.assigneeName?'selected':''}>${esc(p.name)}</option>`)].join('');
             card.innerHTML=`
               <div class="pc-main">
                 <div class="pc-top">
                   <span class="badge info">${esc(r.category||'-')}</span>
                   ${r.name?`<span class="pc-name">${esc(r.name)}</span>`:''}
                   ${r.contact?`<span class="muted">${esc(r.contact)}</span>`:''}
-                  ${r.callbackDone?'<span class="badge synced">완료</span>':`<span class="pc-age ${d===0?'d0':''}">${d===0?'오늘':'대기 '+d+'일'}</span>`}
+                  ${r.assigneeName?`<span class="pc-asg">${icon('users')}${esc(r.assigneeName)}</span>`:''}
+                  ${r.done?'<span class="badge synced">완료</span>':`<span class="pc-age ${d===0?'d0':''}">${d===0?'오늘':'대기 '+d+'일'}</span>`}
                 </div>
                 <div class="pc-content">${esc(r.content||'')}</div>
-                <div class="pc-note"><input type="text" placeholder="처리 메모 (예: 재통화 완료 · 견적 발송)" value="${esc(r.callbackNote||'')}"></div>
+                <div class="pc-note"><input type="text" placeholder="처리 메모 (예: 재통화 완료 · 견적 발송)" value="${esc(r.note||'')}"></div>
               </div>
               <div class="pc-side">
-                <div class="pc-meta">${esc(r.date||todayStr(r.createdAt))} · ${esc(r.agent||'-')}${r.callbackDone&&r.callbackDoneAt?'<br>완료 '+timeHM(r.callbackDoneAt):''}</div>
-                <button class="btn ${r.callbackDone?'':'pri'} sm" data-a="toggle">${r.callbackDone?icon('refresh')+'되돌리기':icon('check')+'완료'}</button>
-                <button class="btn ghost sm" data-a="go">${icon('clipboard')}메모로</button>
+                <div class="pc-meta">접수 ${esc(todayStr(r.createdAt))} · ${esc(r.agent||'-')}${r.done&&r.doneAt?'<br>완료 '+timeHM(r.doneAt):''}</div>
+                <select class="pc-asgsel" title="담당 지정">${opts}</select>
+                <button class="btn ${r.done?'':'pri'} sm" data-a="toggle">${r.done?icon('refresh')+'되돌리기':icon('check')+'완료'}</button>
+                <button class="btn ghost sm" data-a="del">${icon('trash')}삭제</button>
               </div>`;
             const inp=card.querySelector('.pc-note input');
-            inp.onchange=()=>{ const arr=getNotes(); const t=arr.find(x=>x.id===r.id); if(t){ t.callbackNote=inp.value; setNotes(arr); } };
-            card.querySelector('[data-a=toggle]').onclick=()=>{ const arr=getNotes(); const t=arr.find(x=>x.id===r.id);
-              if(t){ t.callbackDone=!t.callbackDone; t.callbackDoneAt=t.callbackDone?nowISO():null; t.callbackNote=inp.value; setNotes(arr); }
-              renderPend(); updatePendCnt(); };
-            card.querySelector('[data-a=go]').onclick=()=>{ tab='memo'; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t==='memo')); draw(); };
+            inp.onchange=()=>{ r.note=inp.value; saveItem(r); };
+            card.querySelector('.pc-asgsel').onchange=e=>{ r.assigneeName=e.target.value; saveItem(r); renderPend(); };
+            card.querySelector('[data-a=toggle]').onclick=()=>{ r.done=!r.done; r.doneAt=r.done?nowISO():null; r.note=inp.value; saveItem(r); renderPend(); };
+            card.querySelector('[data-a=del]').onclick=()=>{ if(confirm('이 항목을 목록에서 삭제할까요?')){ Q.del(r.id); items=items.filter(x=>x.id!==r.id); updatePendCnt(); renderPend(); } };
             box.appendChild(card);
           });
         }
-        renderFilters(); renderPend();
+        renderFilters();
+        fetchRoster().then(r=>{ roster=r; if(items!==null) renderPend(); });
+        reload();
       }
 
       /* ---------------- 일일 결산 탭 ---------------- */
