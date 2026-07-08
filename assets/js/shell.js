@@ -44,6 +44,9 @@ function bootShell(){
     const a=el('a','qlink'); a.href=l.url; a.target='_blank'; a.rel='noopener noreferrer'; a.title=l.name;
     a.innerHTML=`${icon('external')}<span>${esc(l.name)}</span>`; ql.appendChild(a);
   });
+  // 설정 백업/복원 (백엔드 없이 파일로 세팅 보존·이전)
+  const backupBtn=el('button','qlink'); backupBtn.type='button'; backupBtn.id='btnBackup'; backupBtn.title='설정 백업/복원 (.json)';
+  backupBtn.innerHTML=`${icon('save')}<span>설정 백업</span>`; backupBtn.onclick=openBackup; ql.appendChild(backupBtn);
 
   // 로고 클릭 → 인트로 재생 후 홈으로
   const intro=$('appIntro');
@@ -108,6 +111,48 @@ function bootShell(){
        <div class="seg">${icon('users')}<span>접속</span><b>1</b><span>(이 기기)</span></div>
        <div class="sp"></div>
        <div class="seg">${esc(APP_NAME)} · 초안(Draft)</div>`;
+  }
+
+  // ---- 설정 백업/복원 오버레이 ----
+  function openBackup(){
+    const keys=Object.keys(localStorage).filter(k=>k.startsWith('eduino.'));
+    const ov=el('div','modal-ov');
+    ov.innerHTML=`
+      <div class="modal">
+        <div class="modal-hd">${icon('save')}<b>설정 백업 / 복원</b><button class="btn ghost sm" id="mClose">${icon('x')}</button></div>
+        <div class="modal-bd">
+          <p style="font-size:13.5px;line-height:1.65;color:var(--ink-2)">이 프로그램은 백엔드 없이 <b>이 브라우저(이 PC)에만</b> 설정을 저장합니다. 브라우저 캐시를 지우면 설정이 사라지므로, 아래에서 <b>설정 파일(.json)</b>로 백업해 두세요. 다른 PC·직원과 세팅을 공유할 때도 이 파일을 쓰면 됩니다.</p>
+          <div class="muted" style="font-size:12.5px;margin:10px 0">백업 대상: 플랫폼·상품 마스터·입점사·발주/CS 연동 설정·분류·상담사·결산 양식·상담 메모 등 저장된 <b>${keys.length}</b>개 항목</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn pri" id="mExport">${icon('download')}설정 내보내기(.json)</button>
+            <button class="btn" id="mImport">${icon('upload')}설정 불러오기</button>
+            <input type="file" id="mFile" accept=".json,application/json" class="hidden">
+          </div>
+          <div class="note warn" style="margin-top:12px;font-size:12.5px">불러오기를 하면 현재 이 브라우저의 설정을 <b>덮어씁니다</b>. 필요하면 먼저 내보내기로 백업하세요. (상담 메모 등 데이터도 함께 포함됩니다)</div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+    ov.querySelector('#mClose').onclick=close;
+    ov.querySelector('#mExport').onclick=()=>{
+      const out={ _app:'eduino-works', _exportedAt:nowISO(), device:store(STORE.device).get(''), data:{} };
+      Object.keys(localStorage).filter(k=>k.startsWith('eduino.')).forEach(k=>{ out.data[k]=localStorage.getItem(k); });
+      downloadBlob(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}), `에듀이노설정_${todayStr()}.json`);
+      toast('설정을 내보냈습니다');
+    };
+    ov.querySelector('#mImport').onclick=()=>ov.querySelector('#mFile').click();
+    ov.querySelector('#mFile').onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+      const rd=new FileReader();
+      rd.onload=()=>{ try{
+          const j=JSON.parse(rd.result); const d=(j&&j.data)?j.data:j;
+          const entries=Object.entries(d||{}).filter(([k,v])=>k.startsWith('eduino.')&&typeof v==='string');
+          if(!entries.length){ toast('올바른 설정 파일이 아닙니다'); return; }
+          if(!confirm(`설정 ${entries.length}개 항목을 불러와 현재 설정을 덮어쓸까요?`)) return;
+          entries.forEach(([k,v])=>localStorage.setItem(k,v));
+          toast('설정을 불러왔습니다 · 새로고침합니다'); setTimeout(()=>location.reload(),700);
+        }catch{ toast('파일을 읽지 못했습니다 (JSON 형식 확인)'); } };
+      rd.readAsText(f,'utf-8'); };
   }
 
   window.addEventListener('hashchange', route);

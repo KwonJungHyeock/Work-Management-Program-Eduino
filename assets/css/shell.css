@@ -118,3 +118,11 @@
   .nav-glabel .txt,.nav-glabel .cnt,.nav-item .txt,.nav-item .badge{display:none}
   .nav-item{justify-content:center}
 }
+
+/* 설정 백업/복원 모달 */
+.modal-ov{position:fixed;inset:0;z-index:200;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;padding:20px;animation:mfade .14s ease}
+@keyframes mfade{from{opacity:0}to{opacity:1}}
+.modal{width:100%;max-width:520px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 64px rgba(16,24,40,.28);overflow:hidden}
+.modal-hd{display:flex;align-items:center;gap:9px;padding:15px 18px;border-bottom:1px solid var(--line);font-size:15.5px;background:var(--panel-2)}
+.modal-hd .btn{margin-left:auto}
+.modal-bd{padding:18px}

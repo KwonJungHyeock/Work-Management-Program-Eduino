@@ -15,6 +15,23 @@
     return o;
   }
 
+  /* 일일 결산 저장 기본 양식 (사용자가 화면에서 커스텀 가능 · 토큰 치환) */
+  const DEFAULT_SUM_TPL =
+`[{날짜} CS 상담 결산]
+총 {총건수}건
+
+■ 분류별
+{분류별}
+
+■ 고객유형별
+{고객유형별}
+
+■ 상담사별
+{상담사별}
+
+■ 후속조치(콜백) 필요: {콜백건수}건
+{콜백목록}`;
+
   /* ---- 목적지(destination) 추상화 ----
      새 대상(예: 노션)은 여기 객체만 추가하면 됩니다. */
   const DESTINATIONS = {
@@ -85,6 +102,14 @@
         if(cur && (cur.includes('상품추천')||!cur.length)) typesDB.set(CS_INQUIRY_TYPES.slice()); })();
       const getTypes=()=> typesDB.get(CS_INQUIRY_TYPES.slice());
       const setTypes=(v)=> typesDB.set(v);
+      // 상담사 목록 (사용자 편집 · 로컬 저장)
+      const agentsDB=store(STORE.csAgents);
+      const getAgents=()=> agentsDB.get(CS_AGENTS.slice());
+      const setAgents=(v)=> agentsDB.set(v);
+      // 일일 결산 저장 양식 (커스텀)
+      const sumTplDB=store(STORE.csSumTpl);
+      const getSumTpl=()=> sumTplDB.get(DEFAULT_SUM_TPL);
+      const setSumTpl=(v)=> sumTplDB.set(v);
 
       // 옛 레코드 스키마(type/memo/product) → 신규(category/content/prodCode) 마이그레이션
       (function migrateNotes(){ const all=getNotes(); let ch=false;
@@ -97,8 +122,8 @@
         });
         if(ch) setNotes(all); })();
 
-      let tab='memo', filter='전체', lastAgent=store(STORE.csAgent).get(CS_AGENTS[0]);
-      let typeEdit=false;
+      let tab='memo', filter='전체', lastAgent=store(STORE.csAgent).get(getAgents()[0]);
+      let typeEdit=false, agentEdit=false;
       // 폼 상태 (분류·상담사·날짜는 저장 후에도 유지되는 컨텍스트)
       let form={ category:getTypes()[0], customerType:'', prodCategory:'', date:todayStr(), agent:lastAgent };
 
@@ -110,6 +135,8 @@
         .cs-tabs{display:flex;gap:4px;margin-top:14px}
         .cs-tabs .t{padding:10px 16px;font-size:14.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
         .cs-tabs .t.on{color:var(--red);border-bottom-color:var(--red)}
+        .tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:5px;
+          border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:800;vertical-align:middle}
         .cs-body{padding:20px 22px;max-width:1200px;margin:0 auto}
         /* 빠른 입력 (메모 중심) */
         .q-card{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
@@ -152,6 +179,21 @@
         .q-cb{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;padding:2px 0;cursor:pointer}
         .q-cb input{width:18px;height:18px}
         .q-save{width:100%;justify-content:center;margin-top:2px}
+        .side-cap-row{display:flex;align-items:center;margin-bottom:6px}
+        /* 처리 대기 카드 */
+        .pend-card{display:grid;grid-template-columns:1fr 190px;gap:14px;align-items:start;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:9px}
+        .pend-card.done{opacity:.62;background:var(--panel-2)}
+        .pend-card .pc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+        .pend-card .pc-name{font-weight:700}
+        .pend-card .pc-age{font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-bg);border:1px solid #ead9b0;border-radius:5px;padding:1px 7px}
+        .pend-card .pc-age.d0{color:var(--ok);background:var(--ok-bg);border-color:#bfe6cf}
+        .pend-card .pc-content{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+        .pend-card .pc-note input{margin-top:8px;width:100%;height:36px;font-size:13px}
+        .pend-card .pc-side{display:flex;flex-direction:column;gap:7px;align-items:stretch}
+        .pend-card .pc-meta{font-size:12.5px;color:var(--muted);text-align:right}
+        /* 결산 양식 토큰 */
+        .tpl-tokens{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+        .chip.sm{padding:5px 10px;font-size:12px;font-family:var(--mono)}
         /* 연동 가이드 */
         .guide{counter-reset:step;display:grid;gap:14px;margin:6px 0 4px;padding:0}
         .guide li{list-style:none;position:relative;padding-left:40px;min-height:28px;font-size:14.5px;line-height:1.75}
@@ -183,6 +225,7 @@
         <div class="ds">통화 중 분류·고객유형·상품분류를 바로 누르고 내용을 적으면(Ctrl+Enter 저장) 연동 시트에 그대로 기록됩니다.</div>
         <div class="cs-tabs">
           <div class="t" data-t="memo">상담 메모</div>
+          <div class="t" data-t="pending">처리 대기 <span class="tab-cnt" id="pendCnt" style="display:none"></span></div>
           <div class="t" data-t="summary">일일 결산</div>
           <div class="t" data-t="settings">연동 설정</div>
         </div>
@@ -191,7 +234,11 @@
       const body=root.querySelector('#csBody');
       root.querySelectorAll('.cs-tabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.cs-tabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
-      const draw=()=> tab==='memo'?drawMemo(): tab==='summary'?drawSummary(): drawSettings();
+      const draw=()=>{ updatePendCnt();
+        return tab==='memo'?drawMemo(): tab==='pending'?drawPending(): tab==='summary'?drawSummary(): drawSettings(); };
+      function updatePendCnt(){ const c=root.querySelector('#pendCnt'); if(!c) return;
+        const n=getNotes().filter(r=>r.callback&&!r.callbackDone).length;
+        c.textContent=n||''; c.style.display=n?'':'none'; }
 
       /* ---------------- 상담 메모 탭 ---------------- */
       function drawMemo(){
@@ -228,7 +275,8 @@
 
                   <aside class="q-side">
                     <div>
-                      <span class="cap">상담사</span>
+                      <div class="side-cap-row"><span class="cap" style="margin:0">상담사</span>
+                        <button type="button" class="sec-edit" id="agentEdit">편집</button></div>
                       <div class="q-agents" id="agentGroup"></div>
                     </div>
                     <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
@@ -293,14 +341,35 @@
         renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
         renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
 
-        /* --- 상담사 칩 (고정 목록 · 단일선택 · 마지막값 기억) --- */
+        /* --- 상담사 칩 (편집 가능 · 단일선택 · 마지막값 기억) --- */
         function renderAgents(){
           const g=body.querySelector('#agentGroup'); g.innerHTML='';
-          if(!CS_AGENTS.includes(form.agent)) form.agent=CS_AGENTS.includes(lastAgent)?lastAgent:CS_AGENTS[0];
-          CS_AGENTS.forEach(a=>{ const b=el('button','chip'+(form.agent===a?' on':'')); b.type='button'; b.textContent=a;
-            b.onclick=()=>{ form.agent=a; store(STORE.csAgent).set(a); lastAgent=a; renderAgents(); };
-            g.appendChild(b); });
+          const agents=getAgents();
+          if(!agents.includes(form.agent)) form.agent = agents.includes(lastAgent)?lastAgent:agents[0];
+          agents.forEach(a=>{ const b=el('button','chip'+(form.agent===a?' on':'')); b.type='button';
+            b.innerHTML=`<span>${esc(a)}</span>${agentEdit&&agents.length>1?`<span class="q-del" title="삭제">✕</span>`:''}`;
+            b.onclick=(e)=>{
+              if(e.target.classList.contains('q-del')){ const na=agents.filter(x=>x!==a); setAgents(na); if(form.agent===a)form.agent=na[0]; renderAgents(); return; }
+              if(agentEdit) return;
+              form.agent=a; store(STORE.csAgent).set(a); lastAgent=a; renderAgents();
+            };
+            g.appendChild(b);
+          });
+          if(agentEdit){ const add=el('div','chip-add');
+            add.innerHTML=`<input type="text" id="newAgent" placeholder="상담사 이름" maxlength="12">
+              <button type="button" class="btn pri sm" id="addAgentBtn">${icon('plus')}추가</button>`;
+            const doAdd=()=>{ const v=add.querySelector('#newAgent').value.trim();
+              if(!v) return; const cur=getAgents(); if(cur.includes(v)){ toast('이미 있는 상담사입니다'); return; }
+              cur.push(v); setAgents(cur); renderAgents();
+              const ni=g.querySelector('#newAgent'); if(ni) ni.focus(); };
+            add.querySelector('#addAgentBtn').onclick=doAdd;
+            add.querySelector('#newAgent').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
+            g.appendChild(add);
+          }
         }
+        body.querySelector('#agentEdit').onclick=(e)=>{ agentEdit=!agentEdit;
+          e.currentTarget.classList.toggle('on',agentEdit); e.currentTarget.textContent=agentEdit?'완료':'편집';
+          renderAgents(); };
         renderAgents();
 
         // 저장
@@ -355,6 +424,7 @@
         let list=todayNotes().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
         if(cnt) cnt.textContent=`· 총 ${list.length}건`;
         if(filter!=='전체') list=list.filter(r=>r.category===filter);
+        updatePendCnt();
         if(!list.length){ box.innerHTML=`<div class="empty">${icon('clipboard')}<div style="font-size:13.5px">${filter==='전체'?'오늘 기록이 아직 없습니다.':'해당 분류 기록이 없습니다.'}</div></div>`; return; }
         box.innerHTML=''; list.forEach(r=>box.appendChild(noteCard(r)));
       }
@@ -430,19 +500,76 @@
           toast(r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트에서 확인하세요`:`${r.synced}건 동기화 완료`):('동기화 실패: '+r.error)); };
       }
 
+      /* ---------------- 처리 대기 탭 (후속조치 큐) ---------------- */
+      function drawPending(){
+        let pf='wait'; // wait | done | all
+        body.innerHTML=`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <h3 style="font-size:16px">처리 대기 <span class="muted" id="pendSummary" style="font-weight:500;font-size:13.5px"></span></h3>
+            <div style="margin-left:auto;display:flex;gap:6px" id="pendFilters"></div>
+          </div>
+          <div class="note" style="margin-bottom:14px">상담 메모에서 <b>후속조치(콜백) 필요</b>로 체크한 건이 여기에 모입니다. 처리 완료하면 <b>완료</b>를 눌러 목록에서 내리세요. (담당자·연락처와 함께 처리 메모를 남길 수 있습니다.)</div>
+          <div id="pendList"></div>`;
+        function renderFilters(){ const f=body.querySelector('#pendFilters'); f.innerHTML='';
+          [['wait','대기중'],['done','완료'],['all','전체']].forEach(([k,l])=>{ const b=el('button','btn sm'+(pf===k?' pri':''),l);
+            b.onclick=()=>{ pf=k; renderFilters(); renderPend(); }; f.appendChild(b); }); }
+        function daysWaiting(iso){ return Math.max(0, Math.floor((Date.now()-new Date(iso).getTime())/86400000)); }
+        function renderPend(){
+          const box=body.querySelector('#pendList'), sm=body.querySelector('#pendSummary');
+          const all=getNotes().filter(r=>r.callback);
+          const waitN=all.filter(r=>!r.callbackDone).length;
+          if(sm) sm.textContent=`· 대기 ${waitN}건 / 전체 ${all.length}건`;
+          let list=all.filter(r=> pf==='wait'?!r.callbackDone : pf==='done'?r.callbackDone : true);
+          list.sort((a,b)=> (a.callbackDone-b.callbackDone) || a.createdAt.localeCompare(b.createdAt));
+          if(!list.length){ box.innerHTML=`<div class="empty">${icon('checkCircle')}<div style="font-size:13.5px">${pf==='wait'?'처리할 후속조치가 없습니다.':'해당 항목이 없습니다.'}</div></div>`; return; }
+          box.innerHTML=''; list.forEach(r=>{
+            const d=daysWaiting(r.createdAt); const card=el('div','pend-card'+(r.callbackDone?' done':''));
+            card.innerHTML=`
+              <div class="pc-main">
+                <div class="pc-top">
+                  <span class="badge info">${esc(r.category||'-')}</span>
+                  ${r.name?`<span class="pc-name">${esc(r.name)}</span>`:''}
+                  ${r.contact?`<span class="muted">${esc(r.contact)}</span>`:''}
+                  ${r.callbackDone?'<span class="badge synced">완료</span>':`<span class="pc-age ${d===0?'d0':''}">${d===0?'오늘':'대기 '+d+'일'}</span>`}
+                </div>
+                <div class="pc-content">${esc(r.content||'')}</div>
+                <div class="pc-note"><input type="text" placeholder="처리 메모 (예: 재통화 완료 · 견적 발송)" value="${esc(r.callbackNote||'')}"></div>
+              </div>
+              <div class="pc-side">
+                <div class="pc-meta">${esc(r.date||todayStr(r.createdAt))} · ${esc(r.agent||'-')}${r.callbackDone&&r.callbackDoneAt?'<br>완료 '+timeHM(r.callbackDoneAt):''}</div>
+                <button class="btn ${r.callbackDone?'':'pri'} sm" data-a="toggle">${r.callbackDone?icon('refresh')+'되돌리기':icon('check')+'완료'}</button>
+                <button class="btn ghost sm" data-a="go">${icon('clipboard')}메모로</button>
+              </div>`;
+            const inp=card.querySelector('.pc-note input');
+            inp.onchange=()=>{ const arr=getNotes(); const t=arr.find(x=>x.id===r.id); if(t){ t.callbackNote=inp.value; setNotes(arr); } };
+            card.querySelector('[data-a=toggle]').onclick=()=>{ const arr=getNotes(); const t=arr.find(x=>x.id===r.id);
+              if(t){ t.callbackDone=!t.callbackDone; t.callbackDoneAt=t.callbackDone?nowISO():null; t.callbackNote=inp.value; setNotes(arr); }
+              renderPend(); updatePendCnt(); };
+            card.querySelector('[data-a=go]').onclick=()=>{ tab='memo'; root.querySelectorAll('.cs-tabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t==='memo')); draw(); };
+            box.appendChild(card);
+          });
+        }
+        renderFilters(); renderPend();
+      }
+
       /* ---------------- 일일 결산 탭 ---------------- */
       function drawSummary(){
         let date=todayStr();
         body.innerHTML=`
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-            <label class="fld" style="width:200px">${icon('calendar')} 결산 날짜<input type="date" id="sumDate" value="${date}"></label>
-            <div style="margin-left:auto;display:flex;gap:8px">
-              <button class="btn" id="copySum">${icon('copy')}결산 텍스트 복사</button>
-              <button class="btn pri" id="pushSum">${icon('cloudUp')}미동기화분 시트 전송</button></div>
+            <label class="fld" style="width:190px">${icon('calendar')} 결산 날짜<input type="date" id="sumDate" value="${date}"></label>
+            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" id="editTpl">${icon('settings')}양식 편집</button>
+              <button class="btn" id="copySum">${icon('copy')}텍스트 복사</button>
+              <button class="btn pri" id="saveTxt">${icon('download')}메모장 저장(.txt)</button>
+              <button class="btn" id="pushSum">${icon('cloudUp')}미동기화분 시트 전송</button></div>
           </div>
+          <div id="tplBox" class="hidden"></div>
           <div id="sumWrap"></div>`;
         body.querySelector('#sumDate').onchange=e=>{ date=e.target.value; renderSum(); };
-        body.querySelector('#copySum').onclick=()=>copyText(summaryText(date));
+        body.querySelector('#copySum').onclick=()=>copyText(buildSummary(date));
+        body.querySelector('#saveTxt').onclick=()=>{ downloadBlob(new Blob([buildSummary(date)],{type:'text/plain;charset=utf-8'}),`CS결산_${date}.txt`); toast('메모장(.txt)으로 저장했습니다'); };
+        body.querySelector('#editTpl').onclick=openTpl;
         body.querySelector('#pushSum').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false; renderSum();
           toast(r.ok?(r.unconfirmed?`${r.synced}건 전송함 — 시트 확인`:`${r.synced}건 전송 완료`):('전송 실패: '+r.error)); };
@@ -479,20 +606,49 @@
             <div class="card" style="margin-top:16px"><div class="card-hd"><b>콜백 필요 목록</b></div><div class="card-bd" style="padding:0">
               <table class="tbl"><thead><tr><th style="width:70px">시각</th><th style="width:90px">분류</th><th>주문자/업체</th><th>연락처</th><th>내용</th></tr></thead><tbody>
                 ${cbList.length?cbList.sort((x,y)=>x.createdAt.localeCompare(y.createdAt)).map(r=>`<tr><td>${timeHM(r.createdAt)}</td><td>${esc(r.category||'-')}</td><td>${esc(r.name||'-')}</td><td>${esc(r.contact||'-')}</td><td>${esc((r.content||'').slice(0,40))}</td></tr>`).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">콜백 필요 없음</td></tr>'}
-              </tbody></table></div></div>`;
+              </tbody></table></div></div>
+            <div class="card" style="margin-top:16px"><div class="card-hd">${icon('clipboard')}<b>저장 텍스트 미리보기</b>
+              <span class="muted" style="margin-left:auto;font-size:12px">[양식 편집]에서 형식을 바꿀 수 있습니다</span></div>
+              <div class="card-bd"><pre id="sumPre" style="white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;line-height:1.55;margin:0;color:var(--ink-2)"></pre></div></div>`;
+          const pre=body.querySelector('#sumPre'); if(pre) pre.textContent=buildSummary(date);
         }
-        function summaryText(d){
+        // 토큰 치환으로 결산 텍스트 생성 (커스텀 양식 반영)
+        function buildSummary(d){
           const list=getNotes().filter(r=>todayStr(r.createdAt)===d), a=agg(list);
-          const lines=[`[${d} CS 상담 결산]`, `총 ${a.total}건`, '', '■ 분류별',
-            ...getTypes().map(t=>`- ${t}: ${a.byCat[t]||0}건`),
-            '', '■ 고객유형별',
-            ...CS_CUSTOMER_TYPES.filter(t=>a.byCust[t]).map(t=>`- ${t}: ${a.byCust[t]}건`),
-            '', '■ 상담사별',
-            ...Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`- ${k}: ${v}건`),
-            '', `콜백 필요: ${list.filter(r=>r.callback).length}건`];
-          return lines.join('\n');
+          const catLines=getTypes().map(t=>`- ${t}: ${a.byCat[t]||0}건`).join('\n');
+          const custLines=CS_CUSTOMER_TYPES.filter(t=>a.byCust[t]).map(t=>`- ${t}: ${a.byCust[t]}건`).join('\n') || '- (없음)';
+          const agentLines=Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`- ${k}: ${v}건`).join('\n') || '- (없음)';
+          const cbList=list.filter(r=>r.callback);
+          const cbLines=cbList.length? cbList.sort((x,y)=>x.createdAt.localeCompare(y.createdAt))
+            .map(r=>`- ${timeHM(r.createdAt)} ${r.name||'-'}${r.contact?`(${r.contact})`:''}: ${(r.content||'').slice(0,40)}${r.callbackDone?' [완료]':''}`).join('\n') : '- (없음)';
+          const map={ '{날짜}':d, '{총건수}':a.total, '{분류별}':catLines, '{고객유형별}':custLines,
+            '{상담사별}':agentLines, '{콜백건수}':cbList.length, '{콜백목록}':cbLines };
+          let out=getSumTpl(); Object.keys(map).forEach(k=>{ out=out.split(k).join(map[k]); }); return out;
         }
-        window.__csSummaryText=summaryText; // (테스트 편의)
+        // 결산 양식 편집기
+        function openTpl(){
+          const box=body.querySelector('#tplBox'); box.classList.remove('hidden');
+          box.innerHTML=`<div class="card" style="margin-bottom:16px"><div class="card-hd">${icon('settings')}<b>결산 저장 양식 편집</b>
+            <span style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn sm" id="tplReset">${icon('refresh')}기본값</button>
+              <button class="btn pri sm" id="tplSave">${icon('save')}저장</button>
+              <button class="btn sm" id="tplClose">닫기</button></span></div>
+            <div class="card-bd">
+              <div class="muted" style="font-size:12.5px;margin-bottom:8px">아래 <b>토큰</b>을 클릭해 넣거나 자유롭게 배치하세요. 저장하면 [텍스트 복사]·[메모장 저장]에 반영됩니다.</div>
+              <div class="tpl-tokens" id="tplTokens"></div>
+              <textarea id="tplArea" rows="12" style="width:100%;font-family:var(--mono);font-size:13px;line-height:1.5">${esc(getSumTpl())}</textarea>
+            </div></div>`;
+          const tokens=[['{날짜}','날짜'],['{총건수}','총 건수'],['{분류별}','분류별 목록'],['{고객유형별}','고객유형별 목록'],['{상담사별}','상담사별 목록'],['{콜백건수}','콜백 건수'],['{콜백목록}','콜백 목록']];
+          const tt=box.querySelector('#tplTokens');
+          tokens.forEach(([k,d2])=>{ const b=el('button','chip sm'); b.type='button'; b.textContent=k; b.title=d2;
+            b.onclick=()=>{ const ta=box.querySelector('#tplArea'); const s=ta.selectionStart??ta.value.length, e2=ta.selectionEnd??s;
+              ta.value=ta.value.slice(0,s)+k+ta.value.slice(e2); ta.focus(); ta.selectionStart=ta.selectionEnd=s+k.length; };
+            tt.appendChild(b); });
+          box.querySelector('#tplClose').onclick=()=>{ box.classList.add('hidden'); box.innerHTML=''; };
+          box.querySelector('#tplReset').onclick=()=>{ box.querySelector('#tplArea').value=DEFAULT_SUM_TPL; };
+          box.querySelector('#tplSave').onclick=()=>{ setSumTpl(box.querySelector('#tplArea').value); toast('양식을 저장했습니다'); renderSum(); };
+        }
+        window.__csBuildSummary=buildSummary; // (테스트 편의)
       }
 
       /* ---------------- 연동 설정 탭 ---------------- */
