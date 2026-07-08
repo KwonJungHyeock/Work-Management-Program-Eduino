@@ -58,11 +58,15 @@
         .ord-tabs .t.on{color:var(--red);border-bottom-color:var(--red)}
         .ord-body{padding:20px 22px;max-width:1240px}
         .code-in{font-size:19px;font-weight:800;font-family:var(--mono);height:52px;letter-spacing:.02em}
-        .lookup{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);min-height:56px;font-size:14.5px}
-        .lookup.ok{border-color:#bfe6cf;background:var(--ok-bg)}
+        .lookup{display:flex;align-items:center;padding:12px 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel-2);min-height:64px;font-size:14px}
+        .lookup.ok{border-color:#9fd8b7;background:var(--ok-bg)}
         .lookup.bad{border-color:#eecac6;background:#fdeef0;color:var(--red);font-weight:600}
-        .lookup .vn{font-weight:800;font-size:16px}
-        .lookup .pill{background:#fff}
+        .lk{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0}
+        .lk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .lk-vn{font-weight:800;font-size:18px;color:var(--ink);white-space:nowrap;letter-spacing:-.01em}
+        .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
+        .lookup .pill{white-space:nowrap;background:#fff;font-weight:600;border-color:#bcd9c8}
+        .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
         .out-tbl{overflow:auto;max-height:300px;border:1px solid var(--line);border-radius:8px}
         .mini{font-size:11px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
       </style>
@@ -90,7 +94,7 @@
             <div class="card-hd">${icon('search')}<b>상품코드로 빠른 발주</b>
               <span class="muted" style="margin-left:auto;font-size:12.5px">코드 입력 후 <b>Enter</b> → 목록에 추가</span></div>
             <div class="card-bd">
-              <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start">
+              <div style="display:grid;grid-template-columns:minmax(200px,1fr) minmax(260px,1.3fr);gap:16px;align-items:stretch">
                 <label class="fld">자체상품코드
                   <input class="code-in" id="fCode" list="codeList" value="${esc(form.code)}" placeholder="예: ED-1004" autocomplete="off">
                   <datalist id="codeList">${products.map(p=>`<option value="${esc(p.selfCode||p.code)}">${esc(p.vendor)} · ${esc(p.name).slice(0,30)}`).join('')}</datalist></label>
@@ -144,8 +148,11 @@
           if(!p){ box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. ‘상품 마스터’에서 추가하세요.`; return null; }
           const sh=shipFor(p);
           box.className='lookup ok';
-          box.innerHTML=`<span class="vn">${esc(p.vendor)}</span><span class="pill">정산 ${esc(p.settle)}</span>
-            <span class="pill">배송비 ${fmtNum(sh)}원</span><span style="color:var(--ink-2)">${esc(p.name)}</span>`;
+          box.innerHTML=`<div class="lk">
+            <div class="lk-top"><span class="lk-vn">${esc(p.vendor)}</span>
+              <span class="pill">정산 <b>${esc(p.settle)}</b></span>
+              <span class="pill">배송비 <b>${fmtNum(sh)}원</b></span></div>
+            <div class="lk-name">${esc(p.name)}</div></div>`;
           return p;
         }
         codeEl.oninput=()=>{ form.code=codeEl.value; refreshLookup(); };
@@ -170,10 +177,11 @@
         $f('#addOrder').onclick=addOrder;
         body.querySelector('.card-bd').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='fCode'){ e.preventDefault(); addOrder(); }});
         $f('#clearOrders').onclick=()=>{ if(orders.length&&confirm('발주 목록을 모두 비울까요?')){ orders=[]; saveOrders(); renderAll(); } };
-        $f('#sheetCopy').onclick=()=>{ const {cols,rows}=sheetData(); copyText(toTSV(cols,rows)); };
+        const rowsTSV=rows=>rows.map(r=>r.join('\t')).join('\n');
+        $f('#sheetCopy').onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이 데이터 행만
         $f('#sheetCsv').onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); };
         $f('#sheetSend').onclick=sendToSheet;
-        $f('#ecCopy').onclick=()=>{ const {cols,rows}=ecData(); copyText(toTSV(cols,rows)); };
+        $f('#ecCopy').onclick=()=>{ const {rows}=ecData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이
         $f('#ecCsv').onclick=()=>{ const {cols,rows}=ecData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_이카운트배송비_${todayStr()}.csv`); toast('CSV 저장'); };
         refreshLookup(); renderAll(); codeEl.focus();
       }
@@ -307,14 +315,14 @@
         products.forEach(p=>{ if(p.vendor && !names.has(p.vendor)){ vendors.push({name:p.vendor,ship:3000}); names.add(p.vendor); } }); }
       function renderProd(){
         const t=body.querySelector('#prodTable'); if(!t) return;
-        t.innerHTML=`<thead><tr><th style="width:120px">자체상품코드</th><th style="width:110px">카페24코드<div class="mini" style="font-weight:500">참고·선택</div></th><th style="width:140px">입점사명</th><th style="width:90px">정산구분</th><th>품명</th><th style="width:100px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+        t.innerHTML=`<thead><tr><th style="width:120px">자체상품코드</th><th style="width:120px">카페24 상품코드<div class="mini" style="font-weight:500">참고·선택</div></th><th style="width:140px">입점사명</th><th style="width:100px">정산구분</th><th>품명</th><th style="width:100px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
         if(!products.length){ tb.innerHTML=`<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">상품이 없습니다. “행 추가” 또는 불러오기.</td></tr>`; return; }
         products.forEach((p,i)=>{ const tr=el('tr');
           tr.innerHTML=`<td><input type="text" data-k="selfCode" value="${esc(p.selfCode||'')}" class="mono" style="font-weight:700"></td>
             <td><input type="text" data-k="code" value="${esc(p.code||'')}" class="mono" style="color:var(--muted)"></td>
             <td><input type="text" data-k="vendor" value="${esc(p.vendor)}" list="venList"></td>
-            <td><select data-k="settle">${SETTLE_TYPES.map(s=>`<option ${s===p.settle?'selected':''}>${s}</option>`).join('')}</select></td>
+            <td><select data-k="settle">${[...new Set([...SETTLE_TYPES, p.settle].filter(Boolean))].map(s=>`<option ${s===p.settle?'selected':''}>${esc(s)}</option>`).join('')}</select></td>
             <td><input type="text" data-k="name" value="${esc(p.name)}"></td>
             <td><input type="number" data-k="ship" value="${esc(p.ship||'')}" placeholder="기본"></td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
