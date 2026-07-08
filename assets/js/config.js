@@ -95,6 +95,11 @@ const CS_SHEET_MAP = {
 /* 좌측 내비게이션 구조 (활성: CS·MD / 예정: 디자인·경리)
    각 item.key 는 모듈 레지스트리(app.js MODULES) 키와 일치 */
 const NAV = [
+  { dept:'home', name:'홈', full:'공통', icon:'dashboard', common:true, items:[
+      { key:'home.dash',   name:'홈 대시보드', icon:'dashboard' },
+      { key:'home.notice', name:'공지사항',   icon:'megaphone' },
+      { key:'home.memo',   name:'업무 메모',   icon:'send' },
+  ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },

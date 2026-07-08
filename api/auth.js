@@ -71,6 +71,12 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true, users: await allAccounts(), adminId: ADMIN_ID });
     }
 
+    if (op === 'roster') {
+      // 이름/부서만 (접속코드·이메일 제외) — 공지/메모 수신자 선택용, 로그인 사용자 누구나
+      const list = (await allAccounts()).map(a => ({ loginId: a.loginId, name: a.name || a.loginId, dept: a.dept || '' }));
+      return res.status(200).json({ ok: true, roster: list });
+    }
+
     if (op === 'saveUser') {
       if (!isAdmin(body)) return res.status(403).json({ ok: false, error: '관리자 권한이 필요합니다' });
       const u = body.user || {};

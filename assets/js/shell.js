@@ -67,19 +67,23 @@ function bootShell(){
   $('devRole').textContent = (me.user && (deptLabel[me.user.dept] || (me.user.role==='admin'?'관리자':'')) ) || '이 PC';
   $('devAv').textContent = uName.replace(/[^0-9A-Za-z가-힣]/g,'').slice(0,2).toUpperCase() || 'PC';
 
-  // 계정 권한 (관리자가 기능별로 부여 · 관리자는 전체)
+  // 계정 권한 (관리자가 기능별로 부여 · 관리자는 전체 · 공통(홈)은 누구나)
   const isAdmin = !!(me.user && me.user.role==='admin');
   const myDept = me.user && me.user.dept;
   const perms = Array.isArray(me.user && me.user.perms) ? me.user.perms : null;
-  const hasPerm = (key)=>{ if(isAdmin) return true;
+  const commonDepts = new Set(NAV.filter(g=>g.common).map(g=>g.dept));
+  const hasPerm = (key)=>{ const d=String(key||'').split('.')[0];
+    if(commonDepts.has(d)) return true;
+    if(isAdmin) return true;
     if(perms) return perms.includes(key);
-    return String(key||'').split('.')[0]===myDept; };   // 폴백(권한정보 없는 옛 계정)
+    return d===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
+    if(commonDepts.has(d)) return true;
     if(d==='admin') return isAdmin;
     return hasPerm(key); };
 
-  // 내비게이션 — CS·MD 섹션은 모두 표시하되, 권한 없는 기능은 잠금 표시
-  const DEPT_COLOR = { cs:'#4d9bff', md:'#ff5257', admin:'#f0a020' };
+  // 내비게이션 — 공통(홈)은 항상, CS·MD는 표시하되 권한 없는 기능은 잠금
+  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', admin:'#f0a020' };
   const nav = $('nav');
   NAV.forEach(g=>{
     if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
@@ -88,7 +92,7 @@ function bootShell(){
     grp.innerHTML = `<div class="nav-glabel"><span class="gi">${icon(g.icon)}</span>
       <span class="gtx"><b>${esc(g.name)}</b><small>${esc(g.full)}</small></span></div>`;
     g.items.forEach(it=>{
-      const locked = g.dept!=='admin' && !hasPerm(it.key);
+      const locked = !g.common && g.dept!=='admin' && !hasPerm(it.key);
       const item = el('div','nav-item'+(locked?' locked':'')); item.dataset.key = it.key;
       item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>${locked?`<span class="lock">${icon('lock')}</span>`:''}`;
       item.onclick = ()=>{ location.hash = it.key; };

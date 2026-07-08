@@ -50,6 +50,10 @@ const ICONS = {
   search:'<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
   lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  megaphone:'<path d="M3 11l14-7v16L3 13v-2z"/><path d="M3 11v2a2 2 0 0 0 2 2h1l1 5h3l-1-5"/><path d="M20 8a4 4 0 0 1 0 8"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
 };
 function icon(name){ return `<span class="ic">${ICONS[name]?`<svg viewBox="0 0 24 24">${ICONS[name]}</svg>`:''}</span>`; }
 
