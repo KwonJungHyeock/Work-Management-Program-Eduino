@@ -20,6 +20,7 @@
         });
         let data=null; try{ data = await res.json(); }catch{}
         if(!res.ok) throw new Error('HTTP '+res.status);
+        if(data && data.ok===false) throw new Error(data.error||'시트 처리 실패(보호된 시트 등)');
         // 응답을 못 읽어도(res.ok) 성공으로 간주 → id upsert 라 중복 위험 없음
         return { syncedIds: (data && data.synced) ? data.synced : records.map(r=>r.id) };
       },

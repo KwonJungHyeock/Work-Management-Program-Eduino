@@ -191,8 +191,10 @@
         try{ const res=await fetch(cfg.sheetUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
             body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})});
           if(!res.ok) throw new Error('HTTP '+res.status);
+          let data=null; try{ data=await res.json(); }catch{}
+          if(data && data.ok===false) throw new Error(data.error||'시트 처리 실패(보호된 시트 등)');
           targets.forEach(o=>o.synced=true); saveOrders();
-          return {ok:true, sent:targets.length};
+          return {ok:true, sent:(data&&data.added)||targets.length};
         }catch(err){ return {ok:false, error:err.message||'전송 실패'}; }
       }
       function ecData(){
