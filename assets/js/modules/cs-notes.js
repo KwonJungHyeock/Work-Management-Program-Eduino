@@ -185,14 +185,6 @@
         /* 결산 양식 토큰 */
         .tpl-tokens{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
         .chip.sm{padding:5px 10px;font-size:12px;font-family:var(--mono)}
-        /* 연동 가이드 */
-        .guide{counter-reset:step;display:grid;gap:14px;margin:6px 0 4px;padding:0}
-        .guide li{list-style:none;position:relative;padding-left:40px;min-height:28px;font-size:14.5px;line-height:1.75}
-        .guide li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:0;
-          width:27px;height:27px;border-radius:50%;background:var(--red);color:#fff;font-weight:800;font-size:13px;
-          display:flex;align-items:center;justify-content:center}
-        .guide b{color:var(--ink);font-weight:700}
-        .guide .k{display:inline-block;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700;white-space:nowrap;line-height:1.5}
         /* 오늘 기록 카드 */
         .note-card{display:grid;grid-template-columns:58px 96px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-bottom:8px}
         .note-card .tm{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13.5px;font-weight:600}

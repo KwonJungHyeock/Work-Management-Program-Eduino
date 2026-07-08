@@ -4,7 +4,13 @@
 MODULES['md.product'] = {
   title:'상품 데이터 관리', icon:'grid', flush:true,
   render(root){
-    root.innerHTML = `<div class="iframe-wrap"><iframe src="modules/md/product-tool.html" title="상품 데이터 관리 도구"></iframe></div>`;
+    root.style.display='flex'; root.style.flexDirection='column';
+    root.innerHTML = `
+      <div class="mhead pad"><div class="mhead-row"><div>
+        <div class="tt">상품 데이터 관리</div>
+        <div class="ds">엑셀·CSV를 불러와 상품 데이터를 일괄 편집합니다.</div></div></div></div>
+      <div style="flex:1;min-height:0;position:relative">
+        <iframe src="modules/md/product-tool.html" title="상품 데이터 관리 도구" style="position:absolute;inset:0;width:100%;height:100%;border:0;display:block"></iframe></div>`;
   }
 };
 
@@ -63,13 +69,9 @@ MODULES['md.product'] = {
       root.innerHTML = `
       <style>
         .conv-wrap{display:flex;flex-direction:column;height:100%}
-        .conv-head{flex:none;padding:16px 22px 0;border-bottom:1px solid var(--line);background:var(--panel)}
-        .conv-head .tt{font-size:19px;font-weight:800}
-        .conv-head .ds{font-size:13.5px;color:var(--muted);margin-top:3px}
-        .conv-tabs{display:flex;gap:4px;margin-top:14px}
-        .conv-tabs .t{padding:10px 16px;font-size:14.5px;font-weight:700;color:var(--muted);cursor:pointer;
-          border-bottom:2.5px solid transparent;margin-bottom:-1px}
-        .conv-tabs .t.on{color:var(--red);border-bottom-color:var(--red)}
+        .conv-head{flex:none;padding:16px 24px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+        .conv-head .tt{font-size:19px;font-weight:800;letter-spacing:-.01em}
+        .conv-head .ds{font-size:13.5px;color:var(--muted);margin-top:4px}
         .conv-body{flex:1;min-height:0}
         .twopane{display:grid;grid-template-columns:minmax(320px,42%) 1fr;height:100%}
         .pane-l{border-right:1px solid var(--line);background:var(--panel-2);display:flex;flex-direction:column;min-height:0}
@@ -121,13 +123,13 @@ MODULES['md.product'] = {
         <div class="conv-head">
           <div class="tt">상세이미지 변환기</div>
           <div class="ds">통이미지를 왼쪽에서 검수하고, 오른쪽에서 플랫폼별 규격·확장자로 한 번에 변환해 ZIP으로 내려받습니다.</div>
-          <div class="conv-tabs"><div class="t" data-t="convert">이미지 변환</div><div class="t" data-t="settings">플랫폼 설정</div></div>
+          <div class="mtabs"><div class="t" data-t="convert">이미지 변환</div><div class="t" data-t="settings">플랫폼 설정</div></div>
         </div>
         <div class="conv-body" id="cbody"></div>
       </div>`;
       const cbody=root.querySelector('#cbody');
-      root.querySelectorAll('.conv-tabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
-        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.conv-tabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
+      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
+        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>tab==='convert'?drawConvert():drawSettings();
 
       /* ============ 변환 탭 (2분할) ============ */
