@@ -57,7 +57,8 @@
       // 자체상품코드(selfCode)가 기준 · 카페24 상품코드(code)로도 찾히게 보조 매핑
       const prodMap=()=>{ const m={}; products.forEach(p=>{ const s=(p.selfCode||'').trim(), c=(p.code||'').trim();
         if(s) m[s]=p; if(c && !m[c]) m[c]=p; }); return m; };
-      const vendorShip=n=>{ const v=vendors.find(x=>x.name===n); return v?Number(v.ship)||0:0; };
+      const vendorObj=n=>vendors.find(x=>x.name===n)||null;
+      const vendorShip=n=>{ const v=vendorObj(n); return v?Number(v.ship)||0:0; };
       // A~E 로 시작하는 자체상품코드 = 자사 상품 → 입점사명 '자사'
       const isJasa=c=>/^[A-E]-/i.test(String(c||'').trim());
       const vendorName=p=>((p&&p.vendor||'').trim())||(isJasa(p&&p.selfCode)?'자사':'');
@@ -87,6 +88,14 @@
         .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
         .lookup .pill{white-space:nowrap;background:#fff;font-weight:600;border-color:#b7dcc6}
         .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
+        .lookup .pill.pol{background:#fff7e8;border-color:#f0d08a;color:#8a5a00;display:inline-flex;align-items:center;gap:4px;max-width:100%}
+        .lookup .pill.pol b{color:#7a4f00;white-space:normal}
+        .lookup .pill.pol svg{width:13px;height:13px;flex:0 0 auto}
+        /* 입점사 정보 표 */
+        .ven-tbl{overflow:auto;border:1px solid var(--line);border-radius:9px;box-shadow:var(--sh-sm);max-height:560px}
+        .ven-tbl table.tbl th{background:#eef1f5;position:sticky;top:0;z-index:1}
+        .ven-tbl table.tbl tbody tr:nth-child(even){background:var(--zebra)}
+        .ven-tbl input{min-width:0}
         /* 표 */
         .out-tbl{overflow:auto;max-height:320px;border:1px solid var(--line);border-radius:9px;box-shadow:var(--sh-sm)}
         .out-tbl table.tbl th{background:#eef1f5}
@@ -104,7 +113,7 @@
         <div class="ord-tabs">
           <div class="t" data-t="entry">발주 입력</div>
           <div class="t" data-t="master">상품 마스터</div>
-          <div class="t" data-t="vendor">입점사 배송비</div>
+          <div class="t" data-t="vendor">입점사 정보</div>
           <div class="t" data-t="settings">연동 설정</div>
         </div>
       </div>
@@ -174,12 +183,13 @@
           const code=codeEl.value.trim(); const p=prodMap()[code]; const box=$f('#lookup');
           if(!code){ box.className='lookup'; box.textContent='상품코드를 입력하세요.'; return null; }
           if(!p){ box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. ‘상품 마스터’에서 추가하세요.`; return null; }
-          const sh=shipFor(p);
+          const sh=shipFor(p); const ven=vendorObj(vendorName(p));
+          const policy=(ven&&ven.policy||'').trim();
           box.className='lookup ok';
           box.innerHTML=`<div class="lk">
             <div class="lk-top"><span class="lk-vn">${esc(vendorName(p)||'입점사 미지정')}</span>
               <span class="pill">정산 <b>${esc(p.settle)}</b></span>
-              <span class="pill">배송비 <b>${fmtNum(sh)}원</b></span></div>
+              <span class="pill">배송비 <b>${fmtNum(sh)}원</b></span>${policy?`<span class="pill pol">${icon('truck')}<b>${esc(policy)}</b></span>`:''}</div>
             <div class="lk-name">${esc(p.name)}</div></div>`;
           return p;
         }
@@ -374,36 +384,99 @@
         dl.innerHTML=vendors.map(v=>`<option value="${esc(v.name)}">`).join('');
       }
 
-      /* ---------------- 입점사 배송비 ---------------- */
+      /* ---------------- 입점사 정보 (배송비 + 배송정책·담당자) ---------------- */
+      // "3,000원 - 20만원 이상 구매" → 배송비 3000 추출 · "무료배송"/"0원…" → 0
+      function parseShipFromPolicy(s){ s=String(s||'').trim(); if(!s||s==='-') return null;
+        if(/무료/.test(s) && !/[1-9]/.test(s.replace(/무료\s*배송/g,''))) return 0;
+        const m=s.replace(/,/g,'').match(/(\d+)\s*원/); return m?Number(m[1]):null; }
       function drawVendors(){
         body.innerHTML=`
-          <div class="card" style="max-width:720px">
-            <div class="card-hd">${icon('truck')}<b>입점사별 배송비</b> <span class="muted" style="font-size:12.5px">· 단가(vat포함)</span>
+          <input type="file" id="venFile" accept=".csv,text/csv" class="hidden">
+          <div class="card">
+            <div class="card-hd">${icon('truck')}<b>입점사 정보</b> <span class="muted" style="font-size:12.5px">· 배송비(vat포함)·무료배송조건·담당자</span>
               <span class="badge soon" id="vDirty" style="display:${dirtyVendor?'':'none'}">● 저장 안 됨</span>
-              <span style="margin-left:auto;display:flex;gap:6px">
+              <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn sm" id="addVen">${icon('plus')}행 추가</button>
+                <button class="btn sm" id="impVenFile">${icon('upload')}CSV 불러오기</button>
+                <button class="btn sm" id="impVenPaste">${icon('clipboard')}붙여넣기</button>
+                <button class="btn sm" id="expVen">${icon('download')}CSV 내보내기</button>
                 <button class="btn sm pri" id="saveVen">${icon('save')}저장</button></span></div>
-            <div class="card-bd" style="padding:0"><table class="tbl" id="venTable"></table></div>
+            <div class="card-bd" style="padding:0"><div class="ven-tbl"><table class="tbl" id="venTable"></table></div></div>
           </div>
-          <div class="note" style="margin-top:12px;max-width:720px">배송비는 <b>입점사별 고정 금액</b>이 기본입니다. 특정 상품만 다르면 <b>상품 마스터</b>의 “배송비 예외”에 입력하세요.
-            공급가·부가세는 ÷11로 자동 분리됩니다. 수정 후 <b>저장</b>을 눌러 반영하세요.</div>`;
+          <div class="note" style="margin-top:12px">배송비는 <b>입점사별 고정 금액</b>(vat포함)이 기본이며 공급가·부가세는 ÷11로 자동 분리됩니다. 특정 상품만 다르면 <b>상품 마스터</b>의 “배송비 예외”에 입력하세요.
+            <b>무료배송조건</b>은 발주 입력 시 자동 조회에 함께 표시됩니다. 회사 배송정보 리스트(<span class="mono" style="font-size:12px">data/입점사_배송정보.csv</span>)를 <b>CSV 불러오기</b>로 한 번에 등록하세요.
+            헤더(입점사명/업체명·정산구분·배송비·무료배송조건/배송조건·담당자·연락처·발주메일·특이사항)를 자동 인식합니다. 수정 후 <b>저장</b>.</div>
+          <div id="venPasteBox" class="hidden" style="margin-top:14px"></div>`;
         renderVen();
         body.querySelector('#saveVen').onclick=()=>{ saveVendors(); dirtyVendor=false; body.querySelector('#vDirty').style.display='none'; toast('저장되었습니다'); };
-        body.querySelector('#addVen').onclick=()=>{ vendors.push({name:'',ship:3000}); markVendorDirty(); renderVen(); };
+        body.querySelector('#addVen').onclick=()=>{ vendors.unshift({name:'',ship:3000,policy:'',manager:'',contact:'',email:'',note:''}); markVendorDirty(); renderVen(); };
+        body.querySelector('#expVen').onclick=()=>{ const cols=['입점사명','정산구분','배송비','무료배송조건','담당자','연락처','발주메일','특이사항'];
+          const rows=vendors.map(v=>[v.name,v.settle||'',v.ship||'',v.policy||'',v.manager||'',v.contact||'',v.email||'',v.note||'']);
+          downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`입점사정보_${todayStr()}.csv`); toast('CSV 저장'); };
+        const vf=body.querySelector('#venFile');
+        body.querySelector('#impVenFile').onclick=()=>vf.click();
+        vf.onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; const rd=new FileReader(); rd.onload=()=>importVendors(parseTable(rd.result)); rd.readAsText(f,'utf-8'); };
+        body.querySelector('#impVenPaste').onclick=()=>{
+          const box=body.querySelector('#venPasteBox'); box.classList.remove('hidden');
+          box.innerHTML=`<div class="card"><div class="card-hd"><b>붙여넣기로 불러오기</b></div><div class="card-bd">
+            <div class="muted" style="font-size:12.5px;margin-bottom:8px">엑셀/구글시트에서 범위를 복사해 붙여넣으세요. 첫 줄 헤더(입점사명·배송비·무료배송조건·담당자·연락처·발주메일)를 자동 인식합니다.</div>
+            <textarea id="venPasteArea" rows="6" placeholder="입점사명   정산구분   배송비   무료배송조건   담당자   연락처   발주메일"></textarea>
+            <div style="display:flex;gap:8px;margin-top:10px"><button class="btn pri" id="venPasteGo">불러오기</button>
+              <button class="btn" id="venPasteCancel">취소</button></div></div></div>`;
+          box.querySelector('#venPasteCancel').onclick=()=>{ box.classList.add('hidden'); box.innerHTML=''; };
+          box.querySelector('#venPasteGo').onclick=()=>{ importVendors(parseTable(box.querySelector('#venPasteArea').value)); box.classList.add('hidden'); box.innerHTML=''; };
+        };
+      }
+      function importVendors(rows){
+        if(!rows.length){ toast('불러올 데이터가 없습니다'); return; }
+        const norm=s=>String(s||'').replace(/\s/g,'').toLowerCase();
+        const idxOf=(names)=>{ const h=rows[0].map(norm); for(const n of names){ const i=h.indexOf(norm(n)); if(i>=0) return i; } return -1; };
+        const ci={ name:idxOf(['입점사명','입점사','업체명','거래처','거래처명']),
+          settle:idxOf(['정산구분','정산']), ship:idxOf(['배송비']),
+          policy:idxOf(['무료배송조건','배송조건','배송비정책','무료배송기준']),
+          manager:idxOf(['담당자','담당자명','담당']), contact:idxOf(['연락처','전화','전화번호','연락처1']),
+          email:idxOf(['발주메일','발주 메일','이메일','메일','발주이메일']), note:idxOf(['특이사항','비고','메모']) };
+        const hasHeader = ci.name>=0 || ci.ship>=0 || ci.policy>=0;
+        const dataRows = hasHeader ? rows.slice(1) : rows;
+        const g=(r,i)=> i>=0&&i<r.length ? String(r[i]).trim() : '';
+        const nameIdx = ci.name>=0 ? ci.name : 0;
+        let added=0, updated=0;
+        dataRows.forEach(r=>{ if(!r.join('').trim()) return;
+          const name=g(r,nameIdx); if(!name) return;
+          const policy=g(r,ci.policy);
+          let ship=g(r,ci.ship).replace(/[^\d]/g,'');
+          ship = ship!=='' ? Number(ship) : (parseShipFromPolicy(policy) ?? 0);
+          const rec={ name, settle:normSettle(g(r,ci.settle)), ship, policy,
+            manager:g(r,ci.manager), contact:g(r,ci.contact), email:g(r,ci.email), note:g(r,ci.note) };
+          const ex=vendors.find(v=>v.name===name);
+          if(ex){ Object.assign(ex,rec); updated++; } else { vendors.push(rec); added++; } });
+        markVendorDirty(); renderVen();
+        toast(`불러오기 완료 · 신규 ${added} / 갱신 ${updated}건 · [저장]을 눌러 반영`);
       }
       function renderVen(){
         const t=body.querySelector('#venTable'); if(!t) return;
-        t.innerHTML=`<thead><tr><th>입점사명</th><th class="num" style="width:150px">배송비(vat포함)</th><th class="num" style="width:110px">공급가</th><th class="num" style="width:90px">부가세</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+        t.innerHTML=`<thead><tr><th style="min-width:140px">입점사명</th><th style="width:78px">정산</th>
+          <th class="num" style="width:112px">배송비(vat포함)</th><th class="num" style="width:88px">공급가</th><th class="num" style="width:72px">부가세</th>
+          <th style="min-width:180px">무료배송조건</th><th style="min-width:110px">담당자</th><th style="min-width:150px">연락처</th>
+          <th style="min-width:180px">발주메일</th><th style="min-width:120px">특이사항</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
+        if(!vendors.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:16px">입점사가 없습니다. “행 추가” 또는 CSV 불러오기.</td></tr>`; return; }
         vendors.forEach((v,i)=>{ const s=vat(v.ship); const tr=el('tr');
-          tr.innerHTML=`<td><input type="text" data-k="name" value="${esc(v.name)}"></td>
+          const jasa = v.name==='자사';
+          tr.innerHTML=`<td>${jasa?'<span class="vbadge jasa">자사</span> ':''}<input type="text" data-k="name" value="${esc(v.name)}" style="width:${jasa?'88px':'100%'}"></td>
+            <td><input type="text" data-k="settle" value="${esc(v.settle||'')}" placeholder="-"></td>
             <td><input type="number" data-k="ship" value="${esc(v.ship)}" style="text-align:right"></td>
             <td class="num mono">${fmtNum(s.supply)}</td><td class="num mono">${fmtNum(s.tax)}</td>
+            <td><input type="text" data-k="policy" value="${esc(v.policy||'')}" placeholder="예: 3,000원 - 20만원 이상 무료"></td>
+            <td><input type="text" data-k="manager" value="${esc(v.manager||'')}"></td>
+            <td><input type="text" data-k="contact" value="${esc(v.contact||'')}"></td>
+            <td><input type="text" data-k="email" value="${esc(v.email||'')}"></td>
+            <td><input type="text" data-k="note" value="${esc(v.note||'')}"></td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
-          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value; markVendorDirty(); renderVen(); });
+          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value;
+            markVendorDirty(); if(inp.dataset.k==='ship') renderVen(); });
           tr.querySelector('button').onclick=()=>{ vendors.splice(i,1); markVendorDirty(); renderVen(); };
           tb.appendChild(tr); });
-        if(!vendors.length) tb.innerHTML=`<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">입점사가 없습니다. “행 추가”.</td></tr>`;
       }
 
       /* ---------------- 연동 설정 ---------------- */

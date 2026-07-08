@@ -49,13 +49,13 @@ const DEFAULT_MD_PRODUCTS = [
   { selfCode:'P-BA10', code:'', vendor:'새온',       settle:'월정산', name:'[알티노] 언플러그드 크레용 / 교재', ship:'' },
   { selfCode:'P-AJ64', code:'', vendor:'삼쩜일사',   settle:'선결제', name:'[로봇과 함께하는 인공지능 교육 12차시 태블릿&크롬북 활용 교재] 카미봇파이 워크북', ship:'' },
 ];
-/* 입점사별 배송비(vat포함) · 상품에 개별 배송비가 있으면 그 값이 우선 */
+/* 입점사 정보 (배송비 vat포함 + 무료배송조건/담당자/연락처/발주메일/특이사항)
+   · 상품에 개별 배송비가 있으면 그 값이 우선 · 실제 목록은 data/입점사_배송정보.csv 임포트 */
 const DEFAULT_MD_VENDORS = [
-  { name:'자사',       ship:0 },
-  { name:'삼쩜일사',   ship:5100 },
-  { name:'아이씨뱅큐', ship:3000 },
-  { name:'퓨나스',     ship:3000 },
-  { name:'새온',       ship:3000 },
+  { name:'자사',       ship:3000, policy:'자사 상품 (모두 3,000원)', manager:'', contact:'', email:'', note:'' },
+  { name:'삼쩜일사',   ship:5100, policy:'',                    manager:'', contact:'', email:'', note:'' },
+  { name:'아이씨뱅큐', ship:0,    policy:'무료배송',            manager:'', contact:'', email:'', note:'' },
+  { name:'다산북스',   ship:2500, policy:'2,500원 - 3만원 이상 구매', manager:'김재민 본부장', contact:'070-4481-2631', email:'leehan011@dasanbooks.com', note:'' },
 ];
 
 /* 프로그램 명칭 */
