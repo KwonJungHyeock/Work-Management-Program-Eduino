@@ -17,7 +17,9 @@ const PRESENCE_KEY = 'eduino:presence';
 const PRESENCE_TTL_MS = 3 * 60 * 1000; // 최근 3분 이내 하트비트 = 접속 중
 
 async function redis(command) {
-  const url = process.env.KV_REST_API_URL, token = process.env.KV_REST_API_TOKEN;
+  // Vercel KV 또는 Upstash 통합 — 어느 쪽으로 연결해도 자동 인식
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) { const e = new Error('KV_NOT_CONNECTED'); e.kv = true; throw e; }
   const r = await fetch(url, {
     method: 'POST',
