@@ -163,18 +163,28 @@
     title:'홈', icon:'dashboard',
     render(root){
       const u=meU();
+      const greeting=()=>{ const h=new Date().getHours(); return h<11?'좋은 아침이에요':h<14?'점심 맛있게 드세요':h<18?'좋은 오후예요':'오늘도 수고 많으셨어요'; };
+      const weekday=()=>['일','월','화','수','목','금','토'][new Date().getDay()]+'요일';
       const localNotes=()=>{ try{ return JSON.parse(localStorage.getItem(STORE.csNotes)||'[]'); }catch{ return []; } };
       root.innerHTML=`
       <style>
-        .dash-hi{font-size:22px;font-weight:800;letter-spacing:-.01em}
-        .dash-sub{font-size:13.5px;color:var(--muted);margin-top:4px}
-        .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:18px 0 22px}
-        .stat{border:1px solid var(--line);border-radius:12px;background:#fff;padding:15px 16px;box-shadow:var(--sh-sm);cursor:pointer;transition:.12s}
-        .stat:hover{box-shadow:var(--sh);transform:translateY(-1px)}
-        .stat .sl{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);font-weight:600}
-        .stat .sl .ic{color:var(--dept,var(--red))}
-        .stat .sv{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:6px}
-        .stat .sv small{font-size:14px;font-weight:600;color:var(--muted);margin-left:3px}
+        .dash-hero{position:relative;overflow:hidden;border-radius:16px;padding:26px 28px;margin-bottom:20px;color:#fff;
+          background:linear-gradient(118deg,#173f7a 0%,#1f56a3 46%,#2f6fd0 100%);box-shadow:0 10px 30px rgba(23,63,122,.24)}
+        .dash-hero::before{content:"";position:absolute;right:-30px;top:-50px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.07)}
+        .dash-hero::after{content:"";position:absolute;right:80px;bottom:-70px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.05)}
+        .dash-hero .hi{font-size:24px;font-weight:800;letter-spacing:-.015em;position:relative}
+        .dash-hero .sub{font-size:13.5px;opacity:.92;margin-top:7px;font-weight:500;position:relative}
+        .dash-hero .hero-ic{position:absolute;right:26px;top:50%;transform:translateY(-50%);opacity:.18}
+        .dash-hero .hero-ic svg{width:82px;height:82px;stroke:#fff}
+        .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:13px;margin:0 0 22px}
+        .stat{display:flex;align-items:center;gap:13px;border:1px solid var(--line);border-radius:13px;background:#fff;padding:14px 16px;box-shadow:var(--sh-sm);cursor:pointer;transition:.14s}
+        .stat:hover{box-shadow:var(--sh);transform:translateY(-2px);border-color:var(--line-strong)}
+        .stat-ic{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;
+          background:color-mix(in srgb,var(--c,#1f56a3) 13%,#fff);color:var(--c,#1f56a3)}
+        .stat-ic svg{width:21px;height:21px}
+        .stat .sl{font-size:12.5px;color:var(--muted);font-weight:600}
+        .stat .sv{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.08;margin-top:2px}
+        .stat .sv small{font-size:13px;font-weight:600;color:var(--muted);margin-left:2px}
         .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
         @media(max-width:900px){.dash-2{grid-template-columns:1fr}}
         .dcard{border:1px solid var(--line);border-radius:13px;background:#fff;overflow:hidden}
@@ -193,11 +203,12 @@
         .ql-chip:hover{border-color:var(--red);color:var(--red);background:var(--red-soft)}
         .pp-dot2{width:8px;height:8px;border-radius:50%;background:#42c98a;box-shadow:0 0 0 3px rgba(66,201,138,.18);flex:none}
       </style>
-      <div class="mhead pad"><div class="mhead-row"><div>
-        <div class="dash-hi">안녕하세요, ${esc(u.name||'')}님 👋</div>
-        <div class="dash-sub">${esc({cs:'CS · 고객 상담',md:'MD · 상품 기획',admin:'관리자'}[u.dept]||'')} · ${todayStr()} · 오늘도 좋은 하루 되세요.</div>
-      </div></div></div>
       <div class="mbody">
+        <div class="dash-hero">
+          <div class="hero-ic">${icon('dashboard')}</div>
+          <div class="hi">${greeting()}, ${esc(u.name||'')}님 👋</div>
+          <div class="sub">${esc({cs:'CS · 고객 상담',md:'MD · 상품 기획',admin:'관리자'}[u.dept]||'통합 업무관리')} · ${todayStr()} (${weekday()}) · 오늘도 좋은 하루 되세요.</div>
+        </div>
         <div class="stat-row" id="statRow"></div>
         <div class="dash-2">
           <div class="dcard"><div class="dcard-hd">${icon('megaphone')}공지사항 <span class="more" data-go="home.notice">전체 보기</span></div>
@@ -229,8 +240,8 @@
           cards.push({ k:'cs.notes', ic:'headset', l:'오늘 상담', v:todayCs, c:'#4d9bff' });
         }
         const row=root.querySelector('#statRow'); if(!row) return; row.innerHTML='';
-        cards.forEach(c=>{ const d=el('div','stat'); d.style.setProperty('--dept',c.c);
-          d.innerHTML=`<div class="sl">${icon(c.ic)}${c.l}</div><div class="sv">${c.v}<small>건</small></div>`;
+        cards.forEach(c=>{ const d=el('div','stat'); d.style.setProperty('--c',c.c);
+          d.innerHTML=`<div class="stat-ic">${icon(c.ic)}</div><div><div class="sl">${c.l}</div><div class="sv">${c.v}<small>건</small></div></div>`;
           d.onclick=()=>{ location.hash=c.k; }; row.appendChild(d); });
       }
 

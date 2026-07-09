@@ -91,7 +91,8 @@
         function cell(r,c){
           let v=r[c.k]; if(c.money) v=fmtNum(v)+'원'; else if(c.num) v=fmtNum(v); else v=v==null?'':String(v);
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
-          return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||160}px;max-width:${(c.w||160)+120}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
+          // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
+          return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||180}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
         }
         function editCell(r,c){
           const v=r[c.k]==null?'':String(r[c.k]);
