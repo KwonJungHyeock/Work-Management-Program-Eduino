@@ -34,7 +34,10 @@ window.Records = (function(){
   /* MD 발주 레코드 → 서버 시트 'orders' (담당=로그인 계정) */
   function pushMD(rec){
     const u=(window.Auth&&Auth.user&&Auth.user())||{};
-    const record={ ...rec, who: u.loginId||('@'+(u.name||'MD')), whoName: u.name||u.loginId||'MD', day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
+    const dev=(window.Auth&&Auth.device&&Auth.device())||'';   // 로그인 시 저장된 표시 이름(폴백)
+    if(!u.loginId && !dev) return;                              // 로그인 안 된 상태면 서버 귀속 생략(유령 'MD' 방지)
+    const name = u.name || dev || u.loginId;
+    const record={ ...rec, who: u.loginId||('@'+name), whoName: name, day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
     return pushRaw('md','orders',record);
   }
   function del(dept, sheet, id, month, who, day){ return post({ op:'recDel', dept, sheet, id, month, who, day }); }

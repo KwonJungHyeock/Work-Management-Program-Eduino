@@ -48,7 +48,7 @@
           <div class="tt">${esc(cfg.title)}</div>
           <div class="ds">${esc(cfg.desc)}</div>
         </div>
-        <div class="mbody">
+        <div class="mbody wide">
           <div class="sv-ctrl">
             <span class="seg" id="segR">
               <button data-r="today">오늘</button><button data-r="7">7일</button>
@@ -90,6 +90,7 @@
         }
         function cell(r,c){
           let v=r[c.k]; if(c.money) v=fmtNum(v)+'원'; else if(c.num) v=fmtNum(v); else v=v==null?'':String(v);
+          if(c.wrap) v=v.replace(/[ \t]*\n[ \t]*(?:\n[ \t]*)+/g,'\n');   // 빈 줄 접어 1·2번 줄이 이어지게(행 높이 절약)
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
           return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||180}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;

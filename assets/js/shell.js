@@ -112,11 +112,18 @@ function bootShell(){
   const noticeVisible=(dept)=>{ dept=dept||'all'; return dept==='all'||dept===myDept||isAdmin; };
   async function updateBadges(){
     try{
-      if(isAdmin || myDept==='cs'){ const cbs=await fetchColl('callbacks'); if(cbs) setBadge('cs.notes', cbs.filter(c=>!c.done).length); }
+      const uid=me.user.loginId;
+      let cbOpen=0, unreadN=0, myMemo=0;
+      if(isAdmin || myDept==='cs'){ const cbs=await fetchColl('callbacks'); if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); } }
       const nts=await fetchColl('notice');
-      if(nts){ const uid=me.user.loginId; setBadge('home.notice', nts.filter(x=>noticeVisible(x.dept) && !((x.readBy||[]).includes(uid))).length); }
+      if(nts){ unreadN=nts.filter(x=>noticeVisible(x.dept) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
+      const mms=await fetchColl('memo');
+      if(mms){ myMemo=mms.filter(m=>!m.done && noticeVisible(m.to||'all') && m.author!==uid).length; }
+      // 알림 = 미확인 공지 + 나에게 온 메모 + (CS/관리자) 미처리 콜백
+      setBadge('home.alerts', unreadN + myMemo + cbOpen);
     }catch(e){}
   }
+  window.refreshNavBadges = updateBadges;
   updateBadges();
   setInterval(updateBadges, 90000);
   window.addEventListener('focus', updateBadges);

@@ -38,7 +38,7 @@
         .compose .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
       </style>
       <div class="mhead pad"><div class="mhead-row">
-        <div><div class="tt">공지사항</div><div class="ds">관리자가 올린 공지입니다. 열람하면 자동으로 읽음 처리됩니다.</div></div></div></div>
+        <div><div class="tt">공지사항</div><div class="ds">관리자가 올린 공지입니다. <b>[확인]</b>을 눌러야 읽음 처리되고 알림에서 사라집니다.</div></div></div></div>
       <div class="mbody" id="ntBody"></div>`;
       const body=root.querySelector('#ntBody'); let roster=[];
       async function load(){
@@ -50,19 +50,20 @@
         const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
         if(!list.length){ body.insertAdjacentHTML('beforeend', empty('아직 등록된 공지가 없습니다.','megaphone')); return; }
         list.forEach(n=>body.appendChild(card(n)));
-        const unread=list.filter(n=>!(n.readBy||[]).includes(u.loginId));
-        if(unread.length) markRead(unread);
       }
       function card(n){
         const unread=!(n.readBy||[]).includes(u.loginId);
         const c=el('div','nt-card'+(unread?' unread':''));
-        c.innerHTML=`<div class="nt-top">${unread?'<span class="nt-new">NEW</span>':''}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
+        c.innerHTML=`<div class="nt-top">${unread?'<span class="nt-new">미확인</span>':''}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
             ${isAdmin?'<button class="btn ghost sm" data-del style="margin-left:auto">'+icon('trash')+'</button>':''}</div>
           <div class="nt-body">${esc(n.body||'')}</div>
           <div class="nt-meta"><span class="nt-tgt">${esc(targetLabel(n.dept||'all',roster))}</span>
             <span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
-            <span style="margin-left:auto">읽음 ${ (n.readBy||[]).length }</span></div>`;
+            <span style="margin-left:auto">읽음 ${ (n.readBy||[]).length }</span>
+            ${unread?`<button class="btn pri sm" data-read>${icon('check')}확인</button>`:'<span style="color:var(--ok);font-weight:700;font-size:12px">✓ 확인함</span>'}</div>`;
         const db=c.querySelector('[data-del]'); if(db) db.onclick=async()=>{ if(confirm('이 공지를 삭제할까요?')){ await collDel('notice',n.id); load(); } };
+        const rb=c.querySelector('[data-read]'); if(rb) rb.onclick=async(e)=>{ e.currentTarget.disabled=true; await markRead([n]); load();
+          if(window.refreshNavBadges) window.refreshNavBadges(); };
         return c;
       }
       function composer(){
@@ -88,6 +89,59 @@
         for(const n of unread){ n.readBy=[...(n.readBy||[]), u.loginId]; try{ await collPush('notice', n); }catch{} }
       }
       rosterList().then(r=>{ roster=r; }); load();
+    }
+  };
+
+  /* ============================ 알림 센터 ============================ */
+  MODULES['home.alerts']={
+    title:'알림', icon:'bell',
+    render(root){
+      const u=meU(), isAdmin=(typeof Auth!=='undefined'&&Auth.isAdmin&&Auth.isAdmin());
+      root.innerHTML=`
+      <style>
+        .al-sec{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin:4px 2px 11px}
+        .al-card{border:1px solid var(--line);border-left:3px solid var(--red);border-radius:11px;background:#fff;padding:13px 16px;margin-bottom:10px;box-shadow:var(--sh-sm)}
+        .al-title{font-size:14.5px;font-weight:800}
+        .al-body{font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--ink-2);margin-top:5px}
+        .al-meta{font-size:12px;color:var(--muted);margin-top:9px;display:flex;gap:9px;align-items:center}
+        .al-link{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:12px 16px;margin-bottom:10px;cursor:pointer;box-shadow:var(--sh-sm);transition:.12s}
+        .al-link:hover{border-color:var(--red);transform:translateY(-1px)}
+        .al-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--red-soft);color:var(--red)}
+        .al-none{padding:44px;text-align:center;color:var(--muted)}
+      </style>
+      <div class="mhead pad"><div class="mhead-row">
+        <div><div class="tt">알림</div><div class="ds">확인이 필요한 공지·업무를 모아 보여줍니다. 공지는 <b>[확인]</b>을 눌러야 사라집니다.</div></div>
+        <div class="mhead-act"><button class="btn" id="alAllRead">${icon('check')}공지 모두 확인</button></div></div></div>
+      <div class="mbody" id="alBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
+      const body=root.querySelector('#alBody'); let unreadCache=[];
+      async function markRead(list){ for(const n of list){ n.readBy=[...(n.readBy||[]),u.loginId]; try{ await collPush('notice',n); }catch{} } }
+      async function load(){
+        const [notices,memos,cbs]=await Promise.all([collGet('notice'),collGet('memo'),collGet('callbacks')]);
+        if(!root.isConnected||!root.querySelector('#alBody')) return;
+        const unread=(notices||[]).filter(n=>visibleTo(n.dept||'all',u) && !(n.readBy||[]).includes(u.loginId))
+          .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+        unreadCache=unread;
+        const myMemo=(memos||[]).filter(m=>!m.done && visibleTo(m.to||'all',u) && m.author!==u.loginId).length;
+        const openCb=(isAdmin||u.dept==='cs')?(cbs||[]).filter(c=>!c.done).length:0;
+        let html=`<div class="al-sec">미확인 공지 · ${unread.length}건</div>`;
+        html+= unread.length
+          ? unread.map(n=>`<div class="al-card"><div class="al-title">${esc(n.title||'(제목 없음)')}</div>
+              <div class="al-body">${esc((n.body||'').slice(0,240))}${(n.body||'').length>240?'…':''}</div>
+              <div class="al-meta"><span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
+                <button class="btn pri sm" data-read="${esc(n.id)}" style="margin-left:auto">${icon('check')}확인</button></div></div>`).join('')
+          : `<div class="al-none">${icon('check')}<div style="margin-top:6px;font-size:14px">확인할 공지가 없습니다.</div></div>`;
+        if(myMemo||openCb){ html+=`<div class="al-sec" style="margin-top:20px">확인 필요</div>`;
+          if(openCb) html+=`<div class="al-link" data-go="cs.notes"><div class="al-ic">${icon('clipboard')}</div><div><b>미처리 콜백 ${openCb}건</b><div class="muted" style="font-size:12px">처리 대기 탭에서 확인하세요</div></div></div>`;
+          if(myMemo) html+=`<div class="al-link" data-go="home.memo"><div class="al-ic">${icon('send')}</div><div><b>나에게 온 업무 메모 ${myMemo}건</b><div class="muted" style="font-size:12px">업무 메모에서 확인하세요</div></div></div>`;
+        }
+        body.innerHTML=html;
+        body.querySelectorAll('[data-read]').forEach(btn=>btn.onclick=async()=>{ btn.disabled=true; const n=unread.find(x=>x.id===btn.dataset.read);
+          if(n) await markRead([n]); load(); if(window.refreshNavBadges) window.refreshNavBadges(); });
+        body.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>location.hash=x.dataset.go);
+      }
+      root.querySelector('#alAllRead').onclick=async(e)=>{ if(!unreadCache.length){ toast('확인할 공지가 없습니다'); return; }
+        e.currentTarget.disabled=true; await markRead(unreadCache); toast('모든 공지를 확인했습니다'); load(); if(window.refreshNavBadges) window.refreshNavBadges(); };
+      load();
     }
   };
 

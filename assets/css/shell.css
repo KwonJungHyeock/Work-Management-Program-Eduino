@@ -151,6 +151,7 @@
 .mtabs .tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
   border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:800}
 .mbody{padding:22px 24px;max-width:1240px}
+.mbody.wide{max-width:none}
 /* 연동 설정 안내(공통) — 번호 스텝 */
 .setup-guide{counter-reset:step;display:grid;gap:13px;margin:4px 0;padding:0}
 .setup-guide li{list-style:none;position:relative;padding-left:40px;min-height:27px;font-size:14px;line-height:1.7}
