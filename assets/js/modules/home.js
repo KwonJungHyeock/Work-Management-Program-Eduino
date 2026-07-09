@@ -228,7 +228,7 @@
           cards.push({ k:'cs.notes', ic:'clipboard', l:'미처리 콜백', v:nCbOpen, c:'#b26a00' });
           cards.push({ k:'cs.notes', ic:'headset', l:'오늘 상담', v:todayCs, c:'#4d9bff' });
         }
-        const row=root.querySelector('#statRow'); row.innerHTML='';
+        const row=root.querySelector('#statRow'); if(!row) return; row.innerHTML='';
         cards.forEach(c=>{ const d=el('div','stat'); d.style.setProperty('--dept',c.c);
           d.innerHTML=`<div class="sl">${icon(c.ic)}${c.l}</div><div class="sv">${c.v}<small>건</small></div>`;
           d.onclick=()=>{ location.hash=c.k; }; row.appendChild(d); });
@@ -237,7 +237,7 @@
       // 공지 최근
       (async()=>{
         const raw=await collGet('notice');
-        const box=root.querySelector('#dNotice');
+        const box=root.querySelector('#dNotice'); if(!box || !root.isConnected) return;
         if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0,0); }
         else {
           const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
@@ -259,11 +259,12 @@
 
       // 접속자
       (async()=>{
-        const box=root.querySelector('#dPres');
+        const box=root.querySelector('#dPres'); if(!box) return;
         if(!(window.SyncStore && SyncStore.configured())){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 시 표시됩니다.</div>`; return; }
         const list=await SyncStore.presence();
+        if(!root.isConnected || !root.querySelector('#dPres')) return;
         if(!list){ box.innerHTML=`<div class="muted" style="padding:10px">불러오지 못했습니다.</div>`; return; }
-        root.querySelector('#presMore').textContent=`${list.length}명`;
+        const pm=root.querySelector('#presMore'); if(pm) pm.textContent=`${list.length}명`;
         box.innerHTML = list.length? list.map(p=>`<div class="drow"><span class="pp-dot2"></span><span class="dt">${esc(p.device)}</span>${p.device===u.name?'<span class="dm">나</span>':''}</div>`).join('')
           : `<div class="muted" style="padding:10px">접속자 정보가 없습니다.</div>`;
       })();

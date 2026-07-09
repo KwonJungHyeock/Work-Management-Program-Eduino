@@ -1,7 +1,8 @@
 /* ===========================================================================
    관리자 · 업무 현황(인사이트)  — 팀장 전용
    - 직원별(계정id–이름 연동) 일일 업무량을 리스트 + 그래프로 조회
-   - 서버 누적(workstat)을 읽어 기간별 집계·추이·인사이트 자동 분석
+   - 실제 직무 시트(상담/발주 기록)를 읽어 기간별 집계·추이·인사이트 자동 분석
+     → 시트에서 기록을 삭제하면 집계에도 즉시 반영됨
    - CSV / 차트 PNG 로 저장(스냅샷)
    =========================================================================== */
 (function(){
@@ -14,24 +15,19 @@
   const diffDays=(a,b)=>Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);
   const listDays=(from,to)=>{ const out=[]; let c=from; let guard=0; while(c<=to&&guard++<400){ out.push(c); c=addDays(c,1); } return out; };
   const mdLabel=s=>s.slice(5).replace('-','/');
+  const monthsBetween=(from,to)=>{ const out=[]; let y=Number(from.slice(0,4)), m=Number(from.slice(5,7));
+    const ey=Number(to.slice(0,4)), em=Number(to.slice(5,7)); let g=0;
+    while((y<ey||(y===ey&&m<=em))&&g++<60){ out.push(`${y}-${String(m).padStart(2,'0')}`); m++; if(m>12){m=1;y++;} } return out; };
+  const SHEET_OF={ cs:'notes', md:'orders' };
 
-  async function fetchStat(){ try{ const r=await fetch('/api/store?type=workstat&dept=cs,md'); if(!r.ok) throw 0; return await r.json(); }catch(e){ return null; } }
   async function fetchRoster(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch(e){ return []; } }
 
-  /* 서버 응답 → 평탄한 레코드 [{dept,who,name,id,day,count}] */
-  function toRecords(stat){
-    const recs=[]; if(!stat||!stat.stats) return recs;
-    ['cs','md'].forEach(dept=>{
-      const s=stat.stats[dept]||{}, whoMap=(stat.who&&stat.who[dept])||{};
-      Object.keys(s).forEach(field=>{
-        const i=field.lastIndexOf('|'); if(i<0) return;
-        const who=field.slice(0,i), day=field.slice(i+1); const count=Number(s[field])||0;
-        if(!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
-        const name=whoMap[who]||(who[0]==='@'?who.slice(1):who);
-        recs.push({ dept, who, name, id:(who[0]==='@'?'':who), day, count });
-      });
-    });
-    return recs;
+  /* 시트 레코드 1건 → 인사이트 레코드(건수 1). 집계는 실제 시트가 기준이라 삭제도 즉시 반영됨 */
+  function fromSheet(dept, r){
+    const day=r.day||r.date; if(!day||!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+    const who=r.who||('@'+(r.whoName||r.agent||'?'));
+    const name=r.whoName||r.agent||(who[0]==='@'?who.slice(1):who);
+    return { dept, who, name, id:(who[0]==='@'?'':who), day, count:1 };
   }
 
   MODULES['admin.insights']={
@@ -131,6 +127,7 @@
       }
 
       function paint(){
+        if(!root.isConnected || !$('#kpis')) return;   // 다른 화면으로 이동한 뒤의 지연 렌더 방지
         const {from,to}=curRange();
         const days=listDays(from,to);
         const A=aggregate(from,to);
@@ -254,25 +251,46 @@
         img.src=url;
       }
 
+      /* ---- 데이터: 실제 직무 시트에서 집계 (삭제 즉시 반영) ---- */
+      const cache={};   // 'dept|YYYY-MM' → 시트 레코드[]
+      let loadErr=false;
+      function rebuild(){ records=[];
+        Object.keys(cache).forEach(k=>{ const dp=k.split('|')[0];
+          (cache[k]||[]).forEach(r=>{ const rec=fromSheet(dp,r); if(rec) records.push(rec); }); }); }
+      async function ensure(from,to){
+        const need=[]; ['cs','md'].forEach(dp=>monthsBetween(from,to).forEach(m=>{ const k=dp+'|'+m; if(!(k in cache)) need.push([dp,m,k]); }));
+        if(!need.length) return;
+        const res=await Promise.all(need.map(([dp,m])=>Records.month(dp, SHEET_OF[dp], m)));
+        need.forEach(([dp,m,k],i)=>{ if(res[i]===null) loadErr=true; cache[k]=res[i]||[]; });
+        rebuild();
+      }
+      async function refresh(){
+        const {from,to}=curRange(); const len=listDays(from,to).length; const pFrom=addDays(from,-len);
+        await ensure(pFrom, to);
+        if(!root.isConnected || !$('#kpis')) return;
+        if(loadErr && !records.length){ $('#kpis').innerHTML=`<div class="iv-empty" style="grid-column:1/-1">서버에서 시트를 불러오지 못했습니다. 연동을 확인하세요.</div>`; return; }
+        paint();
+      }
+
       /* ---- 이벤트 ---- */
       $('#segRange').querySelectorAll('button').forEach(b=>b.onclick=()=>{
         preset=b.dataset.r; $('#segRange').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
         $('#dates').classList.toggle('on',preset==='custom');
         if(preset==='custom'){ $('#dFrom').value=custom.from; $('#dTo').value=custom.to; }
-        paint(); });
+        refresh(); });
       $('#segDept').querySelectorAll('button').forEach(b=>b.onclick=()=>{
         dept=b.dataset.d; $('#segDept').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); paint(); });
-      $('#dFrom').onchange=()=>{ custom.from=$('#dFrom').value||custom.from; paint(); };
-      $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; paint(); };
+      $('#dFrom').onchange=()=>{ custom.from=$('#dFrom').value||custom.from; refresh(); };
+      $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; refresh(); };
       $('#btnCsv').onclick=exportCsv;
       $('#btnPng').onclick=exportPng;
-      $('#btnReload').onclick=()=>load();
+      $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); loadErr=false; load(); };
 
       async function load(){
-        $('#kpis').innerHTML=`<div class="kpi"><div class="kl">불러오는 중…</div><div class="kv">·</div></div>`;
-        const [stat,ros]=await Promise.all([fetchStat(), fetchRoster()]);
-        if(stat===null){ $('#kpis').innerHTML=`<div class="iv-empty" style="grid-column:1/-1">서버(KV)에서 데이터를 불러오지 못했습니다. 연동을 확인하세요.</div>`; return; }
-        records=toRecords(stat); roster=ros; paint();
+        if($('#kpis')) $('#kpis').innerHTML=`<div class="kpi"><div class="kl">불러오는 중…</div><div class="kv">·</div></div>`;
+        roster=await fetchRoster();
+        if(!root.isConnected) return;
+        await refresh();
       }
       load();
     }

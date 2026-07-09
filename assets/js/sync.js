@@ -6,7 +6,9 @@
    =========================================================================== */
 window.SyncStore = (function(){
   const cfgDB = ()=>store(STORE.syncCfg);
-  const getCfg = ()=>cfgDB().get({ url:'', autoPull:false, autoPush:true });
+  /* 기본값: 같은 도메인의 Vercel 백엔드(/api/store)로 자동 연결 →
+     직원마다 따로 설정하지 않아도 팀 설정·시트 URL이 공유됨(비-Vercel 환경이면 조용히 무시) */
+  const getCfg = ()=>cfgDB().get({ url:'/api/store', autoPull:true, autoPush:true });
   const setCfg = (v)=>cfgDB().set(v);
   const configured = ()=>!!(getCfg().url);
   let pulling = false;   // pull 중 auto-push 억제
@@ -56,11 +58,12 @@ window.SyncStore = (function(){
     let n=0; pulling=true;
     try{
       // 범위 규칙(shareMap)을 먼저 적용해야 이후 키들의 범위 판정이 최신값 기준이 됨
-      if(s[STORE.shareMap]!=null) localStorage.setItem(STORE.shareMap, s[STORE.shareMap]);
+      if(s[STORE.shareMap]!=null && localStorage.getItem(STORE.shareMap)!==s[STORE.shareMap]) localStorage.setItem(STORE.shareMap, s[STORE.shareMap]);
       SHARED_SETTING_KEYS.forEach(k=>{
         if(k===STORE.shareMap || s[k]==null) return;
         const sc=(typeof shareScopeOf==='function')?shareScopeOf(k):'all';
         if(scopes.indexOf(sc)<0) return;          // 내 범위가 아니면 건너뜀(마이그레이션 안전장치)
+        if(localStorage.getItem(k)===s[k]) return; // 값이 같으면 건너뜀(불필요한 새로고침 방지)
         localStorage.setItem(k, s[k]); n++;
       });
     } finally{ pulling=false; }

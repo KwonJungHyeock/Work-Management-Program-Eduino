@@ -63,11 +63,14 @@
           </div>
           <p class="sv-meta" id="meta"></p>
           <div class="sv-wrap"><table class="sv" id="tbl"></table></div>
-          <p class="sv-note">구글시트는 백업으로 병행됩니다. 이 표가 프로그램 내 기본 기록(전 담당자 공유)입니다.${isAdmin?' · 관리자는 행을 삭제할 수 있습니다.':''}</p>
+          <p class="sv-note">구글시트는 백업으로 병행됩니다. 이 표가 프로그램 내 기본 기록(전 담당자 공유)입니다.${cfg.editable?' · 행의 <b>[수정]</b>으로 고치면 내부 기록과 구글시트에 함께 반영됩니다.':''}${isAdmin?' 관리자는 삭제할 수 있습니다.':''}</p>
         </div>`;
 
         const $=s=>root.querySelector(s);
-        let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='';
+        let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null;
+        const myDept=(Auth.user&&Auth.user()||{}).dept;
+        const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
+        const hasActions=isAdmin||canEdit;
 
         function range(){ const to=todayStr();
           if(preset==='today') return {from:to,to};
@@ -90,17 +93,48 @@
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||160}px;max-width:${(c.w||160)+120}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
         }
+        function editCell(r,c){
+          const v=r[c.k]==null?'':String(r[c.k]);
+          const inp = c.wrap
+            ? `<textarea data-k="${esc(c.k)}" rows="2" style="width:100%;min-width:${(c.w||160)}px;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">${esc(v)}</textarea>`
+            : `<input data-k="${esc(c.k)}" type="${c.k==='date'?'date':(c.num?'number':'text')}" value="${esc(v)}" style="width:${(c.w||90)}px;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">`;
+          return `<td style="white-space:nowrap">${inp}</td>`;
+        }
+        function actionCell(r){
+          if(editId===r.id){
+            return `<td style="white-space:nowrap"><span style="display:flex;gap:4px">
+              <button class="btn pri sm" data-a="save">${icon('check')}</button>
+              <button class="btn ghost sm" data-a="cancel">취소</button></span></td>`;
+          }
+          return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
+            ${canEdit?`<button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>`:''}
+            ${isAdmin?`<button class="sv-del" data-id="${esc(r.id)}" data-day="${esc(r.day||r.date||'')}" data-who="${esc(r.who||'')}" title="삭제">${icon('trash')}</button>`:''}
+          </span></td>`;
+        }
         function paint(){
+          if(!root.isConnected || !$('#tbl')) return;
           const {rows,from,to}=filtered();
           $('#meta').textContent=`${from} ~ ${to} · 총 ${rows.length.toLocaleString()}건`;
           const CAP=2000; const show=rows.slice(0,CAP);
-          const head=`<thead><tr>${cfg.cols.map(c=>`<th>${esc(c.h)}</th>`).join('')}${isAdmin?'<th></th>':''}</tr></thead>`;
-          const body=show.length? `<tbody>${show.map(r=>`<tr>${cfg.cols.map(c=>cell(r,c)).join('')}${
-            isAdmin?`<td style="white-space:nowrap"><button class="sv-del" data-id="${esc(r.id)}" data-day="${esc(r.day||r.date||'')}" data-who="${esc(r.who||'')}" title="삭제">${icon('trash')}</button></td>`:''
+          const head=`<thead><tr>${cfg.cols.map(c=>`<th>${esc(c.h)}</th>`).join('')}${hasActions?'<th></th>':''}</tr></thead>`;
+          const body=show.length? `<tbody>${show.map(r=>`<tr>${
+            cfg.cols.map(c=>(editId===r.id?editCell(r,c):cell(r,c))).join('')}${hasActions?actionCell(r):''
           }</tr>`).join('')}</tbody>` : '';
           $('#tbl').innerHTML=head+body;
           if(!show.length){ $('#tbl').innerHTML=`<tbody><tr><td class="sv-empty" colspan="${cfg.cols.length+1}">해당 기간의 기록이 없습니다.</td></tr></tbody>`; }
           if(rows.length>CAP) $('#meta').textContent+=` (앞 ${CAP}건 표시 · 기간을 좁혀 보세요)`;
+          wireRowActions();
+        }
+        function wireRowActions(){
+          $('#tbl').querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
+          $('#tbl').querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
+          $('#tbl').querySelectorAll('[data-a=save]').forEach(b=>b.onclick=async(e)=>{
+            const tr=e.currentTarget.closest('tr'); const old=all.find(x=>x.id===editId); if(!old) return;
+            const rec={...old}; tr.querySelectorAll('[data-k]').forEach(inp=>{ rec[inp.dataset.k]=inp.value; });
+            e.currentTarget.disabled=true; e.currentTarget.textContent='…';
+            try{ await cfg.onSave(rec, old); Object.assign(old, rec); editId=null; paintWho(); paint(); toast('수정했습니다'); }
+            catch(err){ toast(err.message||'수정 실패'); e.currentTarget.disabled=false; }
+          });
           if(isAdmin) $('#tbl').querySelectorAll('.sv-del').forEach(b=>b.onclick=async()=>{
             if(!confirm('이 기록을 서버에서 삭제할까요? (되돌릴 수 없음)')) return;
             const day=b.dataset.day; await Records.del(cfg.dept,cfg.sheet,b.dataset.id,(day||'').slice(0,7),b.dataset.who,day);
@@ -132,10 +166,11 @@
         };
 
         async function load(){
-          $('#meta').textContent='불러오는 중…'; $('#tbl').innerHTML='';
+          if(!$('#meta')) return; $('#meta').textContent='불러오는 중…'; $('#tbl').innerHTML='';
           const {from,to}=range();
           const ms=monthsBetween(from,to);
           const packs=await Promise.all(ms.map(m=>Records.month(cfg.dept,cfg.sheet,m)));
+          if(!root.isConnected || !$('#meta')) return;   // 이동 후 지연 렌더 방지
           if(packs.some(p=>p===null)){ $('#meta').textContent='';
             $('#tbl').innerHTML=`<tbody><tr><td class="sv-empty" colspan="${cfg.cols.length+1}">서버에서 기록을 불러오지 못했습니다. 연동 상태를 확인하세요.</td></tr></tbody>`; return; }
           const map={}; packs.forEach(p=>(p||[]).forEach(r=>{ if(r&&r.id) map[r.id]=r; }));
@@ -149,6 +184,14 @@
 
   build({ key:'cs.records', dept:'cs', sheet:'notes', title:'상담 기록', icon:'sheet',
     desc:'전 상담사의 상담 메모가 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
+    editable:true,
+    onSave: async(rec, old)=>{
+      rec.agent = rec.whoName || rec.agent;                         // 상담사 편집 반영
+      const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
+      if(window.Records && oldM && newM && oldM!==newM) await Records.del('cs','notes',rec.id,oldM,old.who,old.day||old.date);
+      if(window.Records) await Records.pushCS(rec);                 // 내부 상담 기록 갱신(중복 없이 덮어씀)
+      if(window.CSSheet && CSSheet.configured()) CSSheet.send([rec]); // 구글시트 갱신(id 기준 upsert)
+    },
     cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'상담사',w:80}, {k:'category',h:'분류',w:78},
       {k:'customerType',h:'고객유형',w:74}, {k:'name',h:'주문자/학교/업체',w:150}, {k:'contact',h:'연락처',w:120},
       {k:'prodCategory',h:'상품분류',w:90}, {k:'prodCode',h:'상품코드',w:84},

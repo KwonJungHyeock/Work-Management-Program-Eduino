@@ -98,6 +98,8 @@
       return { ok:false, error: err.message||'전송 실패', synced:0 };
     }
   }
+  // 상담 기록(누적 시트) 화면에서 편집 후 구글시트에 재전송할 수 있도록 노출
+  window.CSSheet = { configured:()=>DESTINATIONS[ACTIVE_DEST].configured(getCfg()), send:syncRecords };
 
   /* ============================================================ */
   MODULES['cs.notes'] = {
