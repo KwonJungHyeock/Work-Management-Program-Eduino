@@ -144,19 +144,19 @@
 
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
             <h3 style="font-size:16px">발주 목록 <span class="muted" style="font-weight:500;font-size:13.5px" id="ordCnt"></span></h3>
-            <button class="btn sm" id="clearOrders" style="margin-left:auto">${icon('trash')}전체 비우기</button>
+            <span id="sheetStat" class="muted" style="margin-left:auto;font-size:12.5px"></span>
+            <button class="btn sm" id="clearOrders">${icon('trash')}비우기</button>
+            <button class="btn pri" id="saveOrders">${icon('save')}저장 <span style="opacity:.75;font-weight:500;font-size:11.5px">내부+시트</span></button>
           </div>
           <div class="out-tbl" style="max-height:none;margin-bottom:22px"><table class="tbl" id="ordTable"></table></div>
 
           <div class="fieldset fs-green">
-            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트용 (입점사명·정산구분·품명·배송비 자동)
+            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트 미리보기 (입점사명·정산구분·품명·배송비 자동) · <b>[저장]</b>으로 함께 전송됩니다
               <span class="hint" style="display:flex;gap:6px">
                 <button class="btn sm" id="sheetCopy">${icon('copy')}복사</button>
-                <button class="btn sm" id="sheetCsv">${icon('download')}CSV</button>
-                <button class="btn sm pri" id="sheetSend">${icon('cloudUp')}시트로 전송</button></span></div>
+                <button class="btn sm" id="sheetCsv">${icon('download')}CSV</button></span></div>
             <div class="fs-bd"><div class="out-tbl"><table class="tbl" id="sheetTable"></table></div>
-              <div class="note" style="margin-top:10px"><b>출고송장/입고</b> 칸에는 <b>배송비</b>가 먼저 들어갑니다. 이후 실제 출고 시 담당자가 이 칸을 <b>송장번호로 덮어쓰면</b> 됩니다.</div>
-              <div class="muted" id="sheetStat" style="font-size:12.5px;margin-top:8px"></div></div>
+              <div class="note" style="margin-top:10px"><b>출고송장/입고</b> 칸에는 <b>배송비</b>가 먼저 들어갑니다. 이후 실제 출고 시 담당자가 이 칸을 <b>송장번호로 덮어쓰면</b> 됩니다.</div></div>
           </div>
 
           <div class="fieldset fs-amber">
@@ -195,15 +195,13 @@
             vendor:vendorName(p), settle:p.settle, selfCode:p.selfCode||p.code, code:p.code, name:p.name,
             qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim(), synced:false };
           orders.push(rec); saveOrders();
-          // 서버 시트 누적 — 전 직원 공유 발주 기록 + 인사이트(로그인 계정 기준)
-          if(window.Records) Records.pushMD(rec);
           // 코드/주문자/배송정보만 비우고 구분·경로·일자 유지
           form.code=''; codeEl.value=''; $f('#fOrderer').value=''; $f('#fShipInfo').value=''; $f('#fQty').value=1;
           refreshLookup(); renderAll(); codeEl.focus();
-          const cfg=getCfg();
-          if(cfg.autoSend && cfg.sheetUrl){ toast('추가 · '+SHEET_MSG.sending);
-            sendOrders([rec]).then(r=>{ renderAll(); toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(1):SHEET_MSG.ok(1)):SHEET_MSG.fail(r.error)); });
-          } else toast(cfg.sheetUrl?'발주 목록에 추가 (수동 전송 대기)':'발주 목록에 추가');
+          // 자동 저장이면 추가 즉시 내부+시트 동시 저장, 아니면 [저장] 대기
+          if(getCfg().autoSend){ commit([rec]).then(r=>{ renderAll();
+            toast(r.internalOnly?'저장됨 (내부 시트)':(r.ok?(r.unconfirmed?SHEET_MSG.unconf(1):SHEET_MSG.ok(1)):SHEET_MSG.fail(r.error))); }); }
+          else toast('발주 목록에 추가 · [저장]으로 반영');
         }
         $f('#addOrder').onclick=addOrder;
         body.querySelector('.card-bd').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='fCode'){ e.preventDefault(); addOrder(); }});
@@ -211,7 +209,7 @@
         const rowsTSV=rows=>rows.map(r=>r.join('\t')).join('\n');
         $f('#sheetCopy').onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이 데이터 행만
         $f('#sheetCsv').onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); };
-        $f('#sheetSend').onclick=sendToSheet;
+        $f('#saveOrders').onclick=onSave;
         $f('#ecCopy').onclick=()=>{ const {rows}=ecData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이
         $f('#ecCsv').onclick=()=>{ const {cols,rows}=ecData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_이카운트배송비_${todayStr()}.csv`); toast('CSV 저장'); };
         refreshLookup(); renderAll(); codeEl.focus();
@@ -278,18 +276,23 @@
       const renderSheet=()=>fillTable('#sheetTable',sheetData());
       const renderEc=()=>fillTable('#ecTable',ecData());
 
-      async function sendToSheet(){
-        const cfg=getCfg(), stat=body.querySelector('#sheetStat');
-        if(!cfg.sheetUrl){ stat.innerHTML=`<span style="color:var(--danger)">${SHEET_MSG.noUrl}.</span>`; return; }
-        const pending=orders.filter(o=>!o.synced);
-        if(!pending.length){ stat.innerHTML=`<span style="color:var(--ok)">${SHEET_MSG.allSent}.</span>`; return; }
-        stat.textContent=`${SHEET_MSG.sending} (${pending.length}건)`;
-        const r=await sendOrders(pending); renderAll();
-        stat.innerHTML = r.ok
-          ? (r.unconfirmed ? `<span style="color:var(--ok)">${esc(SHEET_MSG.unconf(r.sent))}</span>`
-                           : `<span style="color:var(--ok)">${esc(SHEET_MSG.ok(r.sent))}</span>`)
-          : `<span style="color:var(--danger)">${esc(SHEET_MSG.fail(r.error))} (복사/CSV로 대체 가능)</span>`;
-        if(r.ok) toast(r.unconfirmed?SHEET_MSG.unconf(r.sent):SHEET_MSG.ok(r.sent));
+      /* 저장 = 내부 시트(Records) + 외부 구글시트 동시 반영 */
+      async function commit(list){
+        const pending=list.filter(o=>!o.synced); if(!pending.length) return {ok:true, sent:0, none:true};
+        if(window.Records) pending.forEach(o=>Records.pushMD(o));      // 내부 발주 기록에 즉시 반영
+        const cfg=getCfg();
+        if(!cfg.sheetUrl){ pending.forEach(o=>o.synced=true); saveOrders(); return {ok:true, sent:pending.length, internalOnly:true}; }
+        return sendOrders(pending);                                    // 외부 구글시트(성공 시 synced 표시)
+      }
+      async function onSave(){
+        const stat=body.querySelector('#sheetStat'); const pending=orders.filter(o=>!o.synced);
+        if(!pending.length){ if(stat) stat.innerHTML=`<span style="color:var(--ok)">모두 저장됨</span>`; toast('저장할 신규 발주가 없습니다'); return; }
+        if(stat) stat.textContent=`저장 중… (${pending.length}건)`;
+        const r=await commit(pending); renderAll();
+        if(stat) stat.innerHTML = r.internalOnly ? `<span style="color:var(--ok)">내부 시트 저장 · ${pending.length}건 (구글시트 미설정)</span>`
+          : r.ok ? `<span style="color:var(--ok)">${esc(r.unconfirmed?SHEET_MSG.unconf(r.sent):SHEET_MSG.ok(r.sent))}</span>`
+                 : `<span style="color:var(--danger)">${esc(SHEET_MSG.fail(r.error))} (복사/CSV로 대체 가능)</span>`;
+        toast((r.ok||r.internalOnly)?'저장했습니다':'전송 실패 — 다시 시도하세요');
       }
 
       /* ---------------- 상품 마스터 ---------------- */
@@ -491,10 +494,10 @@
               </ol>
               <label class="fld" style="margin:8px 0 12px">웹 앱 URL<input type="text" id="ordUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
               <div style="margin-bottom:14px">
-                <label class="fld" style="margin-bottom:8px">발주 입력 시</label>
+                <label class="fld" style="margin-bottom:8px">발주 입력 시 <span class="muted" style="font-weight:500">· [저장]은 내부 시트와 구글시트에 함께 반영됩니다</span></label>
                 <div style="display:flex;gap:20px;flex-wrap:wrap">
-                  <label class="chk"><input type="radio" name="autoSend" value="1" ${cfg.autoSend!==false?'checked':''}> 시트에 <b>자동 전송</b> (추가 즉시)</label>
-                  <label class="chk"><input type="radio" name="autoSend" value="0" ${cfg.autoSend===false?'checked':''}> 수동 (버튼으로 모아서 전송)</label>
+                  <label class="chk"><input type="radio" name="autoSend" value="1" ${cfg.autoSend!==false?'checked':''}> <b>추가 즉시 저장</b> (내부+시트 자동)</label>
+                  <label class="chk"><input type="radio" name="autoSend" value="0" ${cfg.autoSend===false?'checked':''}> 모아서 <b>[저장]</b> 버튼으로</label>
                 </div>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">

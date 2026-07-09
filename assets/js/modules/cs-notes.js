@@ -216,7 +216,7 @@
       </style>
       <div class="mhead">
         <div class="tt">상담 메모</div>
-        <div class="ds">통화 중 분류·고객유형·상품분류를 바로 누르고 내용을 적으면(Ctrl+Enter 저장) 연동 시트에 그대로 기록됩니다.</div>
+        <div class="ds">통화 중 분류·고객유형·상품분류를 바로 누르고 내용을 적으면(Ctrl+Enter 저장) <b>내부 상담 기록과 구글시트에 동시에 저장</b>됩니다.</div>
         <div class="mtabs">
           <div class="t" data-t="memo">상담 메모</div>
           <div class="t" data-t="pending">처리 대기 <span class="tab-cnt" id="pendCnt" style="display:none"></span></div>
@@ -398,9 +398,9 @@
           body.querySelector('#fCallback').checked=false;
           body.querySelector('#fContent').focus();
           renderList(); renderSyncBar(); toast('저장되었습니다');
-          // 실시간 모드면 즉시 전송
+          // 저장과 동시에 구글시트 전송 (내부 상담 기록은 위 Records.pushCS 로 이미 반영)
           const cfg=getCfg();
-          if(cfg.syncMode==='realtime' && DESTINATIONS[ACTIVE_DEST].configured(cfg)){
+          if(DESTINATIONS[ACTIVE_DEST].configured(cfg)){
             syncRecords([rec]).then(r=>{ renderList(); renderSyncBar(); if(!r.ok) toast(SHEET_MSG.fail()); });
           }
         };
@@ -494,8 +494,8 @@
           slot.innerHTML=`<div class="syncbar">${icon('alert')}구글 시트가 아직 연결되지 않았습니다. <b>연동 설정</b> 탭에서 시트 URL을 등록하세요.</div>`; return;
         }
         if(n===0){ slot.innerHTML=`<div class="syncbar ok">${icon('checkCircle')}${SHEET_MSG.allSent}.</div>`; return; }
-        slot.innerHTML=`<div class="syncbar">${icon('cloudUp')}미전송 <b>${n}건</b>${cfg.syncMode==='realtime'?' (실시간 전송 실패분)':''}
-          <button class="btn sm" id="syncNow" style="margin-left:auto">${icon('cloudUp')}시트로 전송</button></div>`;
+        slot.innerHTML=`<div class="syncbar">${icon('cloudUp')}구글시트 전송 실패분 <b>${n}건</b> — 내부 기록에는 저장되어 있습니다
+          <button class="btn sm" id="syncNow" style="margin-left:auto">${icon('cloudUp')}다시 전송</button></div>`;
         slot.querySelector('#syncNow').onclick=async(e)=>{ const btn=e.currentTarget; btn.disabled=true; btn.textContent=SHEET_MSG.sending;
           const r=await syncRecords(unsynced()); renderList(); renderSyncBar();
           toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error)); };
@@ -685,13 +685,7 @@
             <div class="card-bd">
               <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 5번에서 복사한 주소</span>
                 <input type="text" id="cfgUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
-              <div style="margin-bottom:16px">
-                <label class="fld" style="margin-bottom:8px">전송 방식</label>
-                <div style="display:flex;gap:20px;flex-wrap:wrap">
-                  <label class="chk"><input type="radio" name="mode" value="realtime" ${cfg.syncMode==='realtime'?'checked':''}> 실시간 (저장할 때마다 바로 시트로)</label>
-                  <label class="chk"><input type="radio" name="mode" value="batch" ${cfg.syncMode!=='realtime'?'checked':''}> 일괄 (버튼 누를 때 모아서 전송)</label>
-                </div>
-              </div>
+              <div class="note" style="margin-bottom:16px">${icon('check')} 상담 메모를 <b>저장</b>하면 내부 상담 기록과 구글시트에 <b>동시에</b> 전송됩니다. 전송이 실패한 건은 상단 바에서 <b>다시 전송</b>할 수 있습니다.</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="cfgSave">${icon('check')}저장</button>
                 <button class="btn" id="cfgTest">${icon('cloud')}연결 테스트</button>
@@ -710,8 +704,7 @@
           catch{ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 를 사용하세요'); } };
         body.querySelector('#cfgSave').onclick=()=>{
           const url=body.querySelector('#cfgUrl').value.trim();
-          const mode=body.querySelector('input[name=mode]:checked').value;
-          setCfg({ sheetUrl:url, syncMode:mode }); toast('설정을 저장했습니다');
+          setCfg({ ...getCfg(), sheetUrl:url }); toast('설정을 저장했습니다');
         };
         body.querySelector('#cfgTest').onclick=async()=>{
           const url=body.querySelector('#cfgUrl').value.trim(), stat=body.querySelector('#cfgStat');
