@@ -133,6 +133,10 @@
         if(ch) setNotes(all); })();
 
       let tab='memo', filter='전체', lastAgent=store(STORE.csAgent).get(getAgents()[0]);
+      // 팀원은 실무만: 설정(연동·상담사/분류 편집)은 관리자만 · 상담사는 본인 고정 · 이력은 본인 것만
+      const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
+      const meName=((Auth.user&&Auth.user())||{}).name||'';
+      if(!isAdmin && meName) lastAgent=meName;
       let typeEdit=false, agentEdit=false;
       // 폼 상태 (분류·상담사·날짜는 저장 후에도 유지되는 컨텍스트)
       let form={ category:getTypes()[0], customerType:'', prodCategory:'', date:todayStr(), agent:lastAgent };
@@ -223,7 +227,7 @@
           <div class="t" data-t="memo">상담 메모</div>
           <div class="t" data-t="pending">처리 대기 <span class="tab-cnt" id="pendCnt" style="display:none"></span></div>
           <div class="t" data-t="summary">일일 결산</div>
-          <div class="t" data-t="settings">연동 설정</div>
+          ${isAdmin?'<div class="t" data-t="settings">연동 설정</div>':''}
         </div>
       </div>
       <div class="mbody" id="csBody"></div>`;
@@ -231,6 +235,7 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ updatePendCnt();
+        if(tab==='settings' && !isAdmin) tab='memo';
         return tab==='memo'?drawMemo(): tab==='pending'?drawPending(): tab==='summary'?drawSummary(): drawSettings(); };
       async function updatePendCnt(){ const c=root.querySelector('#pendCnt'); if(!c) return;
         const list=await Q.list(); if(!list){ c.style.display='none'; return; }
@@ -249,7 +254,7 @@
                   <div class="q-main">
                     <div>
                       <div class="q-sec-cap">분류 <span class="req">필수</span>
-                        <button type="button" class="sec-edit" id="typeEdit">편집</button></div>
+                        ${isAdmin?'<button type="button" class="sec-edit" id="typeEdit">편집</button>':''}</div>
                       <div class="chips" id="catGroup"></div>
                     </div>
                     <div>
@@ -273,7 +278,7 @@
                   <aside class="q-side">
                     <div>
                       <div class="side-cap-row"><span class="cap" style="margin:0">상담사</span>
-                        <button type="button" class="sec-edit" id="agentEdit">편집</button></div>
+                        ${isAdmin?'<button type="button" class="sec-edit" id="agentEdit">편집</button>':''}</div>
                       <div class="q-agents" id="agentGroup"></div>
                     </div>
                     <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
@@ -323,9 +328,9 @@
             catGroup.appendChild(add);
           }
         }
-        body.querySelector('#typeEdit').onclick=(e)=>{ typeEdit=!typeEdit;
+        { const te=body.querySelector('#typeEdit'); if(te) te.onclick=(e)=>{ typeEdit=!typeEdit;
           e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'편집';
-          renderCat(); };
+          renderCat(); }; }
         renderCat();
 
         /* --- 고객유형 / 상품분류 칩 (단일선택 · 다시 누르면 해제) --- */
@@ -341,6 +346,12 @@
         /* --- 상담사 칩 (편집 가능 · 단일선택 · 마지막값 기억) --- */
         function renderAgents(){
           const g=body.querySelector('#agentGroup'); g.innerHTML='';
+          if(!isAdmin){   // 팀원: 본인이 상담사 (선택·편집 불가)
+            form.agent = meName || form.agent;
+            g.innerHTML=`<div class="chip on" style="cursor:default"><span>${esc(form.agent||'-')}</span></div>
+              <div class="muted" style="font-size:11.5px;margin-top:4px">본인 계정으로 자동 기록됩니다</div>`;
+            return;
+          }
           const agents=getAgents();
           if(!agents.includes(form.agent)) form.agent = agents.includes(lastAgent)?lastAgent:agents[0];
           agents.forEach(a=>{ const b=el('button','chip'+(form.agent===a?' on':'')); b.type='button';
@@ -364,9 +375,9 @@
             g.appendChild(add);
           }
         }
-        body.querySelector('#agentEdit').onclick=(e)=>{ agentEdit=!agentEdit;
+        { const ae=body.querySelector('#agentEdit'); if(ae) ae.onclick=(e)=>{ agentEdit=!agentEdit;
           e.currentTarget.classList.toggle('on',agentEdit); e.currentTarget.textContent=agentEdit?'완료':'편집';
-          renderAgents(); };
+          renderAgents(); }; }
         renderAgents();
 
         // 저장
@@ -420,7 +431,8 @@
         body.querySelector('#fContent')?.focus();
       }
 
-      function todayNotes(){ const t=todayStr(); return getNotes().filter(r=>todayStr(r.createdAt)===t); }
+      function todayNotes(){ const t=todayStr();
+        return getNotes().filter(r=>todayStr(r.createdAt)===t && (isAdmin || !meName || r.agent===meName)); }
       function renderList(){
         const box=body.querySelector('#noteList'), cnt=body.querySelector('#todayCnt'); if(!box) return;
         let list=todayNotes().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
@@ -493,7 +505,7 @@
         const slot=body.querySelector('#syncSlot'); if(!slot) return;
         const cfg=getCfg(), n=unsynced().length;
         if(!DESTINATIONS[ACTIVE_DEST].configured(cfg)){
-          slot.innerHTML=`<div class="syncbar">${icon('alert')}구글 시트가 아직 연결되지 않았습니다. <b>연동 설정</b> 탭에서 시트 URL을 등록하세요.</div>`; return;
+          slot.innerHTML=`<div class="syncbar">${icon('alert')}구글 시트가 아직 연결되지 않았습니다. ${isAdmin?'<b>연동 설정</b> 탭에서 시트 URL을 등록하세요.':'관리자가 시트를 연결하면 자동으로 함께 전송됩니다. (내부 상담 기록에는 저장됩니다)'}</div>`; return;
         }
         if(n===0){ slot.innerHTML=`<div class="syncbar ok">${icon('checkCircle')}${SHEET_MSG.allSent}.</div>`; return; }
         slot.innerHTML=`<div class="syncbar">${icon('cloudUp')}구글시트 전송 실패분 <b>${n}건</b> — 내부 기록에는 저장되어 있습니다
@@ -570,7 +582,7 @@
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
             <label class="fld" style="width:190px">${icon('calendar')} 결산 날짜<input type="date" id="sumDate" value="${date}"></label>
             <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn" id="editTpl">${icon('settings')}양식 편집</button>
+              ${isAdmin?`<button class="btn" id="editTpl">${icon('settings')}양식 편집</button>`:''}
               <button class="btn" id="copySum">${icon('copy')}텍스트 복사</button>
               <button class="btn pri" id="saveTxt">${icon('download')}메모장 저장(.txt)</button>
               <button class="btn" id="pushSum">${icon('cloudUp')}미전송분 시트 전송</button></div>
@@ -580,7 +592,7 @@
         body.querySelector('#sumDate').onchange=e=>{ date=e.target.value; renderSum(); };
         body.querySelector('#copySum').onclick=()=>copyText(buildSummary(date));
         body.querySelector('#saveTxt').onclick=()=>{ downloadBlob(new Blob([buildSummary(date)],{type:'text/plain;charset=utf-8'}),`CS결산_${date}.txt`); toast('메모장(.txt)으로 저장했습니다'); };
-        body.querySelector('#editTpl').onclick=openTpl;
+        { const et=body.querySelector('#editTpl'); if(et) et.onclick=openTpl; }
         body.querySelector('#pushSum').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false; renderSum();
           toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error)); };

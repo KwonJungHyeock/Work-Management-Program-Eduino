@@ -51,9 +51,11 @@ function bootShell(){
     const a=el('a','qlink'); a.href=l.url; a.target='_blank'; a.rel='noopener noreferrer'; a.title=l.name;
     a.innerHTML=`${icon('external')}<span>${esc(l.name)}</span>`; ql.appendChild(a);
   });
-  // 설정 백업/복원 (백엔드 없이 파일로 세팅 보존·이전)
-  const backupBtn=el('button','qlink'); backupBtn.type='button'; backupBtn.id='btnBackup'; backupBtn.title='설정 백업/복원 (.json)';
-  backupBtn.innerHTML=`${icon('save')}<span>설정 백업</span>`; backupBtn.onclick=openBackup; ql.appendChild(backupBtn);
+  // 설정 백업/복원 (관리자 전용 · 팀원은 실무만) — 설정은 관리자가 일괄 관리
+  if(me.user && me.user.role==='admin'){
+    const backupBtn=el('button','qlink'); backupBtn.type='button'; backupBtn.id='btnBackup'; backupBtn.title='설정 백업/복원 (.json)';
+    backupBtn.innerHTML=`${icon('save')}<span>설정 백업</span>`; backupBtn.onclick=openBackup; ql.appendChild(backupBtn);
+  }
 
   // 로고 클릭 → 인트로 재생 후 홈으로
   const intro=$('appIntro');

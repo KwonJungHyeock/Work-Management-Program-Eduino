@@ -37,6 +37,8 @@
     title:'입점사 발주', icon:'truck',
     render(root){
       let tab='entry', dirtyMaster=false, dirtyVendor=false;
+      // 팀원은 실무(발주 입력)만 · 상품 마스터·입점사 정보·연동 설정은 관리자 전용
+      const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
       // 정산구분 정규화: 옛 값 원/선 → 월정산/선결제
       const normSettle=s=>{ s=String(s||'').trim();
         if(s==='원'||s==='월'||s==='월정산') return '월정산';
@@ -102,16 +104,17 @@
         <div class="ds">상품코드만 입력하면 입점사·정산구분·품명(구글시트)과 배송비(이카운트)가 자동으로 채워집니다.</div>
         <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
-          <div class="t" data-t="master">상품 마스터</div>
+          ${isAdmin?`<div class="t" data-t="master">상품 마스터</div>
           <div class="t" data-t="vendor">입점사 정보</div>
-          <div class="t" data-t="settings">연동 설정</div>
+          <div class="t" data-t="settings">연동 설정</div>`:''}
         </div>
       </div>
       <div class="mbody" id="ordBody"></div>`;
       const body=root.querySelector('#ordBody');
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
-      const draw=()=> tab==='entry'?drawEntry(): tab==='master'?drawMaster(): tab==='vendor'?drawVendors(): drawSettings();
+      const draw=()=>{ if(!isAdmin && tab!=='entry') tab='entry';
+        return tab==='entry'?drawEntry(): tab==='master'?drawMaster(): tab==='vendor'?drawVendors(): drawSettings(); };
 
       /* ---------------- 발주 입력 ---------------- */
       let form={ code:'', qty:1, orderer:'', route:'', gubun:'직배', shipInfo:'', date:todayStr().slice(5).replace('-','/') };
