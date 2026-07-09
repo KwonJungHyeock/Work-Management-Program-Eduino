@@ -98,12 +98,29 @@ function bootShell(){
     g.items.forEach(it=>{
       const locked = !g.common && g.dept!=='admin' && !hasPerm(it.key);
       const item = el('div','nav-item'+(locked?' locked':'')); item.dataset.key = it.key;
-      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>${locked?`<span class="lock">${icon('lock')}</span>`:''}`;
+      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>${locked?`<span class="lock">${icon('lock')}</span>`:`<span class="nav-badge" style="display:none;margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;line-height:18px;text-align:center"></span>`}`;
       item.onclick = ()=>{ location.hash = it.key; };
       grp.appendChild(item);
     });
     nav.appendChild(grp);
   });
+
+  // 사이드바 알림 배지 — 미처리 콜백(CS·관리자) · 안 읽은 공지(전원)
+  const setBadge=(key,n)=>{ const s=nav.querySelector(`.nav-item[data-key="${key}"] .nav-badge`); if(!s) return;
+    s.textContent = n>99?'99+':(n||''); s.style.display = n?'':'none'; };
+  async function fetchColl(coll){ try{ const r=await fetch('/api/store?type=coll&coll='+coll); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
+  const noticeVisible=(dept)=>{ dept=dept||'all'; return dept==='all'||dept===myDept||isAdmin; };
+  async function updateBadges(){
+    try{
+      if(isAdmin || myDept==='cs'){ const cbs=await fetchColl('callbacks'); if(cbs) setBadge('cs.notes', cbs.filter(c=>!c.done).length); }
+      const nts=await fetchColl('notice');
+      if(nts){ const uid=me.user.loginId; setBadge('home.notice', nts.filter(x=>noticeVisible(x.dept) && !((x.readBy||[]).includes(uid))).length); }
+    }catch(e){}
+  }
+  updateBadges();
+  setInterval(updateBadges, 90000);
+  window.addEventListener('focus', updateBadges);
+  window.addEventListener('hashchange', ()=>setTimeout(updateBadges, 800));
 
   $('btnLogout').onclick = ()=>{ Auth.logout(); location.href='index.html'; };
   $('navToggle').onclick = ()=>app.classList.toggle('nav-collapsed');
@@ -177,6 +194,18 @@ function bootShell(){
 
           <div style="border-top:1px solid var(--line);margin:16px 0 14px"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <b style="font-size:14px">월간 데이터 백업</b>
+            <span class="muted" style="margin-left:auto;font-size:12px">상담·발주 기록(서버)을 월 단위로</span>
+          </div>
+          <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">선택한 달의 <b>상담 기록 + 발주 기록 전체</b>를 서버에서 받아 JSON 파일 하나로 저장합니다. (매월 백업용)</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px">
+            <input type="month" id="mBkMonth" style="height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font-size:13px">
+            <button class="btn pri sm" id="mBkDown">${icon('download')}이 달 데이터 백업(JSON)</button>
+            <span class="muted" id="mBkStat" style="font-size:12.5px"></span>
+          </div>
+
+          <div style="border-top:1px solid var(--line);margin:16px 0 14px"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <b style="font-size:14px">공용 저장소 동기화</b>
             <span class="badge ${SyncStore&&SyncStore.configured()?'live':'soon'}" style="margin-left:auto">${SyncStore&&SyncStore.configured()?'연결됨':'미연결'}</span>
           </div>
@@ -198,6 +227,22 @@ function bootShell(){
         </div>
       </div>`;
     document.body.appendChild(ov);
+
+    // 월간 데이터 백업 — 선택한 달의 상담/발주 기록을 서버에서 받아 JSON 하나로
+    (function(){ const mSel=ov.querySelector('#mBkMonth'); if(!mSel) return;
+      const d=new Date(); mSel.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      async function getSheet(dept,sheet,ym){ try{ const r=await fetch(`/api/store?type=sheet&dept=${dept}&sheet=${sheet}&month=${ym}`); if(!r.ok) throw 0; const j=await r.json(); return (j&&j.records)||[]; }catch(e){ return null; } }
+      ov.querySelector('#mBkDown').onclick=async()=>{
+        const ym=mSel.value, stat=ov.querySelector('#mBkStat');
+        if(!/^\d{4}-\d{2}$/.test(ym)){ stat.textContent='월을 선택하세요'; return; }
+        stat.textContent='불러오는 중…';
+        const [cs,md]=await Promise.all([getSheet('cs','notes',ym), getSheet('md','orders',ym)]);
+        if(cs===null||md===null){ stat.innerHTML='<span style="color:var(--danger)">서버에서 불러오지 못했습니다</span>'; return; }
+        const payload={ app:'eduino', type:'monthly-data-backup', month:ym, exportedAt:new Date().toISOString(), counts:{ cs:cs.length, md:md.length }, cs, md };
+        downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}), `eduino_data_${ym}.json`);
+        stat.innerHTML=`<span style="color:var(--ok)">상담 ${cs.length} · 발주 ${md.length}건 저장</span>`;
+      };
+    })();
 
     // 연동 상태 (공용 저장소 · CS 상담 시트 · 발주 시트)
     function renderInteg(){

@@ -275,7 +275,8 @@
                       <textarea id="fContent" class="q-memo" placeholder="문의 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
                     </div>
                     <div>
-                      <div class="q-sec-cap">답변 <span class="opt">선택</span></div>
+                      <div class="q-sec-cap" style="display:flex;align-items:center;gap:6px;white-space:nowrap">답변 <span class="opt">선택</span>
+                        <select id="tplSel" class="sec-edit" style="margin-left:auto;max-width:170px;padding:2px 6px;font-weight:700;cursor:pointer"></select></div>
                       <textarea id="fAnswer" class="q-ans" placeholder="응대/답변 내용 (나중에 채워도 됩니다)"></textarea>
                     </div>
                   </div>
@@ -347,6 +348,17 @@
         }
         renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
         renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
+
+        /* --- 답변 템플릿 원클릭 삽입 (답변 템플릿 라이브러리와 연동) --- */
+        (function(){ const sel=body.querySelector('#tplSel'); if(!sel) return;
+          const tpls=store(STORE.csTpl).get([]);
+          sel.innerHTML=`<option value="">＋ 템플릿 삽입</option>`+
+            tpls.map((t,i)=>`<option value="${i}">[${esc(t.cat||'기타')}] ${esc(t.title||'')}</option>`).join('');
+          sel.onchange=()=>{ if(sel.value==='') return; const t=tpls[Number(sel.value)];
+            if(t){ const ta=body.querySelector('#fAnswer');
+              ta.value = ta.value.trim() ? (ta.value.replace(/\s+$/,'')+'\n\n'+t.body) : t.body; ta.focus(); }
+            sel.value=''; };
+        })();
 
         /* --- 상담사 칩 (편집 가능 · 단일선택 · 마지막값 기억) --- */
         function renderAgents(){
