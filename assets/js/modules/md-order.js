@@ -67,7 +67,7 @@
         if(s==='원'||s==='월'||s==='월정산') return '월정산';
         if(s==='선'||s==='선결제') return '선결제';
         return s; };
-      let products=getProducts(), vendors=getVendors(), orders=getOrders();
+      let products=getProducts(), vendors=getVendors(), orders=getOrders(), editIdx=-1;
       // 마이그레이션: 자체상품코드 비어있고 카페24코드만 있으면 왼쪽(자체)로 이동 + 정산구분 정리
       (function migrate(){ let changed=false;
         products.forEach(p=>{ if(!(p.selfCode||'').trim() && (p.code||'').trim()){ p.selfCode=p.code; p.code=''; changed=true; }
@@ -93,6 +93,9 @@
       <style>
         .code-in{font-size:20px;font-weight:800;font-family:var(--mono);height:54px;letter-spacing:.03em;border-width:2px}
         .code-in:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+        .oe{height:32px;font-size:13px;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:#fff}
+        .oe:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);outline:none}
+        #ordTable tr:has(.oe){background:var(--active-bg)}
         /* 자동 조회 */
         .lookup{display:flex;align-items:center;padding:13px 16px;border-radius:11px;border:1.5px solid var(--line);background:var(--panel-2);min-height:66px;font-size:14px;transition:.14s}
         .lookup.ok{border-color:#8fd3ab;background:linear-gradient(0deg,var(--ok-bg),#f4fbf6)}
@@ -277,16 +280,33 @@
         const t=body.querySelector('#ordTable'), cnt=body.querySelector('#ordCnt'); if(!t) return;
         if(cnt) cnt.textContent=`· ${orders.length}건`;
         t.innerHTML=`<thead><tr><th>일자</th><th>구분</th><th>주문자</th><th>입점사</th><th>정산</th><th>자체상품코드</th><th>품명</th>
-          <th class="num">수량</th><th class="num">배송비</th><th style="width:78px">시트</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+          <th class="num">수량</th><th class="num">배송비</th><th style="width:78px">시트</th><th style="width:92px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
         if(!orders.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
         orders.forEach((o,i)=>{ const tr=el('tr');
-          tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
-            <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
-            <td style="max-width:360px">${esc(o.name)}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
-            <td>${o.synced?`<span class="badge live">${SHEET_MSG.badgeDone}</span>`:`<span class="badge soon">${SHEET_MSG.badgePending}</span>`}</td>
-            <td><button class="btn ghost sm">${icon('x')}</button></td>`;
-          tr.querySelector('button').onclick=()=>{ orders.splice(i,1); saveOrders(); renderAll(); };
+          if(i===editIdx){
+            tr.innerHTML=`<td><input type="text" class="oe" data-k="date" value="${esc(o.date)}" placeholder="7/7" style="width:64px"></td>
+              <td><input class="oe" data-k="gubun" value="${esc(o.gubun||'')}" style="width:64px"></td>
+              <td><input class="oe" data-k="orderer" value="${esc(o.orderer||'')}" style="width:88px"></td>
+              <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td>
+              <td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
+              <td style="max-width:360px">${esc(o.name)}<input class="oe" data-k="shipInfo" value="${esc(o.shipInfo||'')}" placeholder="배송정보/비고" style="width:100%;margin-top:5px"></td>
+              <td class="num"><input type="number" min="1" class="oe" data-k="qty" value="${o.qty}" style="width:54px;text-align:right"></td>
+              <td class="num">${fmtNum(o.ship)}</td><td></td>
+              <td><span style="display:flex;gap:4px"><button class="btn pri sm" data-a="osave">${icon('check')}</button><button class="btn ghost sm" data-a="ocancel">취소</button></span></td>`;
+            tr.querySelector('[data-a=ocancel]').onclick=()=>{ editIdx=-1; renderAll(); };
+            tr.querySelector('[data-a=osave]').onclick=async(e)=>{ const btn=e.currentTarget; btn.disabled=true;
+              tr.querySelectorAll('.oe').forEach(inp=>{ const k=inp.dataset.k; o[k]= k==='qty'?(Number(inp.value)||1):inp.value.trim(); });
+              o.synced=false; editIdx=-1; saveOrders(); await commit([o]); renderAll(); toast('수정했습니다'); };
+          } else {
+            tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
+              <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
+              <td style="max-width:360px">${esc(o.name)}${o.shipInfo?`<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(o.shipInfo)}</div>`:''}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
+              <td>${o.synced?`<span class="badge live">${SHEET_MSG.badgeDone}</span>`:`<span class="badge soon">${SHEET_MSG.badgePending}</span>`}</td>
+              <td><span style="display:flex;gap:3px"><button class="btn ghost sm" data-a="oedit">수정</button><button class="btn ghost sm" data-a="odel" title="삭제">${icon('x')}</button></span></td>`;
+            tr.querySelector('[data-a=oedit]').onclick=()=>{ editIdx=i; renderAll(); };
+            tr.querySelector('[data-a=odel]').onclick=()=>{ orders.splice(i,1); if(editIdx===i)editIdx=-1; saveOrders(); renderAll(); };
+          }
           tb.appendChild(tr); });
       }
       function fillTable(id,{cols,rows}){ const t=body.querySelector(id); if(!t) return;

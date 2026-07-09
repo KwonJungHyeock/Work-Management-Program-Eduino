@@ -288,9 +288,9 @@
                       <div class="q-agents" id="agentGroup"></div>
                     </div>
                     <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
-                    <div><span class="cap">연락처 <em>선택</em></span><input type="text" id="fContact" placeholder="010-0000-0000"></div>
-                    <div><span class="cap">주문자/학교/업체명 <em>선택</em></span><input type="text" id="fName" placeholder="예: 에듀이노초 / 홍길동"></div>
-                    <div><span class="cap">상품코드 <em>선택</em></span><input type="text" id="fProdCode" placeholder="예: A-100"></div>
+                    <div><span class="cap">연락처 <em>선택</em></span><input type="tel" inputmode="numeric" id="fContact" placeholder="010-0000-0000" maxlength="13"></div>
+                    <div><span class="cap">주문자/학교/업체명 <em>선택</em></span><input type="text" id="fName" list="dlName" autocomplete="off" placeholder="예: 에듀이노초 / 홍길동"><datalist id="dlName"></datalist></div>
+                    <div><span class="cap">상품코드 <em>선택</em></span><input type="text" id="fProdCode" list="dlCode" autocomplete="off" placeholder="예: A-100"><datalist id="dlCode"></datalist></div>
                     <label class="q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
                     <button type="submit" class="btn pri lg q-save">${icon('save')}저장 <span style="opacity:.7;font-weight:500;font-size:12px">Ctrl+Enter</span></button>
                   </aside>
@@ -348,6 +348,23 @@
         }
         renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
         renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
+
+        /* --- 입력 편의: 연락처 자동 하이픈 + 최근값 자동완성 --- */
+        (function(){
+          const ct=body.querySelector('#fContact');
+          if(ct) ct.addEventListener('input',()=>{ const s=ct.selectionStart, len0=ct.value.length;
+            let d=ct.value.replace(/\D/g,'').slice(0,11); let out=d;
+            if(d.length<4) out=d;
+            else if(d.length<7) out=d.slice(0,3)+'-'+d.slice(3);
+            else if(d.length<11) out=d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+            else out=d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
+            ct.value=out; try{ ct.setSelectionRange(s+(out.length-len0), s+(out.length-len0)); }catch(e){}
+          });
+          const notes=getNotes(); const recent=(k)=>[...new Set(notes.map(r=>r[k]).filter(Boolean))].slice(-40).reverse();
+          const nl=body.querySelector('#dlName'), cl=body.querySelector('#dlCode');
+          if(nl) nl.innerHTML=recent('name').map(v=>`<option value="${esc(v)}">`).join('');
+          if(cl) cl.innerHTML=recent('prodCode').map(v=>`<option value="${esc(v)}">`).join('');
+        })();
 
         /* --- 답변 템플릿 원클릭 삽입 (답변 템플릿 라이브러리와 연동) --- */
         (function(){ const sel=body.querySelector('#tplSel'); if(!sel) return;
