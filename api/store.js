@@ -93,12 +93,48 @@ async function collGet(c) {
 async function collPush(c, item) { if (!item || item.id == null) throw new Error('item.id required'); await redis(['HSET', collKey(c), String(item.id), JSON.stringify(item)]); }
 async function collDel(c, id) { await redis(['HDEL', collKey(c), String(id)]); }
 
+// 업무 로그 — 직원별 일일 업무량 누적 (관리자 인사이트)
+const WORK_DEPTS = ['cs', 'md'];
+const okDept = (d) => WORK_DEPTS.indexOf(d) >= 0;
+async function workLog(dept, event) {
+  if (!okDept(dept)) throw new Error('bad dept');
+  const day = String((event && event.day) || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('bad day');
+  const ym = day.slice(0, 7);
+  const who = String((event && event.who) || '?').slice(0, 60);
+  const id = String((event && event.id) || Date.now());
+  // 원본은 월 단위 버킷(조회 시 통째로 안 읽음) · 대시보드용 카운터는 별도 유지
+  await redis(['HSET', 'eduino:worklog:' + dept + ':' + ym, id,
+    JSON.stringify({ day, ts: event.ts || Date.now(), who, whoName: event.whoName || who, type: event.type || '' })]);
+  await redis(['HINCRBY', 'eduino:workstat:' + dept, who + '|' + day, 1]);
+  if (event && event.whoName) await redis(['HSET', 'eduino:workwho:' + dept, who, String(event.whoName).slice(0, 40)]);
+  return true;
+}
+async function getWorkStat(deptStr) {
+  let depts = String(deptStr || 'cs,md').split(',').map(s => s.trim()).filter(okDept);
+  if (!depts.length) depts = WORK_DEPTS.slice();
+  const stats = {}, who = {};
+  for (const d of depts) {
+    stats[d] = arrToObj(await redis(['HGETALL', 'eduino:workstat:' + d]));
+    who[d] = arrToObj(await redis(['HGETALL', 'eduino:workwho:' + d]));
+  }
+  return { stats, who };
+}
+async function getWorkRaw(dept, month) {
+  if (!okDept(dept)) throw new Error('bad dept');
+  if (!/^\d{4}-\d{2}$/.test(month || '')) throw new Error('bad month');
+  const map = arrToObj(await redis(['HGETALL', 'eduino:worklog:' + dept + ':' + month]));
+  return Object.keys(map).map(k => { try { const o = JSON.parse(map[k]); o.id = k; return o; } catch (e) { return null; } }).filter(Boolean);
+}
+
 module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const type = (req.query && req.query.type) || 'all';
       const out = { ok: true };
       if (type === 'coll') { out.items = await collGet(req.query.coll); return res.status(200).json(out); }
+      if (type === 'workstat') { const w = await getWorkStat(req.query && req.query.dept); out.stats = w.stats; out.who = w.who; return res.status(200).json(out); }
+      if (type === 'worklog') { out.events = await getWorkRaw(req.query && req.query.dept, req.query && req.query.month); return res.status(200).json(out); }
       if (type === 'settings' || type === 'all') out.settings = await getSettings((req.query && req.query.scope) || 'all');
       if (type === 'presence' || type === 'all') out.presence = await getPresence();
       return res.status(200).json(out);
@@ -115,6 +151,7 @@ module.exports = async function handler(req, res) {
       }
       if (body.op === 'collPush') { await collPush(body.coll, body.item); return res.status(200).json({ ok: true }); }
       if (body.op === 'collDel') { await collDel(body.coll, body.id); return res.status(200).json({ ok: true }); }
+      if (body.op === 'workLog') { await workLog(body.dept, body.event || {}); return res.status(200).json({ ok: true }); }
       return res.status(400).json({ ok: false, error: 'unknown op' });
     }
     return res.status(405).json({ ok: false, error: 'method not allowed' });

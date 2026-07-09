@@ -109,7 +109,8 @@ const NAV = [
       { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
       { key:'md.order',   name:'입점사 발주',      icon:'truck' },
   ]},
-  { dept:'admin', name:'관리자', full:'계정·공유', icon:'shield', adminOnly:true, items:[
+  { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
+      { key:'admin.insights', name:'업무 현황', icon:'chart' },
       { key:'admin.users', name:'팀원 계정', icon:'users' },
       { key:'admin.share', name:'공유 범위', icon:'share' },
   ]},

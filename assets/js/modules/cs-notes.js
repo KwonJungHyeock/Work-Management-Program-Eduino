@@ -385,6 +385,8 @@
             content, answer:body.querySelector('#fAnswer').value.trim(),
             agent, callback:body.querySelector('#fCallback').checked, syncedAt:null };
           const all=getNotes(); all.push(rec); setNotes(all);
+          // 업무 로그 누적 — 선택된 상담사 기준(관리자 인사이트용) · 실패해도 저장에 영향 없음
+          if(window.WorkLog) WorkLog.logCS(rec.agent, rec.date, rec.category);
           // 콜백(후속조치) 체크 시 → 팀 공용 처리대기 큐에 등록
           if(rec.callback){ Q.push({ id:rec.id, category:rec.category, name:rec.name, contact:rec.contact,
             content:rec.content, agent:rec.agent, createdAt:rec.createdAt, done:false, assignee:'', assigneeName:'', note:'' }); }
