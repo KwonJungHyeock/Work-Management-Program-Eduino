@@ -15,6 +15,29 @@
   const getCfg     =()=>cfgDB().get({sheetUrl:'', autoSend:true});
   const vat=g=>{ const gross=Number(g)||0; const tax=Math.round(gross/11); return {gross,tax,supply:gross-tax}; };
 
+  /* 발주 → 구글시트 행 매핑 (화면/백그라운드 재시도 공용) */
+  function ordSheetRows(list){
+    return list.map(o=>ORDER_SHEET_COLS.map(c=>({
+      '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
+      '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,
+      '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`,
+      '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
+  }
+  /* 저장 실패로 미전송된 발주 자동 재시도 (주기적 + 재접속) — 내부는 멱등 재반영, 외부는 구글시트 */
+  async function ordRetry(){
+    try{
+      const cfg=cfgDB().get({sheetUrl:''}); const orders=ordDB().get([]);
+      const pending=orders.filter(o=>!o.synced); if(!pending.length) return;
+      if(window.Records) pending.forEach(o=>Records.pushMD(o));               // 내부 발주 기록 재반영
+      if(!cfg.sheetUrl || cfg.backup===false) return;                          // 외부 백업 미설정/미사용
+      const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:ordSheetRows(pending)})};
+      try{ const res=await fetch(cfg.sheetUrl,opts); if(res.ok){ pending.forEach(o=>o.synced=true); ordDB().set(orders); } }
+      catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ await fetch(cfg.sheetUrl,{...opts,mode:'no-cors'}); pending.forEach(o=>o.synced=true); ordDB().set(orders); } }
+    }catch(e){}
+  }
+  setInterval(ordRetry, 90000);
+  window.addEventListener('online', ordRetry);
+
   /* 구분자 데이터 파서 (CSV / 붙여넣기 TSV) */
   function parseTable(text){
     text=text.replace(/\r/g,''); const lines=text.split('\n').filter(l=>l.trim()!=='');
@@ -218,14 +241,8 @@
         refreshLookup(); renderAll(); codeEl.focus();
       }
 
-      function sheetRowsFor(list){
-        // 출고송장/입고 칸: 발주 시 배송비를 먼저 채우고(담당자가 나중에 송장번호로 덮어씀)
-        return list.map(o=>ORDER_SHEET_COLS.map(c=>({
-          '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
-          '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,
-          '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`,
-          '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
-      }
+      // 출고송장/입고 칸: 발주 시 배송비를 먼저 채우고(담당자가 나중에 송장번호로 덮어씀)
+      const sheetRowsFor=(list)=>ordSheetRows(list);
       function sheetData(){ return { cols:ORDER_SHEET_COLS, rows:sheetRowsFor(orders) }; }
       async function sendOrders(list){
         const cfg=getCfg(); if(!cfg.sheetUrl) return {ok:false,error:'시트 URL 미설정'};
@@ -284,7 +301,7 @@
         const pending=list.filter(o=>!o.synced); if(!pending.length) return {ok:true, sent:0, none:true};
         if(window.Records) pending.forEach(o=>Records.pushMD(o));      // 내부 발주 기록에 즉시 반영
         const cfg=getCfg();
-        if(!cfg.sheetUrl){ pending.forEach(o=>o.synced=true); saveOrders(); return {ok:true, sent:pending.length, internalOnly:true}; }
+        if(!cfg.sheetUrl || cfg.backup===false){ pending.forEach(o=>o.synced=true); saveOrders(); return {ok:true, sent:pending.length, internalOnly:true}; }
         return sendOrders(pending);                                    // 외부 구글시트(성공 시 synced 표시)
       }
       async function onSave(){
@@ -292,7 +309,7 @@
         if(!pending.length){ if(stat) stat.innerHTML=`<span style="color:var(--ok)">모두 저장됨</span>`; toast('저장할 신규 발주가 없습니다'); return; }
         if(stat) stat.textContent=`저장 중… (${pending.length}건)`;
         const r=await commit(pending); renderAll();
-        if(stat) stat.innerHTML = r.internalOnly ? `<span style="color:var(--ok)">내부 시트 저장 · ${pending.length}건 (구글시트 미설정)</span>`
+        if(stat) stat.innerHTML = r.internalOnly ? `<span style="color:var(--ok)">내부 발주 기록에 저장 · ${pending.length}건${getCfg().backup===false?' (구글 백업 꺼짐)':' (구글시트 미설정)'}</span>`
           : r.ok ? `<span style="color:var(--ok)">${esc(r.unconfirmed?SHEET_MSG.unconf(r.sent):SHEET_MSG.ok(r.sent))}</span>`
                  : `<span style="color:var(--danger)">${esc(SHEET_MSG.fail(r.error))} (복사/CSV로 대체 가능)</span>`;
         toast((r.ok||r.internalOnly)?'저장했습니다':'전송 실패 — 다시 시도하세요');
@@ -503,6 +520,7 @@
                   <label class="chk"><input type="radio" name="autoSend" value="0" ${cfg.autoSend===false?'checked':''}> 모아서 <b>[저장]</b> 버튼으로</label>
                 </div>
               </div>
+              <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="ordBackup" ${cfg.backup!==false?'checked':''}> 구글시트 <b>백업 사용</b> <span class="muted" style="font-weight:500">· 끄면 내부 발주 기록에만 저장(내부 시트가 안정화되면 꺼도 됩니다)</span></label>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="ordSave">${icon('check')}저장</button>
                 <button class="btn" id="ordTest">${icon('cloud')}연결 테스트</button>
@@ -515,8 +533,9 @@
           <div class="note" style="max-width:820px">이카운트는 현재 <b>복사/CSV</b>로 내보내 붙여넣습니다. (ECOUNT API 연동은 추후 어댑터로 추가 가능)
             발주표 시트 1행 헤더에 <span class="mono" style="font-size:12px">입점사명 · 정산구분 · 상품코드(또는 자체상품코드) · 품명 · 수량 · 배송정보/비고</span> 같은 이름이 있으면 그 칸으로 채워집니다.</div>`;
         body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-orders.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
-        body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ sheetUrl:body.querySelector('#ordUrl').value.trim(),
-          autoSend: body.querySelector('input[name=autoSend]:checked').value==='1' }); toast('저장했습니다'); };
+        body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ ...getCfg(), sheetUrl:body.querySelector('#ordUrl').value.trim(),
+          autoSend: body.querySelector('input[name=autoSend]:checked').value==='1',
+          backup: body.querySelector('#ordBackup').checked }); toast('저장했습니다'); };
         body.querySelector('#ordTest').onclick=async()=>{ const url=body.querySelector('#ordUrl').value.trim(), stat=body.querySelector('#ordStat');
           if(!url){ stat.textContent='URL을 입력하세요'; return; } stat.textContent='테스트 중…';
           try{ const res=await fetch(url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}

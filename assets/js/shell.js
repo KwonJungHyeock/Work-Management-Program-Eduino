@@ -166,7 +166,7 @@ function bootShell(){
         <div class="modal-bd">
           <div id="integStatus" style="margin-bottom:16px"></div>
           <div style="border-top:1px solid var(--line);margin:0 0 14px"></div>
-          <p style="font-size:13.5px;line-height:1.65;color:var(--ink-2)">이 프로그램은 백엔드 없이 <b>이 브라우저(이 PC)에만</b> 설정을 저장합니다. 브라우저 캐시를 지우면 설정이 사라지므로, 아래에서 <b>설정 파일(.json)</b>로 백업해 두세요. 다른 PC·직원과 세팅을 공유할 때도 이 파일을 쓰면 됩니다.</p>
+          <p style="font-size:13.5px;line-height:1.65;color:var(--ink-2)">설정은 <b>서버(공용 저장소)에 저장·공유</b>됩니다. 관리자가 설정하면 <b>팀원 전체에 자동 반영</b>되고, 브라우저 캐시를 지워도 <b>다시 접속하면 복원</b>됩니다. 아래 <b>.json 백업</b>은 만약을 위한 추가 안전장치입니다.</p>
           <div class="muted" style="font-size:12.5px;margin:10px 0">백업 대상: 플랫폼·상품 마스터·입점사·발주/CS 연동 설정·분류·상담사·결산 양식·상담 메모 등 저장된 <b>${keys.length}</b>개 항목</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn pri" id="mExport">${icon('download')}설정 내보내기(.json)</button>
@@ -310,7 +310,7 @@ function bootShell(){
     }
     box.onclick=togglePresencePop;
     tick();
-    setInterval(tick, 60000);
+    setInterval(tick, 90000);   // 접속 하트비트 90초(TTL 3분) — KV 명령 수 절감
     document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });
   }
 

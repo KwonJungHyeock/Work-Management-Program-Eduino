@@ -58,11 +58,6 @@
         }
       },
     },
-    notion: {  // 2단계 자리표시 (인터페이스만)
-      id:'notion', name:'노션', placeholder:true,
-      configured: ()=>false,
-      async send(){ throw new Error('노션 연동은 준비 중입니다'); },
-    },
   };
   const ACTIVE_DEST = 'sheet';
 
@@ -100,6 +95,16 @@
   }
   // 상담 기록(누적 시트) 화면에서 편집 후 구글시트에 재전송할 수 있도록 노출
   window.CSSheet = { configured:()=>DESTINATIONS[ACTIVE_DEST].configured(getCfg()), send:syncRecords };
+
+  // 저장 실패로 미전송된 상담 자동 재시도 (주기적 + 재접속 시) — 내부는 멱등 재반영, 외부는 구글시트
+  async function retrySync(){
+    try{ const u=unsynced(); if(!u.length) return; const cfg=getCfg();
+      if(window.Records) u.forEach(r=>Records.pushCS(r));                        // 내부 상담 기록 재반영(중복 없음)
+      if(cfg.backup!==false && DESTINATIONS[ACTIVE_DEST].configured(cfg)) await syncRecords(u);
+    }catch(e){}
+  }
+  setInterval(retrySync, 90000);
+  window.addEventListener('online', retrySync);
 
   /* ============================================================ */
   MODULES['cs.notes'] = {
@@ -413,7 +418,7 @@
           renderList(); renderSyncBar(); toast('저장되었습니다');
           // 저장과 동시에 구글시트 전송 (내부 상담 기록은 위 Records.pushCS 로 이미 반영)
           const cfg=getCfg();
-          if(DESTINATIONS[ACTIVE_DEST].configured(cfg)){
+          if(cfg.backup!==false && DESTINATIONS[ACTIVE_DEST].configured(cfg)){
             syncRecords([rec]).then(r=>{ renderList(); renderSyncBar(); if(!r.ok) toast(SHEET_MSG.fail()); });
           }
         };
@@ -699,7 +704,8 @@
             <div class="card-bd">
               <label class="fld" style="margin-bottom:14px">웹 앱 URL <span class="muted" style="font-weight:500">· 위 5번에서 복사한 주소</span>
                 <input type="text" id="cfgUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
-              <div class="note" style="margin-bottom:16px">${icon('check')} 상담 메모를 <b>저장</b>하면 내부 상담 기록과 구글시트에 <b>동시에</b> 전송됩니다. 전송이 실패한 건은 상단 바에서 <b>다시 전송</b>할 수 있습니다.</div>
+              <div class="note" style="margin-bottom:14px">${icon('check')} 상담 메모를 <b>저장</b>하면 내부 상담 기록과 구글시트에 <b>동시에</b> 전송됩니다. 전송 실패분은 <b>자동 재시도</b>되며 상단 바에서 수동 전송도 가능합니다.</div>
+              <label class="chk" style="margin-bottom:16px"><input type="checkbox" id="cfgBackup" ${cfg.backup!==false?'checked':''}> 구글시트 <b>백업 사용</b> <span class="muted" style="font-weight:500">· 끄면 내부 상담 기록에만 저장(내부 시트가 안정화되면 꺼도 됩니다)</span></label>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="cfgSave">${icon('check')}저장</button>
                 <button class="btn" id="cfgTest">${icon('cloud')}연결 테스트</button>
@@ -707,18 +713,14 @@
                 <span class="muted" id="cfgStat" style="font-size:13px"></span>
               </div>
             </div>
-          </div>
-
-          <div class="card" style="margin-bottom:16px;max-width:820px;opacity:.7">
-            <div class="card-hd">${icon('link')}<b>노션 연동</b><span class="badge soon" style="margin-left:auto">예정</span></div>
-            <div class="card-bd"><div class="muted" style="font-size:13.5px">저장/전송 로직은 목적지(destination) 추상화로 설계되어, 이후 노션 대상만 추가하면 됩니다. (현재 인터페이스만 존재)</div></div>
           </div>`;
         body.querySelector('#copyCode').onclick=async(e)=>{
           try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; const t=await r.text(); copyText(t); }
           catch{ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 를 사용하세요'); } };
         body.querySelector('#cfgSave').onclick=()=>{
           const url=body.querySelector('#cfgUrl').value.trim();
-          setCfg({ ...getCfg(), sheetUrl:url }); toast('설정을 저장했습니다');
+          const backup=body.querySelector('#cfgBackup').checked;
+          setCfg({ ...getCfg(), sheetUrl:url, backup }); toast('설정을 저장했습니다');
         };
         body.querySelector('#cfgTest').onclick=async()=>{
           const url=body.querySelector('#cfgUrl').value.trim(), stat=body.querySelector('#cfgStat');
@@ -734,6 +736,13 @@
       }
 
       draw();
+
+      // 자정이 지나면 '오늘 기록'이 자동으로 새 날짜(빈 목록)로 리셋 — 누적 기록은 상담 기록 시트에 보존
+      let curDay=todayStr();
+      const rollTimer=setInterval(()=>{
+        if(!root.isConnected){ clearInterval(rollTimer); return; }
+        if(todayStr()!==curDay){ curDay=todayStr(); if(tab==='memo') draw(); }
+      }, 60000);
     }
   };
 })();
