@@ -91,9 +91,10 @@ function bootShell(){
   const nav = $('nav');
   NAV.forEach(g=>{
     if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
-    const grp = el('div','nav-group');
+    const grp = el('div','nav-group'+(g.common?' nav-group-top':''));
     grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
-    grp.innerHTML = `<div class="nav-glabel"><span class="gi">${icon(g.icon)}</span>
+    // 홈(공통)은 제목 없이 버튼만 — 업무 기능이 메인이므로 상단은 간결하게
+    grp.innerHTML = g.common ? '' : `<div class="nav-glabel"><span class="gi">${icon(g.icon)}</span>
       <span class="gtx"><b>${esc(g.name)}</b><small>${esc(g.full)}</small></span></div>`;
     g.items.forEach(it=>{
       const locked = !g.common && g.dept!=='admin' && !hasPerm(it.key);
