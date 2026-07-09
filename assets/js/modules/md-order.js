@@ -195,8 +195,8 @@
             vendor:vendorName(p), settle:p.settle, selfCode:p.selfCode||p.code, code:p.code, name:p.name,
             qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim(), synced:false };
           orders.push(rec); saveOrders();
-          // 업무 로그 누적 — 로그인 계정 기준(관리자 인사이트용)
-          if(window.WorkLog) WorkLog.logMD(rec.date, '발주');
+          // 서버 시트 누적 — 전 직원 공유 발주 기록 + 인사이트(로그인 계정 기준)
+          if(window.Records) Records.pushMD(rec);
           // 코드/주문자/배송정보만 비우고 구분·경로·일자 유지
           form.code=''; codeEl.value=''; $f('#fOrderer').value=''; $f('#fShipInfo').value=''; $f('#fQty').value=1;
           refreshLookup(); renderAll(); codeEl.focus();

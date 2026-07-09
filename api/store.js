@@ -127,6 +127,42 @@ async function getWorkRaw(dept, month) {
   return Object.keys(map).map(k => { try { const o = JSON.parse(map[k]); o.id = k; return o; } catch (e) { return null; } }).filter(Boolean);
 }
 
+// 프로그램 내 "시트" — 전 직원 업무 기록을 서버에 누적 (구글시트는 백업)
+const SHEET_ALLOW = { cs: ['notes'], md: ['orders'] };   // 나중에 시트 종류 추가 가능
+function sheetOk(dept, sheet) { return SHEET_ALLOW[dept] && SHEET_ALLOW[dept].indexOf(sheet) >= 0; }
+function sheetBucket(dept, sheet, ym) { return 'eduino:sheet:' + dept + ':' + sheet + ':' + ym; }
+async function recPush(dept, sheet, record) {
+  if (!sheetOk(dept, sheet)) throw new Error('bad sheet');
+  const day = String((record && record.day) || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('bad day');
+  const id = String((record && record.id) || '');
+  if (!id) throw new Error('record.id required');
+  const ym = day.slice(0, 7), bucket = sheetBucket(dept, sheet, ym);
+  const who = String((record && record.who) || '?').slice(0, 60);
+  const existed = await redis(['HEXISTS', bucket, id]);           // 편집이면 카운터 중복 증가 방지
+  await redis(['HSET', bucket, id, JSON.stringify(record)]);
+  if (!Number(existed)) {
+    await redis(['HINCRBY', 'eduino:workstat:' + dept, who + '|' + day, 1]);
+    if (record && record.whoName) await redis(['HSET', 'eduino:workwho:' + dept, who, String(record.whoName).slice(0, 40)]);
+  }
+  return true;
+}
+async function recDel(dept, sheet, id, month, who, day) {
+  if (!sheetOk(dept, sheet)) throw new Error('bad sheet');
+  if (!/^\d{4}-\d{2}$/.test(month || '')) throw new Error('bad month');
+  const removed = await redis(['HDEL', sheetBucket(dept, sheet, month), String(id)]);
+  if (Number(removed) && who && /^\d{4}-\d{2}-\d{2}$/.test(day || '')) {
+    try { await redis(['HINCRBY', 'eduino:workstat:' + dept, who + '|' + day, -1]); } catch (e) {}
+  }
+  return true;
+}
+async function getSheet(dept, sheet, month) {
+  if (!sheetOk(dept, sheet)) throw new Error('bad sheet');
+  if (!/^\d{4}-\d{2}$/.test(month || '')) throw new Error('bad month');
+  const map = arrToObj(await redis(['HGETALL', sheetBucket(dept, sheet, month)]));
+  return Object.keys(map).map(k => { try { const o = JSON.parse(map[k]); o.id = k; return o; } catch (e) { return null; } }).filter(Boolean);
+}
+
 module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
@@ -135,6 +171,7 @@ module.exports = async function handler(req, res) {
       if (type === 'coll') { out.items = await collGet(req.query.coll); return res.status(200).json(out); }
       if (type === 'workstat') { const w = await getWorkStat(req.query && req.query.dept); out.stats = w.stats; out.who = w.who; return res.status(200).json(out); }
       if (type === 'worklog') { out.events = await getWorkRaw(req.query && req.query.dept, req.query && req.query.month); return res.status(200).json(out); }
+      if (type === 'sheet') { out.records = await getSheet(req.query && req.query.dept, req.query && req.query.sheet, req.query && req.query.month); return res.status(200).json(out); }
       if (type === 'settings' || type === 'all') out.settings = await getSettings((req.query && req.query.scope) || 'all');
       if (type === 'presence' || type === 'all') out.presence = await getPresence();
       return res.status(200).json(out);
@@ -152,6 +189,8 @@ module.exports = async function handler(req, res) {
       if (body.op === 'collPush') { await collPush(body.coll, body.item); return res.status(200).json({ ok: true }); }
       if (body.op === 'collDel') { await collDel(body.coll, body.id); return res.status(200).json({ ok: true }); }
       if (body.op === 'workLog') { await workLog(body.dept, body.event || {}); return res.status(200).json({ ok: true }); }
+      if (body.op === 'recPush') { await recPush(body.dept, body.sheet, body.record || {}); return res.status(200).json({ ok: true }); }
+      if (body.op === 'recDel') { await recDel(body.dept, body.sheet, body.id, body.month, body.who, body.day); return res.status(200).json({ ok: true }); }
       return res.status(400).json({ ok: false, error: 'unknown op' });
     }
     return res.status(405).json({ ok: false, error: 'method not allowed' });

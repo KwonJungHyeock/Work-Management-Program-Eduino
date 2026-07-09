@@ -72,9 +72,11 @@ function bootShell(){
   const myDept = me.user && me.user.dept;
   const perms = Array.isArray(me.user && me.user.perms) ? me.user.perms : null;
   const commonDepts = new Set(NAV.filter(g=>g.common).map(g=>g.dept));
+  const deptOpen = new Set(typeof DEPT_OPEN_KEYS!=='undefined'?DEPT_OPEN_KEYS:[]);
   const hasPerm = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
     if(isAdmin) return true;
+    if(deptOpen.has(key) && d===myDept) return true;   // 누적 시트 등 직무 기본 열람
     if(perms) return perms.includes(key);
     return d===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];

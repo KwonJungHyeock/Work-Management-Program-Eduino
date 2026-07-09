@@ -103,11 +103,13 @@ const NAV = [
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
+      { key:'cs.records',   name:'상담 기록',   icon:'sheet' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
       { key:'md.product', name:'상품 데이터 관리', icon:'grid' },
       { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
       { key:'md.order',   name:'입점사 발주',      icon:'truck' },
+      { key:'md.records', name:'발주 기록',        icon:'sheet' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
@@ -116,6 +118,10 @@ const NAV = [
   ]},
 ];
 /* 디자인·경리는 개발 예정 — 사이드바에서 숨김(백업은 backup/first-draft/에 보존) */
+
+/* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
+   누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
+const DEPT_OPEN_KEYS = ['cs.records', 'md.records'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }

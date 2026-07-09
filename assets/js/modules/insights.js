@@ -74,6 +74,9 @@
         .iv-note{font-size:12px;color:var(--faint);margin-top:12px}
         .lgd{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:600;margin-left:12px}
         .lgd i{width:10px;height:10px;border-radius:3px;display:inline-block}
+        .kpi .kl .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+        .emp-tbl tr.grp td{background:#f6f8fb;padding-top:11px;padding-bottom:7px;border-bottom:1px solid var(--line-2)}
+        .emp-tbl .gsum{color:var(--muted);font-size:12px;font-weight:700;margin-left:7px}
       </style>
       <div class="mhead pad">
         <div class="tt">업무 현황 · 인사이트</div>
@@ -131,75 +134,97 @@
         const {from,to}=curRange();
         const days=listDays(from,to);
         const A=aggregate(from,to);
-        // 이전 동일기간 (전주 대비)
         const len=days.length; const pTo=addDays(from,-1), pFrom=addDays(pTo,-(len-1));
         const P=aggregate(pFrom,pTo);
+        const allMode = dept==='all';
 
-        // --- KPI ---
-        const people=Object.values(A.perPerson).sort((a,b)=>b.count-a.count);
-        const top=people[0];
-        const avg=len? (A.total/len):0;
-        const diff=A.total-P.total;
-        const pct=P.total? Math.round(diff/P.total*100):(A.total?100:0);
+        const deptTotal=d=>days.reduce((s,day)=>s+((A.perDay[day]&&A.perDay[day][d])||0),0);
+        const csTotal=deptTotal('cs'), mdTotal=deptTotal('md');
+        let people=Object.values(A.perPerson).sort((a,b)=>b.count-a.count);
+        const topOf=d=>people.filter(p=>p.dept===d)[0];
+        const diff=A.total-P.total; const pct=P.total?Math.round(diff/P.total*100):(A.total?100:0);
         const dcls=diff>0?'up':diff<0?'down':'flat'; const darrow=diff>0?'▲':diff<0?'▼':'–';
-        $('#kpis').innerHTML=`
-          <div class="kpi"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
-            <div class="kd ${dcls}">${darrow} 이전 동기간 대비 ${diff>=0?'+':''}${diff}건 (${pct>=0?'+':''}${pct}%)</div></div>
-          <div class="kpi"><div class="kl">1일 평균</div><div class="kv">${avg.toFixed(1)}<small>건/일</small></div>
-            <div class="kd flat">${len}일 · 활동 ${Object.keys(A.perDay).length}일</div></div>
-          <div class="kpi"><div class="kl">최다 담당자</div><div class="kv" style="font-size:22px">${top?esc(top.name):'—'}</div>
-            <div class="kd flat">${top?top.count+'건 · '+DLABEL[top.dept]:'데이터 없음'}</div></div>
-          <div class="kpi"><div class="kl">참여 인원</div><div class="kv">${people.length}<small>명</small></div>
-            <div class="kd flat">${dept==='all'?'CS+MD':DLABEL[dept]||dept}</div></div>`;
 
-        // --- 추이 차트 (누적 세로 막대) ---
-        $('#trend').innerHTML=columnsSVG(days, A.perDay);
-        $('#trendLgd').innerHTML = dept==='all'
+        // --- KPI (전체=직무별 분리 / 단일=해당 직무) ---
+        if(allMode){
+          const ct=topOf('cs'), mt=topOf('md');
+          $('#kpis').innerHTML=`
+            <div class="kpi"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
+              <div class="kd ${dcls}">${darrow} 이전 동기간 대비 ${diff>=0?'+':''}${diff}건 (${pct>=0?'+':''}${pct}%)</div></div>
+            <div class="kpi"><div class="kl"><span class="dot" style="background:${CHART.cs}"></span>CS 일평균</div><div class="kv">${(csTotal/len).toFixed(1)}<small>건/일</small></div>
+              <div class="kd flat">총 ${csTotal}건 · ${len}일</div></div>
+            <div class="kpi"><div class="kl"><span class="dot" style="background:${CHART.md}"></span>MD 일평균</div><div class="kv">${(mdTotal/len).toFixed(1)}<small>건/일</small></div>
+              <div class="kd flat">총 ${mdTotal}건 · ${len}일</div></div>
+            <div class="kpi"><div class="kl">최다 담당자 · 직무별</div>
+              <div class="kd" style="margin-top:9px;font-size:13.5px;line-height:2">
+                <span class="dbadge" style="background:${CHART.cs}">CS</span> ${ct?esc(ct.name)+' <b style="color:var(--ink)">'+ct.count+'</b>건':'—'}<br>
+                <span class="dbadge" style="background:${CHART.md}">MD</span> ${mt?esc(mt.name)+' <b style="color:var(--ink)">'+mt.count+'</b>건':'—'}</div></div>`;
+        } else {
+          const top=people[0];
+          $('#kpis').innerHTML=`
+            <div class="kpi"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
+              <div class="kd ${dcls}">${darrow} 이전 동기간 대비 ${diff>=0?'+':''}${diff}건 (${pct>=0?'+':''}${pct}%)</div></div>
+            <div class="kpi"><div class="kl">1일 평균</div><div class="kv">${(A.total/len).toFixed(1)}<small>건/일</small></div>
+              <div class="kd flat">${len}일 · 활동 ${Object.keys(A.perDay).length}일</div></div>
+            <div class="kpi"><div class="kl">최다 담당자</div><div class="kv" style="font-size:22px">${top?esc(top.name):'—'}</div>
+              <div class="kd flat">${top?top.count+'건':'데이터 없음'}</div></div>
+            <div class="kpi"><div class="kl">참여 인원</div><div class="kv">${people.length}<small>명</small></div>
+              <div class="kd flat">${DLABEL[dept]||dept}</div></div>`;
+        }
+
+        // --- 추이 (선 그래프 · 전체는 CS/MD 2선) ---
+        const depts = allMode?['cs','md']:[dept];
+        $('#trend').innerHTML=lineSVG(days, A.perDay, depts);
+        $('#trendLgd').innerHTML = allMode
           ? `<span class="lgd"><i style="background:${CHART.cs}"></i>CS</span><span class="lgd"><i style="background:${CHART.md}"></i>MD</span>`
           : `<span class="lgd"><i style="background:${CHART[dept]||CHART.cs}"></i>${DLABEL[dept]||dept}</span>`;
 
-        // --- 직원별 리스트+막대 (활동 0 인 로스터원도 포함) ---
+        // --- 직원별 리스트 (전체=직무별로 구분) · 활동 0 인 로스터원 포함 ---
         const seen=new Set(people.map(p=>p.dept+'|'+p.who));
-        roster.forEach(m=>{ if((dept==='all'||m.dept===dept)&&!seen.has(m.dept+'|'+m.loginId)&&(m.dept==='cs'||m.dept==='md'))
+        roster.forEach(m=>{ if((allMode||m.dept===dept)&&!seen.has(m.dept+'|'+m.loginId)&&(m.dept==='cs'||m.dept==='md'))
           people.push({dept:m.dept,who:m.loginId,name:m.name,id:m.loginId,count:0}); });
-        people.sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));
-        const max=Math.max(1,...people.map(p=>p.count));
         $('#empCnt').textContent=`${from} ~ ${to}`;
-        $('#emp').innerHTML = people.length? `<table class="emp-tbl"><thead><tr>
-            <th style="width:34px">#</th><th>담당자</th><th>부서</th><th style="width:64px" class="num">건수</th>
-            <th style="width:34%">비중</th><th style="width:66px" class="num">일평균</th></tr></thead><tbody>${
-            people.map((p,i)=>`<tr>
-              <td class="num" style="color:var(--faint)">${i+1}</td>
-              <td><div class="emp-name">${esc(p.name)}</div><div class="emp-id">${p.id?esc(p.id):'계정 미연동'}</div></td>
-              <td><span class="dbadge" style="background:${CHART[p.dept]}">${DLABEL[p.dept]}</span></td>
-              <td class="num">${p.count}</td>
-              <td><div class="bar-wrap"><div class="bar-in" style="width:${Math.round(p.count/max*100)}%;background:${CHART[p.dept]}"></div></div></td>
-              <td class="num" style="color:var(--muted)">${(p.count/len).toFixed(1)}</td></tr>`).join('')
-          }</tbody></table>` : `<div class="iv-empty">해당 기간·부서의 업무 기록이 없습니다.</div>`;
+        const groups = allMode?['cs','md']:[dept];
+        let html='<table class="emp-tbl"><thead><tr><th style="width:34px">#</th><th>담당자</th>'+
+          '<th style="width:60px" class="num">건수</th><th style="width:40%">비중</th><th style="width:62px" class="num">일평균</th></tr></thead><tbody>';
+        let any=false;
+        groups.forEach(g=>{
+          const gp=people.filter(p=>p.dept===g).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));
+          if(!gp.length) return;
+          const gmax=Math.max(1,...gp.map(p=>p.count));
+          if(allMode) html+=`<tr class="grp"><td></td><td colspan="4"><span class="dbadge" style="background:${CHART[g]}">${DLABEL[g]}</span><span class="gsum">${gp.reduce((s,p)=>s+p.count,0)}건 · ${gp.length}명</span></td></tr>`;
+          gp.forEach((p,i)=>{ any=true; html+=`<tr>
+            <td class="num" style="color:var(--faint)">${i+1}</td>
+            <td><div class="emp-name">${esc(p.name)}</div><div class="emp-id">${p.id?esc(p.id):'계정 미연동'}</div></td>
+            <td class="num">${p.count}</td>
+            <td><div class="bar-wrap"><div class="bar-in" style="width:${Math.round(p.count/gmax*100)}%;background:${CHART[p.dept]}"></div></div></td>
+            <td class="num" style="color:var(--muted)">${(p.count/len).toFixed(1)}</td></tr>`; });
+        });
+        html+='</tbody></table>';
+        $('#emp').innerHTML = any? html : `<div class="iv-empty">해당 기간·부서의 업무 기록이 없습니다.</div>`;
       }
 
-      /* 누적 세로 막대 SVG (dept=all 이면 CS+MD 스택) */
-      function columnsSVG(days, perDay){
-        const W=560, H=220, padL=34, padB=26, padT=10, padR=8;
-        const iw=W-padL-padR, ih=H-padT-padB;
-        const max=Math.max(1,...days.map(d=>(perDay[d]?perDay[d].total:0)));
-        const step=iw/Math.max(1,days.length);
-        const bw=Math.max(2,Math.min(30,step*0.62));
-        const y=v=>padT+ih-(v/max)*ih;
-        const grid=[0,.25,.5,.75,1].map(f=>{ const gy=padT+ih-f*ih; const val=Math.round(max*f);
-          return `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#eef0f3"/><text x="${padL-6}" y="${gy+3}" text-anchor="end" font-size="9" fill="#98a0ab">${val}</text>`; }).join('');
-        const showEvery=Math.ceil(days.length/12);
-        let bars='',labels='';
-        days.forEach((d,i)=>{ const pd=perDay[d]||{cs:0,md:0,total:0};
-          const cx=padL+step*i+(step-bw)/2;
-          let yb=padT+ih;
-          const segs=(dept==='all')?[['md',pd.md],['cs',pd.cs]]:[[dept,pd[dept]||0]];
-          segs.forEach(([dp,v])=>{ if(v<=0) return; const h=(v/max)*ih; yb-=h;
-            bars+=`<rect x="${cx.toFixed(1)}" y="${yb.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${CHART[dp]}" rx="1.5"><title>${d} ${DLABEL[dp]} ${v}건</title></rect>`; });
-          if(i%showEvery===0||i===days.length-1) labels+=`<text x="${(cx+bw/2).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#69727e">${mdLabel(d)}</text>`;
+      /* 선 그래프 SVG (여러 직무면 각 직무 1선) */
+      function lineSVG(days, perDay, depts){
+        const W=560, H=220, padL=32, padB=26, padT=12, padR=12;
+        const iw=W-padL-padR, ih=H-padT-padB, n=days.length;
+        const max=Math.max(1,...days.map(d=>Math.max(...depts.map(dp=>(perDay[d]&&perDay[d][dp])||0))));
+        const X=i=> n<=1? padL+iw/2 : padL+iw*i/(n-1);
+        const Y=v=> padT+ih-(v/max)*ih;
+        const grid=[0,.25,.5,.75,1].map(f=>{ const gy=padT+ih-f*ih;
+          return `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#eef0f3"/><text x="${padL-6}" y="${gy+3}" text-anchor="end" font-size="9" fill="#98a0ab">${Math.round(max*f)}</text>`; }).join('');
+        const showEvery=Math.ceil(n/12); let labels='';
+        days.forEach((d,i)=>{ if(i%showEvery===0||i===n-1) labels+=`<text x="${X(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#69727e">${mdLabel(d)}</text>`; });
+        let series='';
+        depts.forEach(dp=>{ const col=CHART[dp];
+          const pts=days.map((d,i)=>[X(i),Y((perDay[d]&&perDay[d][dp])||0)]);
+          const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+          series+=`<path d="${path}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+          pts.forEach((p,i)=>{ const v=(perDay[days[i]]&&perDay[days[i]][dp])||0;
+            series+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${n>40?1.6:2.7}" fill="#fff" stroke="${col}" stroke-width="1.6"><title>${days[i]} ${DLABEL[dp]} ${v}건</title></circle>`; });
         });
         return `<svg id="ivChart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:100%;height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
-          <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${grid}${bars}${labels}</svg>`;
+          <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${grid}${series}${labels}</svg>`;
       }
 
       /* ---- 저장 ---- */

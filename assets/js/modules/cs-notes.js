@@ -385,8 +385,8 @@
             content, answer:body.querySelector('#fAnswer').value.trim(),
             agent, callback:body.querySelector('#fCallback').checked, syncedAt:null };
           const all=getNotes(); all.push(rec); setNotes(all);
-          // 업무 로그 누적 — 선택된 상담사 기준(관리자 인사이트용) · 실패해도 저장에 영향 없음
-          if(window.WorkLog) WorkLog.logCS(rec.agent, rec.date, rec.category);
+          // 서버 시트 누적 — 전 직원 공유 기록 + 인사이트(선택 상담사 기준) · 실패해도 저장 무영향
+          if(window.Records) Records.pushCS(rec);
           // 콜백(후속조치) 체크 시 → 팀 공용 처리대기 큐에 등록
           if(rec.callback){ Q.push({ id:rec.id, category:rec.category, name:rec.name, contact:rec.contact,
             content:rec.content, agent:rec.agent, createdAt:rec.createdAt, done:false, assignee:'', assigneeName:'', note:'' }); }
@@ -482,6 +482,7 @@
             t.callback=box.querySelector('#eCb').checked;
             t.syncedAt=null; // 수정되었으므로 재동기화 필요
             setNotes(all);
+            if(window.Records) Records.pushCS(t);   // 서버 시트 반영(편집이면 카운터 중복 없이 덮어씀)
           }
           renderList(); renderSyncBar(); toast('수정되었습니다');
         };

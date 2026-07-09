@@ -1,13 +1,14 @@
 /* ===========================================================================
-   업무 로그 — CS/MD가 처리한 건을 서버(KV)에 누적 (관리자 인사이트용)
-   - 저장(시트 전송=백업)과 함께 압축 이벤트 1건을 fire-and-forget 로 올림
-   - CS는 '선택된 상담사' 기준, MD는 로그인 계정 기준으로 귀속
+   업무 기록(Records) — 프로그램 내 "시트" 클라이언트
+   - 상담/발주 저장 시 전체 레코드를 서버(KV)에 누적 → 전 직원 공유 시트 + 인사이트
+   - 구글시트는 백업으로 병행. CS=선택 상담사 기준, MD=로그인 계정 기준으로 귀속
    - 이름 → 계정 loginId 는 로스터(/api/auth op:roster)로 자동 매칭
+   - fire-and-forget: 실패해도 로컬 저장/시트 전송에는 영향 없음
    ========================================================================= */
-window.WorkLog = (function(){
+window.Records = (function(){
   let rosterCache=null, rosterAt=0;
   async function roster(){
-    if(rosterCache && Date.now()-rosterAt < 300000) return rosterCache;   // 5분 캐시
+    if(rosterCache && Date.now()-rosterAt < 300000) return rosterCache;
     try{
       const r=await fetch('/api/auth',{ method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ op:'roster' }) });
@@ -16,27 +17,32 @@ window.WorkLog = (function(){
     return rosterCache;
   }
   const today=()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-  const rid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
-  function post(event){
+  function post(body){
     try{ return fetch('/api/store',{ method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ op:'workLog', dept:event.dept, event }) }).catch(()=>{}); }catch(e){}
+      body:JSON.stringify(body) }).then(r=>r.json()).catch(()=>null); }catch(e){ return Promise.resolve(null); }
   }
-  /* who = 계정 loginId(매칭 시) 또는 '@이름'(미매칭) */
-  async function log({ dept, who, whoName, type, day }){
-    const d=(/^\d{4}-\d{2}-\d{2}$/.test(day||'')?day:today());
-    const ev={ dept, id:rid(), day:d, ts:Date.now(),
-      who:who||('@'+(whoName||'?')), whoName:whoName||who||'?', type:type||'' };
-    return post(ev);
-  }
-  async function logCS(agentName, day, type){
+  function pushRaw(dept, sheet, record){ return post({ op:'recPush', dept, sheet, record }); }
+
+  /* CS 상담 레코드 → 서버 시트 'notes' (담당=선택된 상담사) */
+  async function pushCS(rec){
     const R=await roster();
-    const m=R.find(p=>p.dept==='cs' && p.name===agentName) || R.find(p=>p.name===agentName);
-    return log({ dept:'cs', who: m?m.loginId:('@'+agentName), whoName: agentName, type:type||'상담', day });
+    const m=R.find(p=>p.dept==='cs' && p.name===rec.agent) || R.find(p=>p.name===rec.agent);
+    const record={ ...rec, who: m?m.loginId:('@'+(rec.agent||'?')), whoName: rec.agent||'?', day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
+    return pushRaw('cs','notes',record);
   }
-  function logMD(day, type){
+  /* MD 발주 레코드 → 서버 시트 'orders' (담당=로그인 계정) */
+  function pushMD(rec){
     const u=(window.Auth&&Auth.user&&Auth.user())||{};
-    return log({ dept:'md', who: u.loginId||('@'+(u.name||'MD')), whoName: u.name||u.loginId||'MD', type:type||'발주', day });
+    const record={ ...rec, who: u.loginId||('@'+(u.name||'MD')), whoName: u.name||u.loginId||'MD', day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
+    return pushRaw('md','orders',record);
   }
-  return { log, logCS, logMD, roster };
+  function del(dept, sheet, id, month, who, day){ return post({ op:'recDel', dept, sheet, id, month, who, day }); }
+
+  /* 한 달치 시트 레코드 조회 */
+  async function month(dept, sheet, ym){
+    try{ const r=await fetch(`/api/store?type=sheet&dept=${encodeURIComponent(dept)}&sheet=${encodeURIComponent(sheet)}&month=${encodeURIComponent(ym)}`);
+      if(!r.ok) throw 0; const d=await r.json(); return (d&&d.records)||[]; }catch(e){ return null; }
+  }
+  return { roster, pushCS, pushMD, pushRaw, del, month };
 })();
