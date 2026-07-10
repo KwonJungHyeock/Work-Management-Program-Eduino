@@ -255,7 +255,7 @@
             <div class="c-metric"><small>접속</small><span class="c-live"><i></i><span id="ckPres">–</span>명</span></div>
           </div>
         </div>
-        <div class="tile-row" id="statRow"></div>
+        <div class="tile-row" id="statRow">${Array.from({length:4}).map(()=>`<div class="tile" style="--tc:var(--line-strong)"><div class="skel skel-line" style="width:56%"></div><div class="skel skel-line" style="width:40%;height:24px;margin-top:10px"></div></div>`).join('')}</div>
         <div class="dash-2">
           <div class="dcard"><div class="dcard-hd">${icon('megaphone')}공지사항 <span class="more" data-go="home.notice">전체 보기</span></div>
             <div class="dcard-bd" id="dNotice"><div class="muted" style="padding:10px">불러오는 중…</div></div></div>

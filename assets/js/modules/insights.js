@@ -388,7 +388,7 @@
       $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); loadErr=false; load(); };
 
       async function load(){
-        if($('#kpis')) $('#kpis').innerHTML=`<div class="kpi"><div class="kl">불러오는 중…</div><div class="kv">·</div></div>`;
+        if($('#kpis')) $('#kpis').innerHTML=Array.from({length:4}).map(()=>`<div class="kpi" style="--kc:var(--line-strong)"><div class="skel skel-line" style="width:54%"></div><div class="skel skel-line" style="width:40%;height:24px;margin-top:10px"></div></div>`).join('');
         roster=await fetchRoster();
         if(!root.isConnected) return;
         await refresh();
