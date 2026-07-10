@@ -30,7 +30,10 @@
     const day=r.day||r.date; if(!day||!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
     const who=r.who||('@'+(r.whoName||r.agent||'?'));
     const name=r.whoName||r.agent||(who[0]==='@'?who.slice(1):who);
-    return { dept, who, name, id:(who[0]==='@'?'':who), day, count:1 };
+    const rec={ dept, who, name, id:(who[0]==='@'?'':who), day, count:1 };
+    if(dept==='cs'){ rec.category=(r.category||'').trim(); rec.customerType=(r.customerType||'').trim(); rec.route=(r.route||'').trim(); rec.callback=!!r.callback; }
+    else { rec.route=(r.route||'').trim(); rec.vendor=(r.vendor||'').trim(); rec.settle=(r.settle||'').trim(); }
+    return rec;
   }
 
   MODULES['admin.insights']={
@@ -99,10 +102,28 @@
         .iv-tip .tp-row b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:800}
         .iv-tip .tp-tot{border-top:1px solid var(--line);margin-top:5px;padding-top:5px}
         #ivChart{cursor:crosshair}
+        /* 분포 막대 */
+        .dist-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+        @media(max-width:1000px){.dist-grid{grid-template-columns:1fr}}
+        .dist-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+        .dist-k{width:112px;flex:none;font-size:13px;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .dist-bar{flex:1;height:10px;background:var(--zebra);border-radius:6px;overflow:hidden}
+        .dist-bar i{display:block;height:100%;border-radius:6px}
+        .dist-v{width:66px;flex:none;text-align:right;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink)}
+        .dist-v small{font-weight:600;color:var(--muted);margin-left:4px}
+        /* 재미 포인트 */
+        .fun-card{border:1px solid var(--line);border-radius:var(--r-lg);background:linear-gradient(180deg,#fff, #fbfcfe);box-shadow:var(--sh-sm);overflow:hidden}
+        .fun-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
+        .fun-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:14px 16px}
+        .fun{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:#fff}
+        .fun .fe{font-size:22px;line-height:1;flex:none}
+        .fun .fl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+        .fun .fv{font-size:15px;font-weight:800;color:var(--ink);margin-top:2px;line-height:1.2}
+        .iv-secttl{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:20px 2px 10px}
       </style>
       <div class="mhead pad">
         <div class="tt">업무 현황 · 인사이트</div>
-        <div class="ds">직원별 일일 업무량을 집계해 리스트·그래프로 보여줍니다. 매 상담/발주 저장 시 서버에 누적됩니다.</div>
+        <div class="ds"><b>종합 / CS / MD</b> 탭으로 나눠 KPI·추이·직원별 실적과 <b>분포 분석</b>(문의유형·고객유형·구매처·주문경로)·<b>데이터 기반 추측과 재미 포인트</b>를 보여줍니다. 실제 저장 기록 기준(삭제 시 즉시 반영).</div>
       </div>
       <div class="mbody">
         <div class="iv-ctrl">
@@ -112,7 +133,7 @@
           <span class="iv-dates" id="dates">
             <input type="date" id="dFrom"> ~ <input type="date" id="dTo"></span>
           <span class="seg" id="segDept">
-            <button data-d="all" class="on">전체</button><button data-d="cs">CS</button><button data-d="md">MD</button></span>
+            <button data-d="all" class="on">종합</button><button data-d="cs">CS</button><button data-d="md">MD</button></span>
           <span class="iv-sp"></span>
           <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
           <button class="btn ghost sm" id="btnPng">${icon('image')}차트 PNG</button>
@@ -128,7 +149,8 @@
             <span class="muted" id="empCnt" style="margin-left:auto;font-size:12px"></span></div>
             <div class="card-bd" style="padding:0"><div id="emp"></div></div></div>
         </div>
-        <p class="iv-note">※ CS는 선택된 상담사, MD는 로그인 계정 기준으로 집계됩니다. 계정 미매칭 이름은 ID가 빈칸으로 표시됩니다.</p>
+        <div id="detail"></div>
+        <p class="iv-note">※ CS는 선택된 상담사, MD는 로그인 계정 기준으로 집계됩니다. 계정 미매칭 이름은 ID가 빈칸으로 표시됩니다. 분포·재미 포인트는 실제 기록 필드 기반입니다.</p>
       </div>`;
 
       const $=s=>root.querySelector(s);
@@ -237,6 +259,69 @@
         });
         html+='</tbody></table>';
         $('#emp').innerHTML = any? html : `<div class="iv-empty">해당 기간·부서의 업무 기록이 없습니다.</div>`;
+
+        // --- 상세: 분포 분석 + 재미 포인트 (탭별) ---
+        renderDetail(A, days, dept);
+      }
+
+      /* 필드별 분포 [{key,count}] · 상위 N + 기타 */
+      function distByField(rows, field, topN){
+        const m={}; rows.forEach(r=>{ const k=(r[field]||'').trim()||'(미지정)'; m[k]=(m[k]||0)+1; });
+        let arr=Object.entries(m).map(([key,count])=>({key,count})).sort((a,b)=>b.count-a.count||a.key.localeCompare(b.key));
+        if(topN && arr.length>topN){ const top=arr.slice(0,topN); const rest=arr.slice(topN).reduce((s,i)=>s+i.count,0); if(rest) top.push({key:'기타',count:rest}); arr=top; }
+        return arr;
+      }
+      const PALETTE6=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)','var(--d6)'];
+      function distCard(title, items, iconName){
+        const max=Math.max(1,...items.map(i=>i.count)); const total=items.reduce((s,i)=>s+i.count,0);
+        return `<div class="card"><div class="card-hd">${icon(iconName||'grid')}<b>${esc(title)}</b><span class="muted" style="margin-left:auto;font-size:12px">${total.toLocaleString()}건</span></div>
+          <div class="card-bd" style="padding:12px 16px 14px">${ items.length? items.map((it,i)=>`
+            <div class="dist-row"><span class="dist-k" title="${esc(it.key)}">${esc(it.key)}</span>
+              <span class="dist-bar"><i style="width:${Math.max(3,Math.round(it.count/max*100))}%;background:${PALETTE6[i%6]}"></i></span>
+              <span class="dist-v">${it.count}<small>${Math.round(it.count/(total||1)*100)}%</small></span></div>`).join('')
+            : '<div class="iv-empty" style="padding:18px">기록이 없습니다.</div>' }</div></div>`;
+      }
+      /* 데이터 기반 재미 포인트 + 추측 */
+      function funFacts(A, days, deptSel){
+        const facts=[]; const rows=A.rows||[];
+        const byWd={}, wdCount={}; days.forEach(d=>{ const w=wdOf(d); byWd[w]=(byWd[w]||0)+((A.perDay[d]&&A.perDay[d].total)||0); wdCount[w]=(wdCount[w]||0)+1; });
+        const wdArr=Object.keys(byWd).map(w=>({w,avg:byWd[w]/(wdCount[w]||1)})).sort((a,b)=>b.avg-a.avg);
+        if(wdArr.length && wdArr[0].avg>0) facts.push({e:'📅',l:'가장 바쁜 요일',v:`${wdArr[0].w}요일`});
+        const top=Object.values(A.perPerson).sort((a,b)=>b.count-a.count)[0];
+        if(top&&top.count>0) facts.push({e:'👑',l:deptSel==='cs'?'상담왕':deptSel==='md'?'발주왕':'이 기간 MVP',v:`${top.name} · ${top.count}건`});
+        let peak=null; days.forEach(d=>{ const t=(A.perDay[d]&&A.perDay[d].total)||0; if(!peak||t>peak.t) peak={d,t}; });
+        if(peak&&peak.t>0) facts.push({e:'🚀',l:'하루 최고 기록',v:`${peak.t}건 · ${mdLabel(peak.d)}(${wdOf(peak.d)})`});
+        const today=todayStr();
+        if(days.includes(today)){ const mDays=days.filter(d=>d.slice(0,7)===today.slice(0,7));
+          if(mDays.length>=2){ const mTotal=mDays.reduce((s,d)=>s+((A.perDay[d]&&A.perDay[d].total)||0),0);
+            const elapsed=Number(today.slice(8,10)), dim=new Date(Number(today.slice(0,4)),Number(today.slice(5,7)),0).getDate();
+            if(elapsed>0) facts.push({e:'🔮',l:'이번 달 예상',v:`~${Math.round(mTotal/elapsed*dim).toLocaleString()}건`}); } }
+        if(deptSel==='cs'){ const c=distByField(rows,'category',99).filter(x=>x.key!=='(미지정)')[0]; if(c) facts.push({e:'🏷️',l:'최다 문의유형',v:c.key});
+          const cb=rows.filter(r=>r.callback).length; if(rows.length) facts.push({e:'📞',l:'콜백 비율',v:`${Math.round(cb/rows.length*100)}%`}); }
+        else if(deptSel==='md'){ const v=distByField(rows,'vendor',99).filter(x=>x.key!=='(미지정)')[0]; if(v) facts.push({e:'🏢',l:'최다 구매처',v:v.key});
+          const rt=distByField(rows,'route',99).filter(x=>x.key!=='(미지정)')[0]; if(rt) facts.push({e:'🧭',l:'최다 주문경로',v:rt.key}); }
+        else { const cs=days.reduce((s,d)=>s+((A.perDay[d]&&A.perDay[d].cs)||0),0), md=days.reduce((s,d)=>s+((A.perDay[d]&&A.perDay[d].md)||0),0);
+          if(cs+md>0){ const g=(a,b)=>b?g(b,a%b):a; const dv=g(cs,md)||1; facts.push({e:'⚖️',l:'CS : MD 비율',v:`${cs/dv} : ${md/dv}`}); } }
+        return facts.slice(0,6);
+      }
+      function renderDetail(A, days, deptSel){
+        const box=$('#detail'); if(!box) return; const rows=A.rows||[];
+        let dist='';
+        if(deptSel==='cs'){
+          dist=`<div class="iv-secttl">CS 분포 분석</div><div class="dist-grid">
+            ${distCard('문의유형별', distByField(rows,'category',8),'chat')}
+            ${distCard('고객유형별', distByField(rows,'customerType',8),'users')}</div>`;
+        } else if(deptSel==='md'){
+          dist=`<div class="iv-secttl">MD 분포 분석</div><div class="dist-grid">
+            ${distCard('구매처 TOP', distByField(rows,'vendor',8),'truck')}
+            ${distCard('주문경로별', distByField(rows,'route',8),'chart')}
+            ${distCard('정산구분별', distByField(rows,'settle',6),'grid')}</div>`;
+        }
+        const facts=funFacts(A, days, deptSel);
+        const fun = facts.length? `<div class="iv-secttl">재미 포인트</div>
+          <div class="fun-card"><div class="fun-hd">🎉 데이터 재미 포인트 <span class="muted" style="margin-left:auto;font-weight:600;font-size:12px">기록 기반 자동 분석</span></div>
+            <div class="fun-grid">${facts.map(f=>`<div class="fun"><span class="fe">${f.e}</span><div><div class="fl">${esc(f.l)}</div><div class="fv">${esc(f.v)}</div></div></div>`).join('')}</div></div>` : '';
+        box.innerHTML = dist + fun;
       }
 
       /* 선 그래프 SVG (여러 직무면 각 직무 1선) + hover 가이드/포커스 레이어 */
