@@ -30,6 +30,7 @@ function bootShell(){
       <div class="navtoggle" id="navToggle" title="메뉴 접기/펼치기">${icon('menu')}</div>
       <div class="crumb" id="crumb"></div>
       <div class="sp"></div>
+      <div class="syncchip ok" id="syncChip" title="상담·발주는 서버에 저장됩니다. 구글시트 백업 미전송분은 90초마다 자동 재시도됩니다.">${icon('check')}<span>저장 정상</span></div>
       <div class="quicklinks" id="quicklinks"></div>
       <div class="presence" id="presence" title="실시간 접속자 현황은 공용 서버 연동(예정) 후 표시됩니다">
         <span class="dot"></span><span id="presenceTxt">이 기기만 접속 중</span></div>
@@ -143,6 +144,20 @@ function bootShell(){
   window.addEventListener('focus', updateBadges);
   window.addEventListener('hashchange', ()=>setTimeout(updateBadges, 800));
 
+  // 동기화 상태 칩 — 구글시트 백업 미전송분(내부 서버 저장은 별개로 정상)
+  function updateSyncChip(){
+    const chip=$('syncChip'); if(!chip) return; let pending=0;
+    const cnt=(key)=>{ try{ (JSON.parse(localStorage.getItem(key)||'[]')||[]).forEach(r=>{ if(r&&r.synced===false) pending++; }); }catch(e){} };
+    cnt(STORE.csNotes); cnt('eduino.md.orders');
+    if(pending>0){ chip.className='syncchip warn'; chip.innerHTML=`${icon('cloudUp')}<span>백업 미전송 ${pending>99?'99+':pending}</span>`; }
+    else { chip.className='syncchip ok'; chip.innerHTML=`${icon('check')}<span>저장 정상</span>`; }
+  }
+  window.refreshSyncChip = updateSyncChip;
+  updateSyncChip();
+  setInterval(updateSyncChip, 15000);
+  window.addEventListener('focus', updateSyncChip);
+  window.addEventListener('hashchange', ()=>setTimeout(updateSyncChip, 400));
+
   $('btnLogout').onclick = ()=>{ Auth.logout(); location.href='index.html'; };
   $('navToggle').onclick = ()=>app.classList.toggle('nav-collapsed');
   $('presence').onclick = ()=>toast('여러 PC의 실시간 접속 현황은 서버 연동(개발 예정) 후 제공됩니다');
@@ -218,7 +233,8 @@ function bootShell(){
             <b style="font-size:14px">월간 데이터 백업</b>
             <span class="muted" style="margin-left:auto;font-size:12px">상담·발주 기록(서버)을 월 단위로</span>
           </div>
-          <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">선택한 달의 <b>상담 기록 + 발주 기록 전체</b>를 서버에서 받아 JSON 파일 하나로 저장합니다. (매월 백업용)</p>
+          <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:8px">선택한 달의 <b>상담 기록 + 발주 기록 전체</b>를 서버에서 받아 JSON 파일 하나로 저장합니다. (매월 백업용)</p>
+          <div class="note" id="autoBkNote" style="font-size:12.5px;margin-bottom:10px">${icon('refresh')} <b>자동 백업</b>: 매월 1일 서버가 지난달·이번달 기록을 스냅샷으로 보관합니다. <span id="autoBkStat" class="muted">확인 중…</span></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px">
             <input type="month" id="mBkMonth" style="height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font-size:13px">
             <button class="btn pri sm" id="mBkDown">${icon('download')}이 달 데이터 백업(JSON)</button>
@@ -250,6 +266,13 @@ function bootShell(){
     document.body.appendChild(ov);
 
     // 월간 데이터 백업 — 선택한 달의 상담/발주 기록을 서버에서 받아 JSON 하나로
+    // 자동 백업 상태
+    (async()=>{ const st=ov.querySelector('#autoBkStat'); if(!st) return;
+      try{ const r=await fetch('/api/backup-snapshot?type=meta'); const d=await r.json();
+        if(d&&d.ok&&d.lastAt){ const when=new Date(d.lastAt).toLocaleString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+          st.innerHTML=`최근 스냅샷 <b>${esc(d.lastMonth||'')}</b> · ${esc(when)} · 보관 ${d.months?d.months.length:0}개월`; }
+        else st.textContent='아직 자동 백업 실행 전(다음 1일에 첫 스냅샷 생성)'; }
+      catch(e){ st.textContent='상태 확인 실패'; } })();
     (function(){ const mSel=ov.querySelector('#mBkMonth'); if(!mSel) return;
       const d=new Date(); mSel.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       async function getSheet(dept,sheet,ym){ try{ const r=await fetch(`/api/store?type=sheet&dept=${dept}&sheet=${sheet}&month=${ym}`); if(!r.ok) throw 0; const j=await r.json(); return (j&&j.records)||[]; }catch(e){ return null; } }
