@@ -30,6 +30,7 @@ module.exports = async function handler(req, res) {
     const r = await fetchEcount();
     if (req.query && (req.query.diag || req.query.test)) {
       return res.status(200).json({ ok: true, zone: r.zone, detected: r.products.length,
+        custCount: r.custCount, custSample: r.custSample,
         sampleRaw: r.sampleRaw, sampleMapped: r.products.slice(0, 3) });
     }
     const n = await catalog.bulkUpsert(r.products);
@@ -90,15 +91,45 @@ async function fetchEcount() {
   let params = {}; if (process.env.ECOUNT_PRODUCT_BODY) { try { params = JSON.parse(process.env.ECOUNT_PRODUCT_BODY); } catch (e) {} }
   const pr = await postJson(`${host(zone)}${path}?SESSION_ID=${encodeURIComponent(sid)}`, params);
   const arr = pickArray(pr, process.env.ECOUNT_ARRAY_PATH);
+
+  // 3b) 거래처(구매처) 이름 맵 — 품목의 거래처코드(CUST)를 회사명으로 치환
+  const cust = await fetchCustMap(host(zone), sid);
+
   const M = (k, d) => process.env['ECOUNT_MAP_' + k] || d;
-  const products = arr.map(x => ({
-    selfCode: x[M('CODE', 'PROD_CD')],
-    code: '',
-    name: x[M('NAME', 'PROD_DES')],
-    vendor: M('VENDOR', '') ? x[M('VENDOR', '')] : '',
-    settle: M('SETTLE', '') ? x[M('SETTLE', '')] : '',
-    ship: M('SHIP', '') ? (Number(x[M('SHIP', '')]) || 0) : 0,
-  })).filter(p => p.selfCode);
-  return { zone, products, sampleRaw: arr.slice(0, 2) };
+  const VCODE = M('VENDORCODE', 'CUST');   // 품목 레코드에서 거래처코드가 들어있는 필드
+  const products = arr.map(x => {
+    const vcode = String(x[VCODE] || '').trim();
+    const vname = cust.map[vcode] || (M('VENDOR', '') ? x[M('VENDOR', '')] : '');
+    return {
+      selfCode: x[M('CODE', 'PROD_CD')],
+      code: '',
+      name: x[M('NAME', 'PROD_DES')],
+      vendor: vname,
+      settle: M('SETTLE', '') ? x[M('SETTLE', '')] : '',
+      ship: M('SHIP', '') ? (Number(x[M('SHIP', '')]) || 0) : 0,
+    };
+  }).filter(p => p.selfCode);
+  return { zone, products, sampleRaw: arr.slice(0, 2), custCount: cust.count, custSample: cust.sample };
+}
+
+// 이카운트 거래처 목록 → { code: 회사명 } 맵. 실패 시 빈 맵(품목만 업로드).
+async function fetchCustMap(hostUrl, sid) {
+  try {
+    const path = process.env.ECOUNT_CUST_PATH || '/OAPI/V2/AccountBasic/GetBasicCustList';
+    let params = {}; if (process.env.ECOUNT_CUST_BODY) { try { params = JSON.parse(process.env.ECOUNT_CUST_BODY); } catch (e) {} }
+    const cr = await postJson(`${hostUrl}${path}?SESSION_ID=${encodeURIComponent(sid)}`, params);
+    const list = pickArray(cr, process.env.ECOUNT_CUST_ARRAY_PATH);
+    const codeF = process.env.ECOUNT_CUST_CODE || 'CUST';
+    const nameCands = [process.env.ECOUNT_CUST_NAME, 'CUST_DES', 'CUST_NAME', 'CUST_NM', 'BUSINESS_NAME'].filter(Boolean);
+    const map = {};
+    for (const c of list) {
+      const code = String(c[codeF] || '').trim(); if (!code) continue;
+      let name = ''; for (const f of nameCands) { if (c[f]) { name = String(c[f]).trim(); break; } }
+      if (name) map[code] = name;
+    }
+    return { map, count: Object.keys(map).length, sample: list.slice(0, 2) };
+  } catch (e) {
+    return { map: {}, count: 0, sample: 'ERR: ' + (e && e.message || e) };
+  }
 }
 module.exports.fetchEcount = fetchEcount;

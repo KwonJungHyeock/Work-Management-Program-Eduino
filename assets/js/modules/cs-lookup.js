@@ -38,7 +38,7 @@
             <input type="text" id="lkQ" placeholder="상품코드 또는 상품명 검색 (예: 아두이노, A-1)" autocomplete="off" autofocus></div>
           <div class="lk-meta" id="lkMeta"></div>
           <div class="lk-res" id="lkRes" style="display:none"><table><thead><tr>
-            <th style="width:180px">상품코드</th><th>품명</th><th style="width:70px"></th></tr></thead>
+            <th style="width:168px">상품코드</th><th>품명</th><th style="width:168px">구매처</th><th style="width:56px"></th></tr></thead>
             <tbody id="lkBody"></tbody></table></div>
           <div class="lk-empty" id="lkHint">${icon('search')}<div>검색어를 입력하면 결과가 표시됩니다.</div></div>
         </div></div>`;
@@ -71,9 +71,10 @@
         tbody.innerHTML=items.map(p=>`<tr>
           <td class="lk-code">${hl(p.selfCode,term)}</td>
           <td>${hl(p.name,term)||'<span class="muted">(품명 없음)</span>'}</td>
+          <td>${p.vendor?esc(p.vendor):'<span class="muted">-</span>'}</td>
           <td><button class="btn ghost sm lk-copy" data-c="${esc(p.selfCode)}">${icon('copy')}</button></td></tr>`).join('');
         if(d.total>items.length) tbody.insertAdjacentHTML('beforeend',
-          `<tr><td colspan="3" class="muted" style="text-align:center;font-size:12.5px">상위 ${items.length}건 표시 · 전체 ${fmtNum(d.total)}건 — 검색어를 더 구체적으로 입력하세요.</td></tr>`);
+          `<tr><td colspan="4" class="muted" style="text-align:center;font-size:12.5px">상위 ${items.length}건 표시 · 전체 ${fmtNum(d.total)}건 — 검색어를 더 구체적으로 입력하세요.</td></tr>`);
         tbody.querySelectorAll('.lk-copy').forEach(b=>b.onclick=()=>{ copyText(b.dataset.c); toast('상품코드 복사: '+b.dataset.c); });
       }
       qEl.oninput=()=>{ const t=qEl.value.trim(); clearTimeout(timer); timer=setTimeout(()=>run(t), 220); };
