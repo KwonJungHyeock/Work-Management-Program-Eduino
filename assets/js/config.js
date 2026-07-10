@@ -145,6 +145,7 @@ const STORE = {
   csSumTpl: 'eduino.cs.notes.sumtpl',// 일일 결산 저장 양식(커스텀)
   syncCfg:  'eduino.sync.cfg',       // 공용 저장소(구글) 연동 { url, autoPull }
   shareMap: 'eduino.share.map',      // 공유 범위 오버라이드 { settingKey: 'all'|'cs'|'md' } (전사 공유)
+  catMap:   'eduino.md.catmap',      // 이카운트 코드→이름표 { vendor:{코드:구매처명}, category:{코드:분류명} }
 };
 
 /* 공유 범위 — 설정마다 "누가 공유받는가"를 지정 (①부서 단위)
@@ -157,7 +158,7 @@ const SHARE_SCOPES = [
 /* 각 공유 설정의 기본 범위 (부서 전용 설정은 해당 부서끼리만) */
 const SHARE_DEFAULT = {
   [STORE.platforms]:'md', [STORE.mdPresets]:'md', [STORE.mdProducts]:'md',
-  [STORE.mdVendors]:'md', [STORE.mdOrderCfg]:'md',
+  [STORE.mdVendors]:'md', [STORE.mdOrderCfg]:'md', [STORE.catMap]:'all',
   [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
   [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
@@ -180,7 +181,7 @@ function myShareScopes(){
 const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
-  STORE.csTypes, STORE.csSumTpl, STORE.shareMap,
+  STORE.csTypes, STORE.csSumTpl, STORE.shareMap, STORE.catMap,
 ];
 /* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
 const SHARED_LABELS = {
@@ -196,4 +197,12 @@ const SHARED_LABELS = {
   [STORE.csTypes]:'CS 분류',
   [STORE.csSumTpl]:'결산 저장 양식',
   [STORE.shareMap]:'공유 범위 규칙',
+  [STORE.catMap]:'이카운트 구매처·분류 이름표',
 };
+
+/* 이카운트 코드→이름 치환 헬퍼 (구매처명·분류명) — 카탈로그엔 코드만, 이름은 팀 공유 이름표에서 */
+function catNameMap(){ try{ const m=store(STORE.catMap).get({}); return { vendor:(m&&m.vendor)||{}, category:(m&&m.category)||{} }; }catch(e){ return {vendor:{},category:{}}; } }
+const catCodeNorm = s => String(s||'').replace(/[^0-9a-z]/gi,'');
+function catMapGet(map, code){ const k=catCodeNorm(code); return map[k] || map[k.replace(/^0+/,'')] || ''; }
+function catVendorName(p){ if(!p) return ''; if(p.vendor) return p.vendor; return catMapGet(catNameMap().vendor, p.custCode); }
+function catCategoryName(p){ if(!p) return ''; if(p.category) return p.category; return catMapGet(catNameMap().category, p.classCode); }

@@ -86,7 +86,9 @@
       const vendorShip=n=>{ const v=vendorObj(n); return v?Number(v.ship)||0:0; };
       // A~E 로 시작하는 자체상품코드 = 자사 상품 → 입점사명 '자사'
       const isJasa=c=>/^[A-E]-/i.test(String(c||'').trim());
-      const vendorName=p=>((p&&p.vendor||'').trim())||(isJasa(p&&p.selfCode)?'자사':'');
+      // 구매처명: 제품 자체 vendor > 이카운트 코드→이름표(구매처) > 자사
+      const vendorName=p=>{ const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
+        return v||(isJasa(p&&p.selfCode)?'자사':''); };
       const shipFor=p=>{ const o=Number(p&&p.ship); return o>0?o:vendorShip(vendorName(p)); };
 
       root.innerHTML=`
@@ -130,7 +132,8 @@
         <div class="ds">상품코드만 입력하면 입점사·정산구분·품명(구글시트)과 배송비(이카운트)가 자동으로 채워집니다.</div>
         <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
-          ${isAdmin?`<div class="t" data-t="vendor">입점사 정보</div>
+          ${isAdmin?`<div class="t" data-t="catmap">이카운트 매핑</div>
+          <div class="t" data-t="vendor">입점사 정보</div>
           <div class="t" data-t="settings">연동 설정</div>`:''}
         </div>
       </div>
@@ -139,7 +142,7 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ if(!isAdmin && tab!=='entry') tab='entry';
-        return tab==='entry'?drawEntry(): tab==='vendor'?drawVendors(): drawSettings(); };
+        return tab==='entry'?drawEntry(): tab==='catmap'?drawCatMap(): tab==='vendor'?drawVendors(): drawSettings(); };
 
       /* ---------------- 발주 입력 ---------------- */
       const meName=((Auth.user&&Auth.user())||{}).name||'';
@@ -454,6 +457,56 @@
             markVendorDirty(); if(inp.dataset.k==='ship') renderVen(); });
           tr.querySelector('button').onclick=()=>{ vendors.splice(i,1); markVendorDirty(); renderVen(); };
           tb.appendChild(tr); });
+      }
+
+      /* ---------------- 이카운트 매핑 (구매처·분류 코드→이름표) ---------------- */
+      function drawCatMap(){
+        const cur=store(STORE.catMap).get({vendor:{},category:{}});
+        const toText=m=>Object.entries(m||{}).map(([k,val])=>k+'\t'+val).join('\n');
+        const parse=txt=>{ const out={}; String(txt||'').replace(/\r/g,'').split('\n').forEach(line=>{
+          if(!line.trim()) return; const sep=line.includes('\t')?'\t':','; const i=line.indexOf(sep);
+          const code=(i>=0?line.slice(0,i):line).trim(), name=(i>=0?line.slice(i+1):'').trim();
+          const k=catCodeNorm(code); if(!k||!name) return; out[k]=name; const kz=k.replace(/^0+/,''); if(kz&&!out[kz]) out[kz]=name; }); return out; };
+        body.innerHTML=`
+          <div class="note" style="max-width:920px;margin-bottom:14px"><b>이카운트는 구매처명·상품분류를 API로 제공하지 않습니다.</b>
+            여기에 <b>코드↔이름표</b>를 한 번 넣어두면, 상품 조회·발주에서 자동으로 이름이 표시됩니다(품명·단가는 API로 매일 자동).
+            이카운트에서 <b>거래처</b>·<b>품목분류</b>를 엑셀로 열어 <b>두 열(코드·이름)</b>을 복사해 붙여넣으세요. 저장하면 <b>팀 전체에 공유</b>됩니다. 헤더 줄은 자동 무시됩니다.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card"><div class="card-hd">${icon('truck')}<b>구매처(거래처) 이름표</b><span id="vCnt" class="muted" style="margin-left:auto;font-size:12.5px">${Object.keys(cur.vendor||{}).length}건</span></div>
+              <div class="card-bd"><div class="muted" style="font-size:12.5px;margin-bottom:6px">한 줄에 <b>사업자번호(또는 거래처코드)</b> · <b>거래처명</b></div>
+                <textarea id="vMap" rows="14" placeholder="1078841033	(주)로보로보&#10;8598800910	(주)컴스마트">${esc(toText(cur.vendor))}</textarea></div></div>
+            <div class="card"><div class="card-hd">${icon('grid')}<b>상품분류 이름표</b><span id="cCnt" class="muted" style="margin-left:auto;font-size:12.5px">${Object.keys(cur.category||{}).length}건</span></div>
+              <div class="card-bd"><div class="muted" style="font-size:12.5px;margin-bottom:6px">한 줄에 <b>분류코드</b> · <b>분류명</b></div>
+                <textarea id="cMap" rows="14" placeholder="00006	유아&#10;00010	교구">${esc(toText(cur.category))}</textarea></div></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+            <button class="btn pri" id="saveCatMap">${icon('save')}저장 (팀 공유)</button>
+            <span class="muted" id="catStat" style="font-size:12.5px"></span></div>
+          <div class="card" style="margin-top:16px;max-width:560px"><div class="card-hd">${icon('search')}<b>테스트</b> <span class="muted" style="font-size:12px">· 저장 전 미리 확인</span></div>
+            <div class="card-bd"><label class="fld">상품코드로 구매처명 확인<input type="text" id="catTest" placeholder="예: P-DA39" autocomplete="off"></label>
+              <div id="catTestOut" class="muted" style="margin-top:8px;font-size:13px">상품코드를 입력하세요.</div></div></div>`;
+        body.querySelector('#saveCatMap').onclick=()=>{
+          const vm=parse(body.querySelector('#vMap').value), cm=parse(body.querySelector('#cMap').value);
+          store(STORE.catMap).set({vendor:vm, category:cm});
+          body.querySelector('#vCnt').textContent=Object.keys(vm).length+'건';
+          body.querySelector('#cCnt').textContent=Object.keys(cm).length+'건';
+          body.querySelector('#catStat').innerHTML='<span style="color:var(--ok)">저장됨 · 팀 전체에 공유됩니다</span>';
+          toast('이름표 저장 — 상품 조회·발주에 자동 반영');
+        };
+        const testEl=body.querySelector('#catTest');
+        testEl.oninput=async()=>{ const code=testEl.value.trim(); const o=body.querySelector('#catTestOut');
+          if(!code){ o.textContent='상품코드를 입력하세요.'; return; }
+          const vm=parse(body.querySelector('#vMap').value), cm=parse(body.querySelector('#cMap').value);
+          o.innerHTML=`${icon('cloud')} 조회 중…`;
+          try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); const d=await r.json();
+            if(!root.isConnected) return;
+            if(!d||!d.product){ o.textContent='미등록 상품코드입니다.'; return; }
+            const p=d.product;
+            const vn=p.vendor||catMapGet(vm,p.custCode)||`<span style="color:var(--danger)">이름표에 없음(거래처코드 ${esc(p.custCode||'-')})</span>`;
+            const cn=p.category||catMapGet(cm,p.classCode)||'-';
+            o.innerHTML=`품명 <b>${esc(p.name)}</b><br>구매처 <b>${vn}</b> · 분류 <b>${esc(cn)}</b>`;
+            if(!p.custCode) o.innerHTML+=`<br><span style="color:var(--danger);font-size:12px">※ 카탈로그에 거래처코드가 없습니다 — VPS에서 최신 sync 1회 실행 필요</span>`;
+          }catch(e){ o.textContent='조회 실패'; } };
       }
 
       /* ---------------- 연동 설정 ---------------- */

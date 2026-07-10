@@ -65,14 +65,16 @@
         if(!d||!d.ok){ hint(`${icon('alert')}<div>조회에 실패했습니다. 잠시 후 다시 시도하세요.</div>`,true); return; }
         const p=d.product;
         if(!p){ hint(`${icon('alert')}<div>"${esc(code)}" — 미등록 상품코드입니다.<br><span style="font-size:12.5px">이카운트에 등록하면 매일 00시 자동 반영됩니다.</span></div>`,true); return; }
+        const vendor=(typeof catVendorName==='function')?catVendorName(p):(p.vendor||'');
+        const category=(typeof catCategoryName==='function')?catCategoryName(p):(p.category||'');
         out.innerHTML=`<div class="lk-card">
           <div class="lk-top">
             <div style="flex:1;min-width:0"><div class="code">${esc(p.selfCode)}</div>
               <div class="nm">${p.name?esc(p.name):'<span class="muted">(품명 없음)</span>'}</div></div>
             <button class="btn sm" id="lkCopy">${icon('copy')}코드 복사</button></div>
           <div class="lk-grid">
-            ${cell('구매처명', `<span class="v">${p.vendor?esc(p.vendor):'<span class="muted">미지정</span>'}</span>`)}
-            ${cell('상품분류', `<span class="v">${p.category?esc(p.category):'<span class="muted">-</span>'}</span>`)}
+            ${cell('구매처명', `<span class="v">${vendor?esc(vendor):'<span class="muted">미지정</span>'}</span>`)}
+            ${cell('상품분류', `<span class="v">${category?esc(category):'<span class="muted">-</span>'}</span>`)}
             ${cell('입고단가', won(p.inPrice))}
             ${cell('출고단가', won(p.outPrice))}
           </div></div>`;

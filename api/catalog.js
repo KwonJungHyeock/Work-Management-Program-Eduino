@@ -44,6 +44,8 @@ function normalizeProduct(p) {
     name: String(p.name || ''),
     vendor: String(p.vendor || ''),
     category: String(p.category || ''),
+    custCode: String(p.custCode || ''),     // 이카운트 거래처코드(이름표로 구매처명 치환용)
+    classCode: String(p.classCode || ''),   // 이카운트 품목분류코드(이름표로 분류명 치환용)
     inPrice: Number(p.inPrice) || 0,
     outPrice: Number(p.outPrice) || 0,
     settle: String(p.settle || ''),
