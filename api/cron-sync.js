@@ -40,9 +40,14 @@ module.exports = async function handler(req, res) {
 };
 
 async function postJson(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  let r;
+  try {
+    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  } catch (e) {
+    throw new Error('연결 실패 [' + url + '] — ' + (e && e.message || e) + (e && e.cause && e.cause.code ? ' (' + e.cause.code + ')' : ''));
+  }
   const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch (e) {}
-  if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 300));
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' [' + url + '] ' + t.slice(0, 300));
   return j != null ? j : t;
 }
 // 응답 JSON 안에서 상품 배열을 찾아냄 (경로 지정 또는 자동 탐색)
@@ -61,11 +66,12 @@ async function fetchEcount() {
   const com = process.env.ECOUNT_COM_CODE, user = process.env.ECOUNT_USER_ID, cert = process.env.ECOUNT_API_CERT_KEY;
   if (!com || !user || !cert) throw new Error('ECOUNT_COM_CODE / ECOUNT_USER_ID / ECOUNT_API_CERT_KEY 환경변수를 설정하세요');
   const sbo = /^(1|true|test|y)$/i.test(process.env.ECOUNT_TEST || '');
-  const pre = sbo ? 'sbo' : '';
-  const zoneHost = `https://${pre}oapi.ecount.com`;
-  const host = z => `https://${pre}oapi${String(z || '').toUpperCase()}.ecount.com`;
+  // 운영: oapi{ZONE}.ecount.com / 존조회 oapi.ecount.com · 테스트: sboapi{ZONE}.ecount.com / 존조회 sboapi.ecount.com
+  const base = sbo ? 'sboapi' : 'oapi';
+  const zoneHost = `https://${base}.ecount.com`;
+  const host = z => `https://${base}${String(z || '').toUpperCase()}.ecount.com`;
 
-  // 1) ZONE
+  // 1) ZONE (ECOUNT_ZONE 를 직접 넣으면 이 단계 건너뜀)
   let zone = process.env.ECOUNT_ZONE;
   if (!zone) {
     const zr = await postJson(`${zoneHost}/OAPI/V2/Zone`, { COM_CODE: com });
