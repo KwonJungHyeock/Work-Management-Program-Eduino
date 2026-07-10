@@ -6,6 +6,18 @@
   grid-template-rows:var(--topbar-h) 1fr var(--statusbar-h);
   grid-template-areas:"side top" "side main" "side status"}
 .app.nav-collapsed{grid-template-columns:56px 1fr}
+/* 좁은 화면: 사이드바 아이콘 전용으로 자동 축소 */
+@media(max-width:860px){
+  .app{grid-template-columns:56px 1fr}
+  .side-brand{justify-content:center;padding:0}
+  .side-brand .nm{display:none}
+  .nav-glabel{justify-content:center;padding:2px 0 6px}
+  .nav-glabel .gtx{display:none}
+  .nav-item{justify-content:center;padding:8px 0}
+  .nav-item .txt,.nav-item .nav-badge,.nav-item .lock{display:none}
+  .side-foot .btn .txt{display:none}
+  .nav-item.on::before{left:0}
+}
 
 /* ---- 사이드바 (메뉴) ---- */
 .side{grid-area:side;background:var(--ck-1,#161b24);border-right:1px solid var(--ck-line,#0f1319);
@@ -95,6 +107,29 @@
 .top .navtoggle{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
   border-radius:var(--r);color:var(--muted);cursor:pointer;font-size:17px}
 .top .navtoggle:hover{background:var(--hover);color:var(--ink)}
+/* 전역 검색 트리거 + 커맨드 팔레트 */
+.topsearch{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px 0 11px;border:1px solid var(--line-strong);
+  border-radius:8px;background:var(--panel-2);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;min-width:150px}
+.topsearch:hover{border-color:var(--faint);color:var(--ink-2)}
+.topsearch .ic{font-size:15px}
+.topsearch span{flex:1;text-align:left}
+.topsearch kbd{font-size:10.5px;font-weight:700;color:var(--faint);border:1px solid var(--line-strong);border-radius:4px;padding:1px 5px;font-family:var(--mono)}
+@media(max-width:1080px){.topsearch span,.topsearch kbd{display:none}.topsearch{min-width:0;padding:0 9px}}
+.pal-ov{position:fixed;inset:0;z-index:400;background:rgba(16,20,28,.42);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
+.pal{width:min(620px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh-lg);overflow:hidden}
+.pal-in{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.pal-in .ic{color:var(--muted);font-size:18px}
+.pal-in input{border:0;height:auto;font-size:16px;padding:0;flex:1;background:none}
+.pal-in input:focus{box-shadow:none;outline:none}
+.pal-in kbd{font-size:11px;font-weight:700;color:var(--faint);border:1px solid var(--line-strong);border-radius:5px;padding:2px 6px;font-family:var(--mono)}
+.pal-list{max-height:52vh;overflow:auto;padding:6px}
+.pal-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;cursor:pointer;font-size:14px}
+.pal-row.on{background:var(--active-bg)}
+.pal-row .pal-ic{color:var(--muted);font-size:15px;display:inline-flex}
+.pal-row .pal-nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.pal-row .pal-gp{font-size:11.5px;color:var(--faint);font-weight:600;white-space:nowrap}
+.pal-row mark{background:#fff2a8;border-radius:2px;padding:0 1px}
+.pal-empty{padding:26px;text-align:center;color:var(--muted);font-size:13.5px}
 .syncchip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;
   font-size:12.5px;font-weight:700;border:1px solid var(--line);white-space:nowrap;cursor:default}
 .syncchip .ic{font-size:14px}

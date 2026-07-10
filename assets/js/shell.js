@@ -30,6 +30,8 @@ function bootShell(){
       <div class="navtoggle" id="navToggle" title="메뉴 접기/펼치기">${icon('menu')}</div>
       <div class="crumb" id="crumb"></div>
       <div class="sp"></div>
+      <button class="topsearch" id="btnSearch" title="전역 검색 (Ctrl+K)">${icon('search')}<span>검색</span><kbd>Ctrl K</kbd></button>
+      <button class="navtoggle" id="btnBell" title="브라우저 알림 켜기/끄기">${icon('bell')}</button>
       <div class="syncchip ok" id="syncChip" title="상담·발주는 서버에 저장됩니다. 구글시트 백업 미전송분은 90초마다 자동 재시도됩니다.">${icon('check')}<span>저장 정상</span></div>
       <div class="quicklinks" id="quicklinks"></div>
       <div class="presence" id="presence" title="실시간 접속자 현황은 공용 서버 연동(예정) 후 표시됩니다">
@@ -135,7 +137,14 @@ function bootShell(){
       const mms=await fetchColl('memo');
       if(mms){ myMemo=mms.filter(m=>!m.done && noticeVisible(m.to||'all') && m.author!==uid).length; }
       // 알림 = 미확인 공지 + 나에게 온 메모 + (CS/관리자) 미처리 콜백
-      setBadge('home.alerts', unreadN + myMemo + cbOpen);
+      const totalAlerts = unreadN + myMemo + cbOpen;
+      setBadge('home.alerts', totalAlerts);
+      // 브라우저 알림 — 확인필요 항목이 늘어나고 알림이 켜져 있으며 탭이 백그라운드일 때
+      if(window.__prevAlerts!=null && totalAlerts>window.__prevAlerts && localStorage.getItem('eduino.notify')==='1'
+        && ('Notification' in window) && Notification.permission==='granted' && document.visibilityState!=='visible'){
+        try{ new Notification('에듀이노 업무', { body:`확인이 필요한 항목이 ${totalAlerts}건 있습니다.`, tag:'eduino-alerts' }); }catch(e){}
+      }
+      window.__prevAlerts = totalAlerts;
     }catch(e){}
   }
   window.refreshNavBadges = updateBadges;
@@ -158,6 +167,62 @@ function bootShell(){
   window.addEventListener('focus', updateSyncChip);
   window.addEventListener('hashchange', ()=>setTimeout(updateSyncChip, 400));
 
+  // ---- 전역 검색 / 커맨드 팔레트 (⌘K / Ctrl+K) ----
+  (function(){
+    const navItems=[];
+    NAV.forEach(g=>{ if(g.adminOnly && !isAdmin) return; g.items.forEach(it=>{ if(canAccess(it.key)) navItems.push({type:'nav',key:it.key,name:it.name,group:g.name||'홈'}); }); });
+    if(isLead && !isAdmin) navItems.push({type:'nav',key:'admin.insights',name:'우리 파트 현황',group:'파트 관리'});
+    const ov=el('div','pal-ov'); ov.id='palOv'; ov.style.display='none';
+    ov.innerHTML=`<div class="pal" role="dialog"><div class="pal-in">${icon('search')}
+      <input id="palQ" placeholder="메뉴 이동 · 상품코드·상품명 검색…" autocomplete="off"><kbd>ESC</kbd></div>
+      <div class="pal-list" id="palList"></div></div>`;
+    document.body.appendChild(ov);
+    const qEl=ov.querySelector('#palQ'), listEl=ov.querySelector('#palList');
+    let rows=[], sel=0, seq=0, openFlag=false;
+    const hl=(s,t)=>{ s=String(s||''); if(!t) return esc(s); const i=s.toLowerCase().indexOf(t.toLowerCase());
+      return i<0?esc(s):esc(s.slice(0,i))+'<mark>'+esc(s.slice(i,i+t.length))+'</mark>'+esc(s.slice(i+t.length)); };
+    function paint(term){ listEl.innerHTML = rows.length? rows.map((r,i)=>r.type==='nav'
+        ? `<div class="pal-row${i===sel?' on':''}" data-i="${i}"><span class="pal-ic">${icon('chevron')}</span><span class="pal-nm">${hl(r.name,term)}</span><span class="pal-gp">${esc(r.group)}</span></div>`
+        : `<div class="pal-row${i===sel?' on':''}" data-i="${i}"><span class="pal-ic">${icon('box')}</span><span class="pal-nm"><b class="mono">${hl(r.code,term)}</b> · ${hl(r.name,term)}</span><span class="pal-gp">상품 · 코드복사</span></div>`
+      ).join('') : `<div class="pal-empty">일치하는 항목이 없습니다.</div>`;
+      listEl.querySelectorAll('.pal-row').forEach(el2=>{ el2.onmousemove=()=>{ sel=+el2.dataset.i; markSel(); };
+        el2.onclick=()=>activate(+el2.dataset.i); });
+    }
+    function markSel(){ listEl.querySelectorAll('.pal-row').forEach((e,i)=>e.classList.toggle('on',i===sel));
+      const on=listEl.querySelector('.pal-row.on'); if(on) on.scrollIntoView({block:'nearest'}); }
+    async function render(){ const my=++seq; const term=qEl.value.trim();
+      const nav=term? navItems.filter(n=>n.name.toLowerCase().includes(term.toLowerCase())) : navItems.slice(0,7);
+      rows=nav.map(n=>({...n})); sel=0; paint(term);
+      if(term.length>=2){ try{ const r=await fetch('/api/catalog?limit=6&q='+encodeURIComponent(term)); const d=await r.json();
+        if(my!==seq||!openFlag) return; (d&&d.items||[]).forEach(p=>rows.push({type:'prod',code:p.selfCode,name:p.name})); paint(term); }catch(e){} }
+    }
+    function activate(i){ const r=rows[i]; if(!r) return;
+      if(r.type==='nav'){ close(); location.hash=r.key; }
+      else { copyText(r.code); toast('상품코드 복사: '+r.code); close(); } }
+    function open(){ openFlag=true; ov.style.display='flex'; qEl.value=''; rows=[]; render(); setTimeout(()=>qEl.focus(),0); }
+    function close(){ openFlag=false; ov.style.display='none'; }
+    qEl.oninput=render;
+    qEl.onkeydown=e=>{ if(e.key==='ArrowDown'){ e.preventDefault(); sel=Math.min(sel+1,rows.length-1); markSel(); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); sel=Math.max(sel-1,0); markSel(); }
+      else if(e.key==='Enter'){ e.preventDefault(); activate(sel); }
+      else if(e.key==='Escape'){ close(); } };
+    ov.onclick=e=>{ if(e.target===ov) close(); };
+    window.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); openFlag?close():open(); } });
+    window.__openPalette=open;
+  })();
+
+  { const bs=$('btnSearch'); if(bs) bs.onclick=()=>window.__openPalette&&window.__openPalette(); }
+  // 브라우저 알림 토글
+  { const bb=$('btnBell'); if(bb){
+      const notifyOn=()=>localStorage.getItem('eduino.notify')==='1' && ('Notification' in window) && Notification.permission==='granted';
+      const sync=()=>{ bb.style.color = notifyOn()? 'var(--red)':''; };
+      bb.onclick=async()=>{ if(!('Notification' in window)){ toast('이 브라우저는 알림을 지원하지 않습니다'); return; }
+        if(localStorage.getItem('eduino.notify')==='1'){ localStorage.removeItem('eduino.notify'); toast('브라우저 알림을 껐습니다'); sync(); return; }
+        let p=Notification.permission; if(p!=='granted'){ try{ p=await Notification.requestPermission(); }catch(e){} }
+        if(p==='granted'){ localStorage.setItem('eduino.notify','1'); toast('브라우저 알림 켬 — 새 공지·콜백 시 알려드립니다'); }
+        else toast('알림 권한이 거부되어 있습니다(브라우저 설정에서 허용 필요)'); sync(); };
+      sync();
+  } }
   $('btnLogout').onclick = ()=>{ Auth.logout(); location.href='index.html'; };
   $('navToggle').onclick = ()=>app.classList.toggle('nav-collapsed');
   $('presence').onclick = ()=>toast('여러 PC의 실시간 접속 현황은 서버 연동(개발 예정) 후 제공됩니다');
