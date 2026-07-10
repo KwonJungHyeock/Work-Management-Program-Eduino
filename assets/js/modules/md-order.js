@@ -199,10 +199,21 @@
 
         const $f=id=>body.querySelector(id);
         const codeEl=$f('#fCode');
+        const catCache={};   // 셀메이트 카탈로그 조회 캐시 (code → product)
+        async function fetchCatalog(code){ try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); if(!r.ok) return null; const d=await r.json(); return (d&&d.product)||null; }catch(e){ return null; } }
+        const resolveLocal=code=>prodMap()[code]||catCache[code];
         function refreshLookup(){
-          const code=codeEl.value.trim(); const p=prodMap()[code]; const box=$f('#lookup');
+          const code=codeEl.value.trim(); const box=$f('#lookup');
           if(!code){ box.className='lookup'; box.textContent='상품코드를 입력하세요.'; return null; }
-          if(!p){ box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. ‘상품 마스터’에서 추가하세요.`; return null; }
+          const p=resolveLocal(code);
+          if(!p){
+            // 로컬 상품 마스터에 없으면 서버 카탈로그(셀메이트)에서 조회
+            box.className='lookup'; box.innerHTML=`${icon('cloud')} 카탈로그 조회 중…`;
+            fetchCatalog(code).then(prod=>{ if(codeEl.value.trim()!==code) return;
+              if(prod){ catCache[code]=prod; refreshLookup(); }
+              else { box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. (셀메이트·상품 마스터에 없음)`; } });
+            return null;
+          }
           const sh=shipFor(p); const ven=vendorObj(vendorName(p));
           const policy=(ven&&ven.policy||'').trim();
           box.className='lookup ok';
@@ -216,8 +227,10 @@
         codeEl.oninput=()=>{ form.code=codeEl.value; refreshLookup(); };
         ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value; });
         $f('#fShipInfo').oninput=e=>form.shipInfo=e.target.value;
-        function addOrder(){
-          const code=codeEl.value.trim(); const p=prodMap()[code];
+        async function addOrder(){
+          const code=codeEl.value.trim();
+          let p=resolveLocal(code);
+          if(!p){ p=await fetchCatalog(code); if(p) catCache[code]=p; }
           if(!p){ toast('미등록 상품코드입니다'); refreshLookup(); codeEl.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(),
