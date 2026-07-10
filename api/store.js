@@ -154,7 +154,11 @@ async function recDel(dept, sheet, id, month, who, day) {
   if (Number(removed) && who && /^\d{4}-\d{2}-\d{2}$/.test(day || '')) {
     try { await redis(['HINCRBY', 'eduino:workstat:' + dept, who + '|' + day, -1]); } catch (e) {}
   }
-  return true;
+  return Number(removed) || 0;
+}
+// 감사 로그 (기록 삭제 등) — auth.js 와 동일 리스트 'eduino:audit'
+async function logAudit(entry) {
+  try { await redis(['LPUSH', 'eduino:audit', JSON.stringify({ at: new Date().toISOString(), ...entry })]); await redis(['LTRIM', 'eduino:audit', 0, 499]); } catch (e) {}
 }
 async function getSheet(dept, sheet, month) {
   if (!sheetOk(dept, sheet)) throw new Error('bad sheet');
@@ -190,7 +194,9 @@ module.exports = async function handler(req, res) {
       if (body.op === 'collDel') { await collDel(body.coll, body.id); return res.status(200).json({ ok: true }); }
       if (body.op === 'workLog') { await workLog(body.dept, body.event || {}); return res.status(200).json({ ok: true }); }
       if (body.op === 'recPush') { await recPush(body.dept, body.sheet, body.record || {}); return res.status(200).json({ ok: true }); }
-      if (body.op === 'recDel') { await recDel(body.dept, body.sheet, body.id, body.month, body.who, body.day); return res.status(200).json({ ok: true }); }
+      if (body.op === 'recDel') { const n = await recDel(body.dept, body.sheet, body.id, body.month, body.who, body.day);
+        if (n) await logAudit({ actor: String(body.actor || '?').slice(0, 40), action: 'record.delete', target: `${body.dept}/${body.sheet}/${body.id}`, detail: `${body.dept === 'cs' ? '상담' : '발주'} 기록 · ${body.day || body.month || ''}${body.who ? ' · ' + body.who : ''}` });
+        return res.status(200).json({ ok: true }); }
       return res.status(400).json({ ok: false, error: 'unknown op' });
     }
     return res.status(405).json({ ok: false, error: 'method not allowed' });

@@ -36,6 +36,8 @@
         .dept-badge.cs{background:#e7f0ff;color:#2d6cdf}.dept-badge.md{background:#ffe9ea;color:#e0313b}
         .lead-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;
           background:#efe9ff;color:#5b3fc4;margin-left:6px;letter-spacing:.02em}
+        .off-badge{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;background:var(--line-2);color:var(--muted);margin-left:6px}
+        tr.inactive td{opacity:.5}
         .u-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
         .u-form .fld{margin:0}
         .perm-sec{margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px}
@@ -67,6 +69,7 @@
                 <span style="display:flex;gap:6px"><input type="text" id="fCode" placeholder="접속코드" style="flex:1">
                   <button type="button" class="btn sm" id="genCode" title="랜덤 생성">${icon('refresh')}</button></span></label>
             </div>
+            <label class="chk" style="margin-top:14px"><input type="checkbox" id="fActive" checked> <b>활성 계정</b> <span class="muted" style="font-weight:500">· 끄면 로그인 차단(퇴사·휴직 시) · 상담/발주 기록은 보존됩니다</span></label>
             <div class="perm-sec">
               <div class="perm-cap">열람 권한 <span class="muted" style="font-weight:500">· 체크한 기능만 사용할 수 있습니다 (부서 선택 시 자동 체크)</span></div>
               <div class="perm-pick" id="permPick"></div>
@@ -94,17 +97,17 @@
       const collectPerms=()=>[...$('#permPick').querySelectorAll('[data-perm]:checked')].map(c=>c.dataset.perm);
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
       $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur]); };
-      function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member';
+      function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true;
         renderPerms(deptDefault('cs')); $('#fId').disabled=false; $('#editHint').textContent=''; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
-        $('#fDept').value=u.dept||'cs'; $('#fRole').value=u.role==='lead'?'lead':'member'; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
+        $('#fDept').value=u.dept||'cs'; $('#fRole').value=u.role==='lead'?'lead':'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'));
         $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
       renderPerms(deptDefault('cs'));
 
       $('#saveUser').onclick=async()=>{
         const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value, role:$('#fRole').value,
-          email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), perms:collectPerms() };
+          email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), active:$('#fActive').checked, perms:collectPerms() };
         if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--danger)">아이디와 접속코드는 필수입니다.</span>'; return; }
         // 파트장은 직무별 1명 제한
         if(user.role==='lead'){ const other=usersCache.find(x=>x.dept===user.dept && x.role==='lead' && x.loginId!==user.loginId);
@@ -127,16 +130,20 @@
           $('#uCnt').textContent=`· ${users.length}명`;
           const tb=t.querySelector('tbody'); tb.innerHTML='';
           if(!users.length){ tb.innerHTML=`<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">발급된 계정이 없습니다. 위에서 발급하세요.</td></tr>`; return; }
-          users.forEach(u=>{ const tr=el('tr');
-            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${u.role==='lead'?'<span class="lead-badge">파트장</span>':''}</td>
+          users.forEach(u=>{ const tr=el('tr'); if(u.active===false) tr.className='inactive';
+            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${u.role==='lead'?'<span class="lead-badge">파트장</span>':''}${u.active===false?'<span class="off-badge">비활성</span>':''}</td>
               <td><span class="dept-badge ${esc(u.dept||'')}">${esc(deptLabel(u.dept))}</span></td>
               <td class="muted">${esc(u.email||'-')}</td>
               <td class="code-cell">${esc(u.code||'-')}</td>
               <td><span style="display:flex;gap:4px;justify-content:flex-end">
+                <button class="btn ghost sm" data-a="toggle">${u.active===false?'활성화':'비활성화'}</button>
                 <button class="btn ghost sm" data-a="edit">수정</button>
                 <button class="btn ghost sm" data-a="del">${icon('trash')}</button></span></td>`;
             tr.querySelector('[data-a=edit]').onclick=()=>{ fillForm(u); root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
-            tr.querySelector('[data-a=del]').onclick=async()=>{ if(!confirm(`'${u.loginId}' 계정을 삭제할까요?`)) return;
+            tr.querySelector('[data-a=toggle]').onclick=async()=>{ const on=u.active===false;
+              if(!confirm(`'${u.name||u.loginId}' 계정을 ${on?'활성화':'비활성화'}할까요?${on?'':' (로그인이 차단됩니다)'}`)) return;
+              try{ await authApi('saveUser',{user:{...u, active:on}}); load(); toast(on?'활성화했습니다':'비활성화했습니다'); }catch(err){ toast(err.message); } };
+            tr.querySelector('[data-a=del]').onclick=async()=>{ if(!confirm(`'${u.loginId}' 계정을 삭제할까요? (비활성화로 두면 기록·이력이 보존됩니다)`)) return;
               try{ await authApi('deleteUser',{loginId:u.loginId}); load(); }catch(err){ toast(err.message); } };
             tb.appendChild(tr);
           });
@@ -230,6 +237,46 @@
           $('#shStat').innerHTML=`<span style="color:var(--danger)">${esc(err.message||'오류')}</span>`;
         }
       };
+    }
+  };
+
+  /* =========================================================================
+     관리자 · 감사 로그 (팀장 전용) — 계정/기록 변경 이력
+     ========================================================================= */
+  MODULES['admin.audit']={
+    title:'감사 로그', icon:'clipboard',
+    render(root){
+      if(!Auth.isAdmin()){
+        root.innerHTML=`<div class="view"><div class="empty">${icon('shield')}<div style="font-size:14px">관리자(팀장)만 접근할 수 있는 화면입니다.</div></div></div>`;
+        return;
+      }
+      root.innerHTML=`
+        <div class="mhead pad"><div class="tt">감사 로그</div>
+          <div class="ds">계정 발급·수정·삭제와 상담/발주 기록 삭제 이력을 최근 순으로 보여줍니다. 내부 통제용(최근 500건 보관).</div></div>
+        <div class="mbody"><div class="card">
+          <div class="card-hd">${icon('clipboard')}<b>최근 활동</b><span class="muted" id="auCnt" style="margin-left:auto;font-size:12.5px"></span>
+            <button class="btn sm" id="auReload" style="margin-left:10px">${icon('refresh')}새로고침</button></div>
+          <div class="card-bd" style="padding:0"><div style="overflow:auto"><table class="tbl" id="auTable"></table></div></div>
+        </div></div>`;
+      const $=s=>root.querySelector(s);
+      const ACT={ 'account.create':['계정 생성','var(--ok)'], 'account.update':['계정 수정','var(--info)'],
+        'account.delete':['계정 삭제','var(--danger)'], 'record.delete':['기록 삭제','var(--danger)'] };
+      const fmt=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch{ return iso||''; } };
+      async function load(){
+        const t=$('#auTable');
+        t.innerHTML=`<thead><tr><th style="width:132px">시각</th><th style="width:96px">작업</th><th>대상 / 상세</th><th style="width:110px">실행자</th></tr></thead><tbody><tr><td colspan="4" class="muted" style="text-align:center;padding:16px">불러오는 중…</td></tr></tbody>`;
+        try{
+          const d=await authApi('auditLog',{limit:200}); const es=d.entries||[]; $('#auCnt').textContent=`· ${es.length}건`;
+          const tb=t.querySelector('tbody');
+          if(!es.length){ tb.innerHTML=`<tr><td colspan="4" class="muted" style="text-align:center;padding:16px">기록된 활동이 없습니다.</td></tr>`; return; }
+          tb.innerHTML=es.map(e=>{ const a=ACT[e.action]||[e.action,'var(--muted)'];
+            return `<tr><td class="mono" style="white-space:nowrap">${esc(fmt(e.at))}</td>
+              <td><span style="font-weight:800;color:${a[1]}">${esc(a[0])}</span></td>
+              <td><b>${esc(e.target||'')}</b>${e.detail?` <span class="muted">· ${esc(e.detail)}</span>`:''}</td>
+              <td>${esc(e.actor||'-')}</td></tr>`; }).join('');
+        }catch(err){ t.querySelector('tbody').innerHTML=`<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--danger)">${esc(err.message)}</td></tr>`; }
+      }
+      $('#auReload').onclick=load; load();
     }
   };
 })();

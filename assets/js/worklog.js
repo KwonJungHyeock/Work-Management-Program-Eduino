@@ -40,7 +40,10 @@ window.Records = (function(){
     const record={ ...rec, who: u.loginId||('@'+name), whoName: name, day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
     return pushRaw('md','orders',record);
   }
-  function del(dept, sheet, id, month, who, day){ return post({ op:'recDel', dept, sheet, id, month, who, day }); }
+  function del(dept, sheet, id, month, who, day){
+    const u=(window.Auth&&Auth.user&&Auth.user())||{};
+    const actor=u.name || u.loginId || '?';
+    return post({ op:'recDel', dept, sheet, id, month, who, day, actor }); }
 
   /* 한 달치 시트 레코드 조회 */
   async function month(dept, sheet, ym){

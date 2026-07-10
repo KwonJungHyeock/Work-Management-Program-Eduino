@@ -44,6 +44,10 @@ async function putAccount(a) { await redis(['HSET', ACCOUNTS_KEY, a.loginId, JSO
 async function delAccount(id) { await redis(['HDEL', ACCOUNTS_KEY, id]); }
 
 function isAdmin(body) { const a = (body && body.admin) || {}; return a.loginId === ADMIN_ID && String(a.code) === String(ADMIN_CODE); }
+// 감사 로그 (누가·언제·무엇을) — 최근 500건 보관
+async function logAudit(entry) {
+  try { await redis(['LPUSH', 'eduino:audit', JSON.stringify({ at: new Date().toISOString(), ...entry })]); await redis(['LTRIM', 'eduino:audit', 0, 499]); } catch (e) {}
+}
 function safeUser(acc, role) { return { loginId: acc.loginId, name: acc.name || acc.loginId, dept: acc.dept || '', role: role || acc.role || 'member', email: acc.email || '', perms: Array.isArray(acc.perms) ? acc.perms : null }; }
 
 module.exports = async function handler(req, res) {
@@ -91,19 +95,32 @@ module.exports = async function handler(req, res) {
         const dup = (await allAccounts()).find(a => a.loginId !== loginId && (a.dept || '') === String(u.dept || '') && a.role === 'lead');
         if (dup) return res.status(400).json({ ok: false, error: '해당 직무에 이미 파트장이 있습니다 (기존 파트장을 팀원으로 변경 후 지정하세요)' });
       }
+      const prev = await getAccount(loginId);
       const acc = {
         loginId, code: String(u.code), name: String(u.name || ''), dept: String(u.dept || ''),
         email: String(u.email || ''), role, active: u.active !== false, perms,
-        createdAt: u.createdAt || new Date().toISOString(),
+        createdAt: (prev && prev.createdAt) || u.createdAt || new Date().toISOString(),
       };
       await putAccount(acc);
+      await logAudit({ actor: (body.admin && body.admin.loginId) || 'admin', action: prev ? 'account.update' : 'account.create',
+        target: loginId, detail: `${acc.name || loginId} · ${acc.dept || '-'} · ${role === 'lead' ? '파트장' : '팀원'}${acc.active === false ? ' · 비활성' : ''}` + (prev && prev.active !== false && acc.active === false ? ' (비활성 전환)' : (prev && prev.active === false && acc.active !== false ? ' (활성 전환)' : '')) });
       return res.status(200).json({ ok: true });
     }
 
     if (op === 'deleteUser') {
       if (!isAdmin(body)) return res.status(403).json({ ok: false, error: '관리자 권한이 필요합니다' });
-      await delAccount(String(body.loginId || '').trim());
+      const id = String(body.loginId || '').trim();
+      const prev = await getAccount(id);
+      await delAccount(id);
+      await logAudit({ actor: (body.admin && body.admin.loginId) || 'admin', action: 'account.delete', target: id, detail: (prev && prev.name) || id });
       return res.status(200).json({ ok: true });
+    }
+
+    if (op === 'auditLog') {
+      if (!isAdmin(body)) return res.status(403).json({ ok: false, error: '관리자 권한이 필요합니다' });
+      const raw = await redis(['LRANGE', 'eduino:audit', 0, Math.min(Number(body.limit) || 200, 500) - 1]);
+      const entries = (Array.isArray(raw) ? raw : []).map(s => { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean);
+      return res.status(200).json({ ok: true, entries });
     }
 
     return res.status(400).json({ ok: false, error: 'unknown op' });

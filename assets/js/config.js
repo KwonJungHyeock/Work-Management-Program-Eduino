@@ -119,6 +119,7 @@ const NAV = [
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
       { key:'admin.users', name:'팀원 계정', icon:'users' },
       { key:'admin.share', name:'공유 범위', icon:'share' },
+      { key:'admin.audit', name:'감사 로그', icon:'clipboard' },
   ]},
 ];
 /* 디자인·경리는 개발 예정 — 사이드바에서 숨김(백업은 backup/first-draft/에 보존) */
