@@ -8,6 +8,9 @@
 (function(){
   const CHART={ cs:'#3b76e0', md:'#e8804a' };     // 데이터 시각화용(부서 구분) — UI 기본색과 분리
   const DLABEL={ cs:'CS', md:'MD' };
+  const GEO={ W:560, H:220, padL:32, padB:26, padT:12, padR:12 };   // 선그래프 좌표계(그리기·툴팁 공용)
+  const WD=['일','월','화','수','목','금','토'];
+  const wdOf=day=>WD[new Date(day+'T00:00:00').getDay()];
 
   /* 날짜 유틸 (todayStr 는 전역) */
   const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -73,6 +76,24 @@
         .kpi .kl .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
         .emp-tbl tr.grp td{background:#f6f8fb;padding-top:11px;padding-bottom:7px;border-bottom:1px solid var(--line-2)}
         .emp-tbl .gsum{color:var(--muted);font-size:12px;font-weight:700;margin-left:7px}
+        /* 자동 인사이트 하이라이트 */
+        .hl-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:0 0 20px}
+        .hl{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;background:#fff;padding:13px 14px;box-shadow:var(--sh-sm)}
+        .hl .hi{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto}
+        .hl .ht{font-size:13px;line-height:1.5;color:var(--ink-2)}
+        .hl .ht b{color:var(--ink);font-weight:800}
+        .hl.up .hi{background:var(--ok-bg,#e8f6ee)} .hl.down .hi{background:#fdecee} .hl.flat .hi{background:var(--panel-2)}
+        /* 차트 hover 툴팁 */
+        #trend{position:relative}
+        .iv-tip{position:absolute;pointer-events:none;display:none;z-index:6;background:#fff;border:1px solid var(--line-2);
+          border-radius:9px;box-shadow:0 8px 24px rgba(16,24,40,.18);padding:8px 11px;font-size:12px;min-width:128px}
+        .iv-tip .tp-d{font-weight:800;color:var(--ink);margin-bottom:6px}
+        .iv-tip .tp-row{display:flex;justify-content:space-between;gap:16px;line-height:1.75}
+        .iv-tip .tp-row span{color:var(--muted);display:flex;align-items:center;gap:5px}
+        .iv-tip .tp-row i{width:9px;height:9px;border-radius:2px;display:inline-block}
+        .iv-tip .tp-row b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:800}
+        .iv-tip .tp-tot{border-top:1px solid var(--line);margin-top:5px;padding-top:5px}
+        #ivChart{cursor:crosshair}
       </style>
       <div class="mhead pad">
         <div class="tt">업무 현황 · 인사이트</div>
@@ -93,6 +114,7 @@
           <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
         </div>
         <div class="kpis" id="kpis"></div>
+        <div class="hl-row" id="hl"></div>
         <div class="iv-grid">
           <div class="card"><div class="card-hd">${icon('chart')}<b>일자별 처리 추이</b>
             <span id="trendLgd" style="margin-left:auto"></span></div>
@@ -169,9 +191,16 @@
               <div class="kd flat">${DLABEL[dept]||dept}</div></div>`;
         }
 
-        // --- 추이 (선 그래프 · 전체는 CS/MD 2선) ---
+        // --- 자동 인사이트 하이라이트 ---
+        const hs=buildHighlights(days, A.perDay, A, P, Object.values(A.perPerson), allMode);
+        $('#hl').innerHTML = hs.length
+          ? hs.map(h=>`<div class="hl ${h.tone}"><div class="hi">${h.icon}</div><div class="ht">${h.text}</div></div>`).join('')
+          : `<div class="hl flat"><div class="hi">💡</div><div class="ht">데이터가 더 쌓이면 자동 인사이트가 여기에 표시됩니다.</div></div>`;
+
+        // --- 추이 (선 그래프 · 전체는 CS/MD 2선) + hover 툴팁 ---
         const depts = allMode?['cs','md']:[dept];
-        $('#trend').innerHTML=lineSVG(days, A.perDay, depts);
+        $('#trend').innerHTML=lineSVG(days, A.perDay, depts)+`<div class="iv-tip" id="ivTip"></div>`;
+        wireChartHover(days, A.perDay, depts);
         $('#trendLgd').innerHTML = allMode
           ? `<span class="lgd"><i style="background:${CHART.cs}"></i>CS</span><span class="lgd"><i style="background:${CHART.md}"></i>MD</span>`
           : `<span class="lgd"><i style="background:${CHART[dept]||CHART.cs}"></i>${DLABEL[dept]||dept}</span>`;
@@ -201,13 +230,15 @@
         $('#emp').innerHTML = any? html : `<div class="iv-empty">해당 기간·부서의 업무 기록이 없습니다.</div>`;
       }
 
-      /* 선 그래프 SVG (여러 직무면 각 직무 1선) */
+      /* 선 그래프 SVG (여러 직무면 각 직무 1선) + hover 가이드/포커스 레이어 */
+      function chartMax(days, perDay, depts){ return Math.max(1,...days.map(d=>Math.max(...depts.map(dp=>(perDay[d]&&perDay[d][dp])||0)))); }
+      function chartX(i,n){ const {padL,W,padR}=GEO, iw=W-padL-padR; return n<=1? padL+iw/2 : padL+iw*i/(n-1); }
+      function chartY(v,max){ const {padT,H,padB}=GEO, ih=H-padT-padB; return GEO.padT+ih-(v/max)*ih; }
       function lineSVG(days, perDay, depts){
-        const W=560, H=220, padL=32, padB=26, padT=12, padR=12;
+        const {W,H,padL,padB,padT,padR}=GEO;
         const iw=W-padL-padR, ih=H-padT-padB, n=days.length;
-        const max=Math.max(1,...days.map(d=>Math.max(...depts.map(dp=>(perDay[d]&&perDay[d][dp])||0))));
-        const X=i=> n<=1? padL+iw/2 : padL+iw*i/(n-1);
-        const Y=v=> padT+ih-(v/max)*ih;
+        const max=chartMax(days,perDay,depts);
+        const X=i=>chartX(i,n), Y=v=>chartY(v,max);
         const grid=[0,.25,.5,.75,1].map(f=>{ const gy=padT+ih-f*ih;
           return `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#eef0f3"/><text x="${padL-6}" y="${gy+3}" text-anchor="end" font-size="9" fill="#98a0ab">${Math.round(max*f)}</text>`; }).join('');
         const showEvery=Math.ceil(n/12); let labels='';
@@ -216,12 +247,73 @@
         depts.forEach(dp=>{ const col=CHART[dp];
           const pts=days.map((d,i)=>[X(i),Y((perDay[d]&&perDay[d][dp])||0)]);
           const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+          // 면적 살짝 채워 추이 강조
+          const area=`${path} L ${pts[pts.length-1][0].toFixed(1)} ${(padT+ih).toFixed(1)} L ${pts[0][0].toFixed(1)} ${(padT+ih).toFixed(1)} Z`;
+          series+=`<path d="${area}" fill="${col}" opacity="0.06"/>`;
           series+=`<path d="${path}" fill="none" stroke="${col}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-          pts.forEach((p,i)=>{ const v=(perDay[days[i]]&&perDay[days[i]][dp])||0;
-            series+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${n>40?1.6:2.7}" fill="#fff" stroke="${col}" stroke-width="1.6"><title>${days[i]} ${DLABEL[dp]} ${v}건</title></circle>`; });
+          if(n<=40) pts.forEach(p=>{ series+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.7" fill="#fff" stroke="${col}" stroke-width="1.6"/>`; });
         });
         return `<svg id="ivChart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:100%;height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
-          <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${grid}${series}${labels}</svg>`;
+          <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${grid}
+          <line id="ivGuide" x1="0" x2="0" y1="${padT}" y2="${(padT+ih).toFixed(1)}" stroke="#b9c0ca" stroke-width="1" stroke-dasharray="4 3" style="display:none"/>
+          ${series}<g id="ivFocus"></g>${labels}</svg>`;
+      }
+      /* 차트 hover 인터랙션 — 가이드선·포커스점·플로팅 툴팁 */
+      function wireChartHover(days, perDay, depts){
+        const svg=$('#ivChart'), tip=$('#ivTip'), guide=$('#ivGuide'), focus=$('#ivFocus');
+        if(!svg||!tip) return;
+        const {W,padL,padR}=GEO, iw=W-padL-padR, n=days.length, max=chartMax(days,perDay,depts);
+        function show(i){ const day=days[i]; if(day==null) return; const gx=chartX(i,n);
+          guide.setAttribute('x1',gx); guide.setAttribute('x2',gx); guide.style.display='';
+          focus.innerHTML=depts.map(dp=>{ const v=(perDay[day]&&perDay[day][dp])||0;
+            return `<circle cx="${gx.toFixed(1)}" cy="${chartY(v,max).toFixed(1)}" r="4.2" fill="${CHART[dp]}" stroke="#fff" stroke-width="1.7"/>`; }).join('');
+          const total=depts.reduce((s,dp)=>s+((perDay[day]&&perDay[day][dp])||0),0);
+          const rows=depts.map(dp=>`<div class="tp-row"><span><i style="background:${CHART[dp]}"></i>${DLABEL[dp]}</span><b>${(perDay[day]&&perDay[day][dp])||0}건</b></div>`).join('');
+          tip.innerHTML=`<div class="tp-d">${mdLabel(day)} (${wdOf(day)})</div>${rows}${depts.length>1?`<div class="tp-row tp-tot"><span>합계</span><b>${total}건</b></div>`:''}`;
+          const rect=svg.getBoundingClientRect(), scale=rect.width/W; tip.style.display='block';
+          const ox=svg.offsetLeft, oy=svg.offsetTop, tw=tip.offsetWidth;
+          let left=ox+gx*scale-tw/2; left=Math.min(Math.max(left,ox+2), ox+rect.width-tw-2);
+          tip.style.left=left+'px'; tip.style.top=(oy+6)+'px';
+        }
+        function at(clientX){ const rect=svg.getBoundingClientRect(), scale=rect.width/W;
+          const mx=(clientX-rect.left)/scale; let i=Math.round((mx-padL)/(iw/Math.max(1,n-1)));
+          show(Math.max(0,Math.min(n-1,i))); }
+        svg.onmousemove=e=>at(e.clientX);
+        svg.onmouseleave=()=>{ tip.style.display='none'; guide.style.display='none'; focus.innerHTML=''; };
+        svg.ontouchstart=svg.ontouchmove=e=>{ if(e.touches&&e.touches[0]){ at(e.touches[0].clientX); e.preventDefault(); } };
+      }
+      /* 데이터에서 사람이 읽는 인사이트 문장 자동 생성 */
+      function buildHighlights(days, perDay, A, P, people, allMode){
+        const out=[]; const len=days.length; if(!len) return out;
+        const totalOf=day=>(perDay[day]&&perDay[day].total)||0;
+        const avg=A.total/len;
+        // 1) 이전 동기간 대비 증감
+        if(P.total>0){ const diff=A.total-P.total, pct=Math.round(diff/P.total*100);
+          if(Math.abs(pct)>=5) out.push({icon:diff>=0?'📈':'📉', tone:diff>=0?'up':'down',
+            text:`이전 동기간보다 처리량이 <b>${diff>=0?'+':''}${pct}%</b> ${diff>=0?'늘었어요':'줄었어요'} (${P.total}→${A.total}건)`}); }
+        // 2) 오늘 vs 일평균 (오늘이 기간에 포함되고 3일 이상)
+        const today=todayStr();
+        if(len>=3 && days.includes(today) && avg>0){ const tt=totalOf(today); const r=tt/avg;
+          if(tt>0 && r>=1.3) out.push({icon:'🔥', tone:'up', text:`오늘 벌써 <b>${tt}건</b> — 평소(일평균 ${avg.toFixed(1)}건)보다 <b>${Math.round((r-1)*100)}%</b> 많아요!`});
+          else if(r<=0.5) out.push({icon:'🌤️', tone:'down', text:`오늘은 <b>${tt}건</b>으로 평소(일평균 ${avg.toFixed(1)}건)보다 한산해요`}); }
+        // 3) 가장 바쁜 날
+        let peak=null; days.forEach(d=>{ const t=totalOf(d); if(!peak||t>peak.t) peak={d,t}; });
+        if(peak && peak.t>0 && len>=3) out.push({icon:'🏆', tone:'flat', text:`가장 바쁜 날은 <b>${mdLabel(peak.d)}(${wdOf(peak.d)})</b> · ${peak.t}건`});
+        // 4) 최다 담당자 비중
+        const top=[...people].filter(p=>p.count>0).sort((a,b)=>b.count-a.count)[0];
+        if(top && A.total>0){ const share=Math.round(top.count/A.total*100);
+          if(share>=35) out.push({icon:'⭐', tone:'flat', text:`<b>${esc(top.name)}</b>님이 전체의 <b>${share}%</b>(${top.count}건)를 처리했어요`}); }
+        // 5) 최근 추세 (뒤 절반 vs 앞 절반 일평균)
+        if(len>=6){ const h=Math.floor(len/2);
+          const first=days.slice(0,h).reduce((s,d)=>s+totalOf(d),0)/h;
+          const last=days.slice(len-h).reduce((s,d)=>s+totalOf(d),0)/h;
+          if(first>0){ const pct=Math.round((last-first)/first*100);
+            if(pct>=20) out.push({icon:'🚀', tone:'up', text:`기간 후반 들어 처리량이 <b>+${pct}%</b> 상승 추세예요`});
+            else if(pct<=-20) out.push({icon:'🔻', tone:'down', text:`기간 후반 처리량이 <b>${pct}%</b> 둔화됐어요`}); } }
+        // 6) 무기록일
+        const zero=days.filter(d=>totalOf(d)===0).length;
+        if(len>=5 && zero>0 && zero<len) out.push({icon:'🗓️', tone:'flat', text:`기간 ${len}일 중 <b>${zero}일</b>은 기록이 없어요`});
+        return out.slice(0,4);
       }
 
       /* ---- 저장 ---- */
