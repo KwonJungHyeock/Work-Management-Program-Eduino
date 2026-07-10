@@ -72,6 +72,7 @@ const DEFAULT_MD_VENDORS = [
 /* 프로그램 명칭 */
 const APP_NAME = '에듀이노 통합 업무관리';
 const APP_NAME_FULL = '에듀이노 통합 업무관리 프로그램';
+const APP_VERSION = 'v1.0';
 
 /* 상단 사내 바로가기 링크 (여기만 수정하면 버튼이 추가/변경됩니다) */
 const QUICK_LINKS = [

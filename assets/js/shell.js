@@ -212,6 +212,8 @@ function bootShell(){
   })();
 
   { const bs=$('btnSearch'); if(bs) bs.onclick=()=>window.__openPalette&&window.__openPalette(); }
+  // 최초 1회 온보딩 팁
+  if(!localStorage.getItem('eduino.tip.k')){ setTimeout(()=>{ try{ toast('팁: Ctrl+K 로 메뉴·상품을 어디서든 검색하세요'); }catch(e){} localStorage.setItem('eduino.tip.k','1'); }, 2600); }
   // 브라우저 알림 토글
   { const bb=$('btnBell'); if(bb){
       const notifyOn=()=>localStorage.getItem('eduino.notify')==='1' && ('Notification' in window) && Notification.permission==='granted';
@@ -271,7 +273,7 @@ function bootShell(){
        <div class="seg ok">${icon('check')}<span>로그인됨</span></div>
        <div class="seg">${icon('users')}<span>접속</span><b>${presenceCount}</b><span>${presenceCount>1?'명':'(이 기기)'}</span></div>
        <div class="sp"></div>
-       <div class="seg">${esc(APP_NAME)} · 초안(Draft)</div>`;
+       <div class="seg">${esc(APP_NAME)} · ${esc(typeof APP_VERSION!=='undefined'?APP_VERSION:'')}</div>`;
   }
 
   // ---- 설정 백업/복원 오버레이 ----
@@ -353,27 +355,40 @@ function bootShell(){
       };
     })();
 
-    // 연동 상태 (공용 저장소 · CS 상담 시트 · 발주 시트)
+    // 연동 상태 체크리스트 (공용저장소·구글시트·이카운트·자동백업)
     function renderInteg(){
+      const csUrl=store(STORE.csNoteCfg).get({}).sheetUrl||'', mdUrl=store(STORE.mdOrderCfg).get({}).sheetUrl||'';
       const rows=[
-        { name:'공용 저장소', desc:'팀 설정 공유·접속자 현황', url:(window.SyncStore?SyncStore.getCfg().url:'') },
-        { name:'CS 상담 시트', desc:'상담 메모 기록',        url:(store(STORE.csNoteCfg).get({}).sheetUrl||'') },
-        { name:'발주 시트',    desc:'입점사 발주 기록',       url:(store(STORE.mdOrderCfg).get({}).sheetUrl||'') },
+        { name:'공용 저장소(KV)', desc:'팀 설정·업무 기록 서버 저장',
+          check:async()=>{ try{ const r=await fetch('/api/store?type=presence'); return {ok:r.ok, detail:r.ok?'정상':'오류'}; }catch{ return {ok:false, detail:'실패'}; } } },
+        { name:'CS 상담 시트', desc:'상담 메모 구글시트 백업', testUrl:csUrl,
+          check:async()=>({ ok:!!csUrl, detail:csUrl?'설정됨':'미설정(내부 시트만)' }) },
+        { name:'발주 시트', desc:'입점사 발주 구글시트 백업', testUrl:mdUrl,
+          check:async()=>({ ok:!!mdUrl, detail:mdUrl?'설정됨':'미설정(내부 시트만)' }) },
+        { name:'이카운트 카탈로그', desc:'상품 자동 조회(매일 최신화)',
+          check:async()=>{ try{ const d=await (await fetch('/api/catalog?type=meta')).json(); return {ok:!!(d&&d.count), detail:d&&d.count?`${Number(d.count).toLocaleString()}개 품목`:'없음'}; }catch{ return {ok:false, detail:'실패'}; } } },
+        { name:'자동 월간 백업', desc:'매월 1일 서버 스냅샷',
+          check:async()=>{ try{ const d=await (await fetch('/api/backup-snapshot?type=meta')).json(); return {ok:!!(d&&d.lastAt), detail:d&&d.lastMonth?`${d.lastMonth} 보관`:'첫 스냅샷 대기'}; }catch{ return {ok:false, detail:'대기'}; } } },
       ];
       const box=ov.querySelector('#integStatus');
-      box.innerHTML=`<div style="font-size:14px;font-weight:800;margin-bottom:9px">연동 상태</div>
+      box.innerHTML=`<div style="font-size:14px;font-weight:800;margin-bottom:9px">연동 상태 체크리스트</div>
         <div class="integ-list">${rows.map((r,i)=>`
-          <div class="integ-row">
-            <span class="integ-dot ${r.url?'on':'off'}"></span>
+          <div class="integ-row" data-row="${i}">
+            <span class="integ-dot off"></span>
             <div class="integ-nm"><b>${esc(r.name)}</b><span>${esc(r.desc)}</span></div>
-            <span class="badge ${r.url?'live':'soon'}">${r.url?'연결됨':'미연결'}</span>
-            <button class="btn ghost sm" data-test="${i}" ${r.url?'':'disabled'}>테스트</button>
+            <span class="badge neutral" data-badge="${i}">확인 중…</span>
+            ${r.testUrl?`<button class="btn ghost sm" data-test="${i}">테스트</button>`:''}
           </div>`).join('')}</div>
         <div class="muted" id="integStat" style="font-size:12px;margin-top:8px"></div>`;
+      rows.forEach((r,i)=>{ r.check().then(res=>{ const row=box.querySelector(`[data-row="${i}"]`); if(!row) return;
+        row.querySelector('.integ-dot').className='integ-dot '+(res.ok?'on':'off');
+        const bd=box.querySelector(`[data-badge="${i}"]`); if(bd){ bd.className='badge '+(res.ok?'live':'soon');
+          bd.textContent=(res.ok?'정상':'확인 필요')+(res.detail?` · ${res.detail}`:''); }
+      }).catch(()=>{}); });
       box.querySelectorAll('[data-test]').forEach(b=>b.onclick=async()=>{
-        const r=rows[+b.dataset.test], st=box.querySelector('#integStat');
+        const r=rows[+b.dataset.test], st=box.querySelector('#integStat'); if(!r.testUrl) return;
         st.textContent=`${r.name} 테스트 중…`;
-        try{ const res=await fetch(r.url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
+        try{ const res=await fetch(r.testUrl,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
           st.innerHTML = res.ok ? `<span style="color:var(--ok)">${esc(r.name)} 연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`
                                 : `<span style="color:var(--danger)">${esc(r.name)} 응답 오류 HTTP ${res.status}</span>`;
         }catch(err){ st.innerHTML=`<span style="color:var(--danger)">${esc(r.name)} 연결 실패: ${esc(err.message)}</span>`; }
