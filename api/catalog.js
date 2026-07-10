@@ -1,5 +1,5 @@
 /* ===========================================================================
-   Vercel 서버리스 · 상품 카탈로그 (셀메이트 연동용)
+   Vercel 서버리스 · 상품 카탈로그 (이카운트 등 외부 상품 데이터 연동용)
    - 대용량 상품 목록을 KV 해시(eduino:catalog)에 저장, 코드로 O(1) 조회
    - 브라우저마다 전체를 동기화하지 않고, 발주 입력 시 코드로 서버에서 조회
    API
@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       // 쓰기(대량 업서트)는 크론 시크릿 또는 관리자만
-      const secret = process.env.CRON_SECRET || process.env.SELLMATE_SYNC_SECRET || '';
+      const secret = process.env.CRON_SECRET || '';
       const ok = secret ? (body.secret === secret) : true;   // 시크릿 미설정 시 내부 신뢰(사내툴)
       if (!ok) return res.status(401).json({ ok: false, error: 'unauthorized' });
       if (body.op === 'bulkUpsert') { const n = await bulkUpsert(body.products || []); return res.status(200).json({ ok: true, upserted: n }); }

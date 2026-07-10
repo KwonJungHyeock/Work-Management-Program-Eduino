@@ -211,7 +211,7 @@
             box.className='lookup'; box.innerHTML=`${icon('cloud')} 카탈로그 조회 중…`;
             fetchCatalog(code).then(prod=>{ if(codeEl.value.trim()!==code) return;
               if(prod){ catCache[code]=prod; refreshLookup(); }
-              else { box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. (셀메이트·상품 마스터에 없음)`; } });
+              else { box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. (이카운트·상품 마스터에 없음)`; } });
             return null;
           }
           const sh=shipFor(p); const ven=vendorObj(vendorName(p));
