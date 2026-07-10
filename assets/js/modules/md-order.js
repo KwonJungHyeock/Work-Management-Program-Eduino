@@ -130,8 +130,7 @@
         <div class="ds">상품코드만 입력하면 입점사·정산구분·품명(구글시트)과 배송비(이카운트)가 자동으로 채워집니다.</div>
         <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
-          ${isAdmin?`<div class="t" data-t="master">상품 마스터</div>
-          <div class="t" data-t="vendor">입점사 정보</div>
+          ${isAdmin?`<div class="t" data-t="vendor">입점사 정보</div>
           <div class="t" data-t="settings">연동 설정</div>`:''}
         </div>
       </div>
@@ -140,10 +139,21 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ if(!isAdmin && tab!=='entry') tab='entry';
-        return tab==='entry'?drawEntry(): tab==='master'?drawMaster(): tab==='vendor'?drawVendors(): drawSettings(); };
+        return tab==='entry'?drawEntry(): tab==='vendor'?drawVendors(): drawSettings(); };
 
       /* ---------------- 발주 입력 ---------------- */
-      let form={ code:'', qty:1, orderer:'', route:'', gubun:'직배', shipInfo:'', date:todayStr().slice(5).replace('-','/') };
+      const meName=((Auth.user&&Auth.user())||{}).name||'';
+      let form={ code:'', qty:1, orderer:'', route:'', gubun:'직배', shipInfo:'', handler:meName, date:todayStr().slice(5).replace('-','/') };
+      // 담당자 셀렉트 채우기 — MD 구성원(+관리자 본인). 팀원은 본인으로 기본 고정
+      async function fetchRoster(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch{ return []; } }
+      function fillHandler(sel){ if(!sel) return;
+        fetchRoster().then(list=>{ if(!sel.isConnected) return;
+          const names=[...new Set([meName, ...list.filter(p=>p.dept==='md').map(p=>p.name)].filter(Boolean))];
+          sel.innerHTML=`<option value="">담당자 선택</option>`+names.map(n=>`<option ${n===form.handler?'selected':''}>${esc(n)}</option>`).join('');
+          if(!form.handler && meName){ form.handler=meName; sel.value=meName; }
+          if(!isAdmin && meName){ form.handler=meName; sel.value=meName; sel.disabled=true; }  // 팀원은 본인 고정
+        });
+      }
       function drawEntry(){
         body.innerHTML=`
           <div class="card" style="margin-bottom:18px">
@@ -152,11 +162,11 @@
             <div class="card-bd">
               <div style="display:grid;grid-template-columns:minmax(200px,1fr) minmax(260px,1.3fr);gap:16px;align-items:stretch">
                 <label class="fld">자체상품코드
-                  <input class="code-in" id="fCode" list="codeList" value="${esc(form.code)}" placeholder="예: ED-1004" autocomplete="off">
-                  <datalist id="codeList">${products.map(p=>`<option value="${esc(p.selfCode||p.code)}">${esc(p.vendor)} · ${esc(p.name).slice(0,30)}`).join('')}</datalist></label>
+                  <input class="code-in" id="fCode" value="${esc(form.code)}" placeholder="예: ED-1004" autocomplete="off"></label>
                 <div><div class="mini" style="margin-bottom:6px">자동 조회</div><div class="lookup" id="lookup">상품코드를 입력하세요.</div></div>
               </div>
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:16px">
+                <label class="fld">담당자<select id="fHandler"><option value="">담당자 선택</option></select></label>
                 <label class="fld">수량<input type="number" id="fQty" value="${form.qty}" min="1"></label>
                 <label class="fld">주문자명<input type="text" id="fOrderer" value="${esc(form.orderer)}"></label>
                 <label class="fld">주문경로<input type="text" id="fRoute" value="${esc(form.route)}" placeholder="예: 스팸"></label>
@@ -166,7 +176,7 @@
               <label class="fld" style="margin-top:14px">배송정보/비고<textarea id="fShipInfo" rows="2" placeholder="수령인 · 연락처 · 주소 · 요청사항">${esc(form.shipInfo)}</textarea></label>
               <div style="display:flex;gap:10px;margin-top:14px">
                 <button class="btn pri lg" id="addOrder">${icon('plus')}발주 목록에 추가</button>
-                <span class="muted" style="align-self:center;font-size:12.5px">미등록 코드는 <b>상품 마스터</b> 탭에서 추가하세요.</span>
+                <span class="muted" style="align-self:center;font-size:12.5px">미등록 코드는 <b>이카운트</b>에 등록하면 매일 00시 자동 반영됩니다.</span>
               </div>
             </div>
           </div>
@@ -211,7 +221,7 @@
             box.className='lookup'; box.innerHTML=`${icon('cloud')} 카탈로그 조회 중…`;
             fetchCatalog(code).then(prod=>{ if(codeEl.value.trim()!==code) return;
               if(prod){ catCache[code]=prod; refreshLookup(); }
-              else { box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. (이카운트·상품 마스터에 없음)`; } });
+              else { box.className='lookup bad'; box.innerHTML=`${icon('alert')} 미등록 상품코드입니다. (이카운트에 없음)`; } });
             return null;
           }
           const sh=shipFor(p); const ven=vendorObj(vendorName(p));
@@ -227,13 +237,15 @@
         codeEl.oninput=()=>{ form.code=codeEl.value; refreshLookup(); };
         ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value; });
         $f('#fShipInfo').oninput=e=>form.shipInfo=e.target.value;
+        $f('#fHandler').onchange=e=>form.handler=e.target.value;
+        fillHandler($f('#fHandler'));
         async function addOrder(){
           const code=codeEl.value.trim();
           let p=resolveLocal(code);
           if(!p){ p=await fetchCatalog(code); if(p) catCache[code]=p; }
           if(!p){ toast('미등록 상품코드입니다'); refreshLookup(); codeEl.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
-            route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(),
+            route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:vendorName(p), settle:p.settle, selfCode:p.selfCode||p.code, code:p.code, name:p.name,
             qty:Number($f('#fQty').value)||1, ship:shipFor(p), shipInfo:$f('#fShipInfo').value.trim(), synced:false };
           orders.push(rec); saveOrders();
@@ -292,14 +304,15 @@
       function renderOrders(){
         const t=body.querySelector('#ordTable'), cnt=body.querySelector('#ordCnt'); if(!t) return;
         if(cnt) cnt.textContent=`· ${orders.length}건`;
-        t.innerHTML=`<thead><tr><th>일자</th><th>구분</th><th>주문자</th><th>입점사</th><th>정산</th><th>자체상품코드</th><th>품명</th>
+        t.innerHTML=`<thead><tr><th>일자</th><th>구분</th><th>담당자</th><th>주문자</th><th>입점사</th><th>정산</th><th>자체상품코드</th><th>품명</th>
           <th class="num">수량</th><th class="num">배송비</th><th style="width:78px">시트</th><th style="width:92px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
-        if(!orders.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
+        if(!orders.length){ tb.innerHTML=`<tr><td colspan="12" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
         orders.forEach((o,i)=>{ const tr=el('tr');
           if(i===editIdx){
             tr.innerHTML=`<td><input type="text" class="oe" data-k="date" value="${esc(o.date)}" placeholder="7/7" style="width:64px"></td>
               <td><input class="oe" data-k="gubun" value="${esc(o.gubun||'')}" style="width:64px"></td>
+              <td><input class="oe" data-k="handler" value="${esc(o.handler||'')}" style="width:80px"></td>
               <td><input class="oe" data-k="orderer" value="${esc(o.orderer||'')}" style="width:88px"></td>
               <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td>
               <td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
@@ -312,7 +325,7 @@
               tr.querySelectorAll('.oe').forEach(inp=>{ const k=inp.dataset.k; o[k]= k==='qty'?(Number(inp.value)||1):inp.value.trim(); });
               o.synced=false; editIdx=-1; saveOrders(); await commit([o]); renderAll(); toast('수정했습니다'); };
           } else {
-            tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${esc(o.orderer||'-')}</td>
+            tr.innerHTML=`<td>${esc(o.date)}</td><td>${esc(o.gubun)}</td><td>${o.handler?esc(o.handler):'<span class="muted">-</span>'}</td><td>${esc(o.orderer||'-')}</td>
               <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td><td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
               <td style="max-width:360px">${esc(o.name)}${o.shipInfo?`<div class="muted" style="font-size:11.5px;margin-top:2px">${esc(o.shipInfo)}</div>`:''}</td><td class="num">${o.qty}</td><td class="num">${fmtNum(o.ship)}</td>
               <td>${o.synced?`<span class="badge live">${SHEET_MSG.badgeDone}</span>`:`<span class="badge soon">${SHEET_MSG.badgePending}</span>`}</td>
@@ -348,93 +361,6 @@
         toast((r.ok||r.internalOnly)?'저장했습니다':'전송 실패 — 다시 시도하세요');
       }
 
-      /* ---------------- 상품 마스터 ---------------- */
-      function drawMaster(){
-        body.innerHTML=`
-          <input type="file" id="csvFile" accept=".csv,text/csv" class="hidden">
-          <div class="card">
-            <div class="card-hd">${icon('grid')}<b>상품 마스터</b>
-              <span class="badge soon" id="mDirty" style="display:${dirtyMaster?'':'none'}">● 저장 안 됨</span>
-              <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn sm" id="addProd">${icon('plus')}행 추가</button>
-                <button class="btn sm" id="impFile">${icon('upload')}CSV 불러오기</button>
-                <button class="btn sm" id="impPaste">${icon('clipboard')}붙여넣기</button>
-                <button class="btn sm" id="expProd">${icon('download')}CSV 내보내기</button>
-                <button class="btn sm" id="resetProd">${icon('refresh')}기본값</button>
-                <button class="btn sm pri" id="saveProd">${icon('save')}저장</button></span></div>
-            <div class="card-bd" style="padding:0"><div class="out-tbl" style="max-height:520px"><table class="tbl" id="prodTable"></table></div></div>
-          </div>
-          <div class="note" style="margin-top:12px"><b>자체상품코드</b>가 기준입니다(카페24 상품코드는 참고용·선택). 엑셀/구글시트에서
-            <b>자체상품코드·입점사명·정산구분·품명</b> 열을 복사해 <b>붙여넣기</b>하거나 CSV로 불러오세요.
-            헤더 이름(자체상품코드/자체코드/자사코드 등)을 자동 인식합니다. 배송비 예외는 비우면 입점사 기본 배송비를 사용합니다.</div>
-          <div id="pasteBox" class="hidden" style="margin-top:14px"></div>`;
-        renderProd();
-        body.querySelector('#saveProd').onclick=()=>{ saveProducts(); saveVendors(); dirtyMaster=false;
-          body.querySelector('#mDirty').style.display='none'; toast('저장되었습니다'); };
-        body.querySelector('#addProd').onclick=()=>{ products.unshift({selfCode:'',code:'',vendor:'',settle:SETTLE_TYPES[0],name:'',ship:''}); markMasterDirty(); renderProd(); };
-        body.querySelector('#resetProd').onclick=()=>{ if(confirm('상품 마스터를 기본값으로 되돌릴까요?')){ products=DEFAULT_MD_PRODUCTS.map(p=>({...p})); saveProducts(); dirtyMaster=false; body.querySelector('#mDirty').style.display='none'; renderProd(); } };
-        body.querySelector('#expProd').onclick=()=>{ const cols=['자체상품코드','카페24코드','입점사명','정산구분','품명','배송비'];
-          const rows=products.map(p=>[p.selfCode||'',p.code||'',p.vendor,p.settle,p.name,p.ship||'']);
-          downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`상품마스터_${todayStr()}.csv`); toast('CSV 저장'); };
-        const file=body.querySelector('#csvFile');
-        body.querySelector('#impFile').onclick=()=>file.click();
-        file.onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; const rd=new FileReader(); rd.onload=()=>importRows(parseTable(rd.result)); rd.readAsText(f,'utf-8'); };
-        body.querySelector('#impPaste').onclick=()=>{
-          const box=body.querySelector('#pasteBox'); box.classList.remove('hidden');
-          box.innerHTML=`<div class="card"><div class="card-hd"><b>붙여넣기로 불러오기</b></div><div class="card-bd">
-            <div class="muted" style="font-size:12.5px;margin-bottom:8px">구글시트/엑셀에서 범위를 복사해 아래에 붙여넣으세요. 첫 줄이 헤더면 자동 인식합니다.</div>
-            <textarea id="pasteArea" rows="6" placeholder="자체상품코드   입점사명   정산구분   품명"></textarea>
-            <div style="display:flex;gap:8px;margin-top:10px"><button class="btn pri" id="pasteGo">불러오기</button>
-              <button class="btn" id="pasteCancel">취소</button></div></div></div>`;
-          box.querySelector('#pasteCancel').onclick=()=>{ box.classList.add('hidden'); box.innerHTML=''; };
-          box.querySelector('#pasteGo').onclick=()=>{ importRows(parseTable(box.querySelector('#pasteArea').value)); box.classList.add('hidden'); box.innerHTML=''; };
-        };
-      }
-      function importRows(rows){
-        if(!rows.length){ toast('불러올 데이터가 없습니다'); return; }
-        const norm=s=>String(s||'').replace(/\s/g,'').toLowerCase();
-        const idxOf=(names)=>{ const h=rows[0].map(norm); for(const n of names){ const i=h.indexOf(norm(n)); if(i>=0) return i; } return -1; };
-        const ci={ selfCode:idxOf(['자체상품코드','자체코드','자사상품코드','자사코드','자체품목코드']),
-          code:idxOf(['상품코드','카페24코드','코드','품목코드']), vendor:idxOf(['입점사명','입점사','거래처']),
-          settle:idxOf(['정산구분','정산']), name:idxOf(['품명','상품명','품목명']), ship:idxOf(['배송비','배송비예외']) };
-        const hasHeader = ci.selfCode>=0 || ci.code>=0 || ci.vendor>=0 || ci.name>=0;
-        const dataRows = hasHeader ? rows.slice(1) : rows;
-        const g=(r,i,def)=> i>=0&&i<r.length ? String(r[i]).trim() : def;
-        // 자체상품코드 열이 있으면 그것을 기준, 없으면 상품코드 열을 자체코드로 사용
-        const keyIdx = ci.selfCode>=0 ? ci.selfCode : (ci.code>=0 ? ci.code : 0);
-        let added=0;
-        dataRows.forEach(r=>{ if(!r.join('').trim()) return;
-          const selfCode=g(r, keyIdx, '').trim(); if(!selfCode) return;
-          const rec={ selfCode, code:g(r,ci.code>=0&&ci.code!==keyIdx?ci.code:-1,''),
-            vendor:g(r,ci.vendor,'')||(isJasa(selfCode)?'자사':''),
-            settle:normSettle(g(r,ci.settle,'')) || SETTLE_TYPES[0], name:g(r,ci.name,''), ship:g(r,ci.ship,'') };
-          const ex=products.find(p=>(p.selfCode||'').trim()===selfCode); if(ex){ Object.assign(ex,rec); } else { products.push(rec); }
-          added++; });
-        syncVendorsFromProducts(); markMasterDirty(); renderProd();
-        toast(`${added}건 불러왔습니다 · [저장]을 눌러 반영하세요`);
-      }
-      function syncVendorsFromProducts(){ const names=new Set(vendors.map(v=>v.name));
-        products.forEach(p=>{ if(p.vendor && !names.has(p.vendor)){ vendors.push({name:p.vendor,ship:3000}); names.add(p.vendor); } }); }
-      function renderProd(){
-        const t=body.querySelector('#prodTable'); if(!t) return;
-        t.innerHTML=`<thead><tr><th style="width:120px">자체상품코드</th><th style="width:120px">카페24 상품코드<div class="mini" style="font-weight:500">참고·선택</div></th><th style="width:140px">입점사명</th><th style="width:118px">정산구분</th><th>품명</th><th style="width:100px">배송비 예외</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
-        const tb=t.querySelector('tbody');
-        if(!products.length){ tb.innerHTML=`<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">상품이 없습니다. “행 추가” 또는 불러오기.</td></tr>`; return; }
-        products.forEach((p,i)=>{ const tr=el('tr');
-          tr.innerHTML=`<td><input type="text" data-k="selfCode" value="${esc(p.selfCode||'')}" class="mono" style="font-weight:700"></td>
-            <td><input type="text" data-k="code" value="${esc(p.code||'')}" class="mono" style="color:var(--muted)"></td>
-            <td><input type="text" data-k="vendor" value="${esc(p.vendor)}" list="venList"></td>
-            <td><select data-k="settle">${[...new Set([...SETTLE_TYPES, p.settle].filter(Boolean))].map(s=>`<option ${s===p.settle?'selected':''}>${esc(s)}</option>`).join('')}</select></td>
-            <td><input type="text" data-k="name" value="${esc(p.name)}"></td>
-            <td><input type="number" data-k="ship" value="${esc(p.ship||'')}" placeholder="기본"></td>
-            <td><button class="btn ghost sm">${icon('x')}</button></td>`;
-          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ p[inp.dataset.k]=inp.value; if(inp.dataset.k==='vendor')syncVendorsFromProducts(); markMasterDirty(); });
-          tr.querySelector('button').onclick=()=>{ products.splice(i,1); markMasterDirty(); renderProd(); };
-          tb.appendChild(tr); });
-        let dl=body.querySelector('#venList'); if(!dl){ dl=el('datalist'); dl.id='venList'; body.appendChild(dl); }
-        dl.innerHTML=vendors.map(v=>`<option value="${esc(v.name)}">`).join('');
-      }
-
       /* ---------------- 입점사 정보 (배송비 + 배송정책·담당자) ---------------- */
       // "3,000원 - 20만원 이상 구매" → 배송비 3000 추출 · "무료배송"/"0원…" → 0
       function parseShipFromPolicy(s){ s=String(s||'').trim(); if(!s||s==='-') return null;
@@ -454,7 +380,7 @@
                 <button class="btn sm pri" id="saveVen">${icon('save')}저장</button></span></div>
             <div class="card-bd" style="padding:0"><div class="ven-tbl"><table class="tbl" id="venTable"></table></div></div>
           </div>
-          <div class="note" style="margin-top:12px">배송비는 <b>입점사별 고정 금액</b>(vat포함)이 기본이며 공급가·부가세는 ÷11로 자동 분리됩니다. 특정 상품만 다르면 <b>상품 마스터</b>의 “배송비 예외”에 입력하세요.
+          <div class="note" style="margin-top:12px">배송비는 <b>입점사별 고정 금액</b>(vat포함)이 기본이며 공급가·부가세는 ÷11로 자동 분리됩니다.
             <b>무료배송조건</b>은 발주 입력 시 자동 조회에 함께 표시됩니다. 회사 배송정보 리스트(<span class="mono" style="font-size:12px">data/입점사_배송정보.csv</span>)를 <b>CSV 불러오기</b>로 한 번에 등록하세요.
             헤더(입점사명/업체명·정산구분·배송비·무료배송조건/배송조건·담당자·연락처·발주메일·특이사항)를 자동 인식합니다. 수정 후 <b>저장</b>.</div>
           <div id="venPasteBox" class="hidden" style="margin-top:14px"></div>`;
@@ -563,7 +489,7 @@
           <div class="note warn" style="max-width:820px;margin-bottom:12px"><b>Apps Script 코드가 업데이트되었습니다.</b>
             시트에 값이 일부만 들어갔다면 → 위 <b>[Apps Script 코드 복사]</b>로 다시 복사해 붙여넣고 <b>재배포(배포 관리 → 새 버전)</b> 하세요.
             이제 시트의 <b>1행 헤더 이름</b>을 읽어 열을 맞추므로, 시트 열 순서가 달라도 정확히 들어갑니다.</div>
-          <div class="note" style="max-width:820px">이카운트는 현재 <b>복사/CSV</b>로 내보내 붙여넣습니다. (ECOUNT API 연동은 추후 어댑터로 추가 가능)
+          <div class="note" style="max-width:820px"><b>이카운트 품목 연동됨</b> · 상품코드를 입력하면 이카운트 품목(매일 00시 자동 최신화)에서 품명을 자동 조회합니다. 이카운트용 배송비는 <b>복사/CSV</b>로 내보내 붙여넣습니다.
             발주표 시트 1행 헤더에 <span class="mono" style="font-size:12px">입점사명 · 정산구분 · 상품코드(또는 자체상품코드) · 품명 · 수량 · 배송정보/비고</span> 같은 이름이 있으면 그 칸으로 채워집니다.</div>`;
         body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-orders.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
         body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ ...getCfg(), sheetUrl:body.querySelector('#ordUrl').value.trim(),

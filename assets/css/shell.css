@@ -151,7 +151,9 @@
 .mtabs .t.on::after{content:"";position:absolute;left:13px;right:13px;bottom:-1px;height:3px;background:var(--red);border-radius:3px 3px 0 0}
 .mtabs .tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
   border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:800}
-.mbody{padding:22px 24px;max-width:1240px}
+/* 모든 기능 페이지는 상단 헤더(.mhead)와 동일하게 전체 폭을 사용해 정렬을 통일.
+   좌우 24px 패딩으로 헤더와 본문의 시작·끝 라인을 맞춤(오른쪽 여백 편차 제거). */
+.mbody{padding:22px 24px;max-width:none}
 .mbody.wide{max-width:none}
 /* 연동 설정 안내(공통) — 번호 스텝 */
 .setup-guide{counter-reset:step;display:grid;gap:13px;margin:4px 0;padding:0}
