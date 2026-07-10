@@ -112,7 +112,7 @@
         .dist-v{width:66px;flex:none;text-align:right;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink)}
         .dist-v small{font-weight:600;color:var(--muted);margin-left:4px}
         /* 재미 포인트 */
-        .fun-card{border:1px solid var(--line);border-radius:var(--r-lg);background:linear-gradient(180deg,#fff, #fbfcfe);box-shadow:var(--sh-sm);overflow:hidden}
+        .fun-card{border:1px solid var(--line);border-radius:var(--r-lg);background:linear-gradient(180deg,var(--panel), var(--panel-2));box-shadow:var(--sh-sm);overflow:hidden}
         .fun-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
         .fun-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:14px 16px}
         .fun{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
@@ -120,6 +120,18 @@
         .fun .fl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.03em;text-transform:uppercase}
         .fun .fv{font-size:15px;font-weight:800;color:var(--ink);margin-top:2px;line-height:1.2}
         .iv-secttl{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:20px 2px 10px}
+        /* 심화 분석(기간 비교·입점사 성과) 표 */
+        .cmp-tbl{width:100%;border-collapse:collapse}
+        .cmp-tbl th,.cmp-tbl td{padding:9px 12px;font-size:13.5px;border-bottom:1px solid var(--line);text-align:left}
+        .cmp-tbl th{font-size:11px;font-weight:800;letter-spacing:.03em;color:var(--muted);text-transform:uppercase;background:var(--panel-2)}
+        .cmp-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+        .cmp-tbl td.emp-name{font-weight:700}
+        .cmp-tbl tbody tr:last-child td{border-bottom:0}
+        .cmp-tbl tr.tot td{background:var(--panel-2);font-weight:800}
+        .cmp-tbl .up{color:var(--ok)} .cmp-tbl .down{color:var(--danger)} .cmp-tbl .flat{color:var(--muted)}
+        /* 이상 탐지 하이라이트 강조 */
+        .hl.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:var(--warn-bg)}
+        .hl.warn .hi{background:color-mix(in srgb,var(--warn) 22%,transparent)}
       </style>
       <div class="mhead pad">
         <div class="tt">업무 현황 · 인사이트</div>
@@ -223,8 +235,9 @@
               <div class="kd flat">${DLABEL[dept]||dept}</div></div>`;
         }
 
-        // --- 자동 인사이트 하이라이트 ---
-        const hs=buildHighlights(days, A.perDay, A, P, Object.values(A.perPerson), allMode);
+        // --- 자동 인사이트 하이라이트 (이상 탐지 우선 노출) ---
+        const anomalies=detectAnomalies(A, P, dept);
+        const hs=[...anomalies, ...buildHighlights(days, A.perDay, A, P, Object.values(A.perPerson), allMode)].slice(0,5);
         $('#hl').innerHTML = hs.length
           ? hs.map(h=>`<div class="hl ${h.tone}"><div class="hi">${h.icon}</div><div class="ht">${h.text}</div></div>`).join('')
           : `<div class="hl flat"><div class="hi">💡</div><div class="ht">데이터가 더 쌓이면 자동 인사이트가 여기에 표시됩니다.</div></div>`;
@@ -261,8 +274,8 @@
         html+='</tbody></table>';
         $('#emp').innerHTML = any? html : `<div class="iv-empty">해당 기간·부서의 업무 기록이 없습니다.</div>`;
 
-        // --- 상세: 분포 분석 + 재미 포인트 (탭별) ---
-        renderDetail(A, days, dept);
+        // --- 상세: 분포 분석 + 기간비교 + 교차 + 재미 포인트 (탭별) ---
+        renderDetail(A, P, days, dept);
       }
 
       /* 필드별 분포 [{key,count}] · 상위 N + 기타 */
@@ -305,8 +318,71 @@
           if(cs+md>0){ const g=(a,b)=>b?g(b,a%b):a; const dv=g(cs,md)||1; facts.push({e:'⚖️',l:'CS : MD 비율',v:`${cs/dv} : ${md/dv}`}); } }
         return facts.slice(0,6);
       }
-      function renderDetail(A, days, deptSel){
-        const box=$('#detail'); if(!box) return; const rows=A.rows||[];
+      /* 필드값별 현재/이전 기간 건수 비교 [{key,count,prev,delta}] */
+      function deltaByField(rows, prevRows, field, topN){
+        const cur={}, prev={};
+        rows.forEach(r=>{ const k=(r[field]||'').trim()||'(미지정)'; cur[k]=(cur[k]||0)+1; });
+        prevRows.forEach(r=>{ const k=(r[field]||'').trim()||'(미지정)'; prev[k]=(prev[k]||0)+1; });
+        let arr=Object.keys(cur).map(k=>({key:k,count:cur[k],prev:prev[k]||0,delta:cur[k]-(prev[k]||0)}))
+          .sort((a,b)=>b.count-a.count||a.key.localeCompare(b.key));
+        if(topN&&arr.length>topN) arr=arr.slice(0,topN);
+        return arr;
+      }
+      /* 이상 탐지 — 이번 기간 특정 문의유형/구매처가 이전 대비 급증(원인 확인 시그널) */
+      function detectAnomalies(A, P, deptSel){
+        const out=[];
+        const specs = deptSel==='cs' ? [{f:'category',lbl:'문의유형',dept:'cs'}]
+          : deptSel==='md' ? [{f:'vendor',lbl:'구매처',dept:'md'}]
+          : [{f:'category',lbl:'CS 문의유형',dept:'cs'},{f:'vendor',lbl:'MD 구매처',dept:'md'}];
+        specs.forEach(sp=>{
+          const cur=(A.rows||[]).filter(r=>r.dept===sp.dept), prev=(P.rows||[]).filter(r=>r.dept===sp.dept);
+          if(cur.length<4) return;                                   // 표본 너무 적으면 스킵(오탐 방지)
+          const d=deltaByField(cur, prev, sp.f).filter(x=>x.key!=='(미지정)');
+          const hot=d.find(x=>x.count>=3 && (x.prev===0 ? x.count>=3 : x.count>=x.prev*2));
+          if(hot){ const share=Math.round(hot.count/cur.length*100);
+            const how = hot.prev===0 ? `이전 기간엔 없다가 <b>${hot.count}건</b>으로 발생` : `이전 대비 <b>${hot.prev}→${hot.count}건</b>`;
+            out.push({icon:'🔺', tone:'warn', text:`${sp.lbl} <b>‘${esc(hot.key)}’</b> 급증 — ${how} (전체 ${share}%). 재고·배송·이벤트 등 원인 확인이 필요해요`}); }
+        });
+        return out;
+      }
+      /* 기간 비교 리포트 — 이번 기간 vs 이전 동기간 */
+      function compareCard(A, P, len, deptSel){
+        const spec = deptSel==='all' ? [{k:'cs',lbl:'CS'},{k:'md',lbl:'MD'},{k:'total',lbl:'합계',tot:true}] : [{k:deptSel,lbl:DLABEL[deptSel],tot:true}];
+        const cnt=(agg,k)=> k==='total'?agg.total : (agg.rows||[]).filter(r=>r.dept===k).length;
+        const body=spec.map(s=>{ const c=cnt(A,s.k), p=cnt(P,s.k), d=c-p, pct=p?Math.round(d/p*100):(c?100:0);
+          const cls=d>0?'up':d<0?'down':'flat', arw=d>0?'▲':d<0?'▼':'–';
+          return `<tr class="${s.tot&&deptSel==='all'?'tot':''}"><td>${s.lbl}</td><td class="num">${p}</td><td class="num">${c}</td>
+            <td class="num ${cls}">${arw} ${d>=0?'+':''}${d}</td><td class="num ${cls}">${pct>=0?'+':''}${pct}%</td></tr>`; }).join('');
+        return `<div class="card"><div class="card-hd">${icon('chart')}<b>기간 비교</b>
+            <span class="muted" style="margin-left:auto;font-size:12px">이전 동기간(${len}일) 대비</span></div>
+          <div class="card-bd" style="padding:0"><table class="cmp-tbl">
+            <thead><tr><th>구분</th><th class="num">이전</th><th class="num">이번</th><th class="num">증감</th><th class="num">%</th></tr></thead>
+            <tbody>${body}</tbody></table></div></div>`;
+      }
+      /* 입점사(구매처)별 성과 — 발주 건수·비중·이전 대비 증감 */
+      function vendorPerfCard(A, P){
+        const cur=(A.rows||[]).filter(r=>r.dept==='md'), prev=(P.rows||[]).filter(r=>r.dept==='md');
+        const d=deltaByField(cur, prev, 'vendor', 8).filter(x=>x.key!=='(미지정)'); const total=cur.length;
+        const rows=d.map((x,i)=>{ const share=Math.round(x.count/(total||1)*100);
+          const cls=x.delta>0?'up':x.delta<0?'down':'flat', arw=x.delta>0?'▲':x.delta<0?'▼':'–';
+          return `<tr><td class="num" style="color:var(--faint)">${i+1}</td><td class="emp-name">${esc(x.key)}</td>
+            <td class="num">${x.count}</td><td class="num" style="color:var(--muted);font-weight:600">${share}%</td>
+            <td class="num ${cls}">${arw} ${x.delta>=0?'+':''}${x.delta}</td></tr>`; }).join('');
+        return `<div class="card"><div class="card-hd">${icon('truck')}<b>입점사(구매처) 성과</b>
+            <span class="muted" style="margin-left:auto;font-size:12px">발주 건수·비중·이전 대비</span></div>
+          <div class="card-bd" style="padding:0">${ d.length
+            ? `<table class="cmp-tbl"><thead><tr><th style="width:34px">#</th><th>입점사</th><th class="num">발주</th><th class="num">비중</th><th class="num">증감</th></tr></thead><tbody>${rows}</tbody></table>`
+            : '<div class="iv-empty" style="padding:20px">입점사 발주 기록이 없습니다.</div>' }</div></div>`;
+      }
+      /* CS ↔ MD 교차 — 같은 기간 CS 핫이슈와 MD 핫이슈를 나란히 */
+      function crossCard(A){
+        const cs=(A.rows||[]).filter(r=>r.dept==='cs'), md=(A.rows||[]).filter(r=>r.dept==='md');
+        return `<div class="iv-secttl">CS ↔ MD 교차</div><div class="dist-grid">
+          ${distCard('CS 문의유형 TOP', distByField(cs,'category',6).filter(x=>x.key!=='(미지정)'),'chat')}
+          ${distCard('MD 구매처 TOP', distByField(md,'vendor',6).filter(x=>x.key!=='(미지정)'),'truck')}</div>`;
+      }
+      function renderDetail(A, P, days, deptSel){
+        const box=$('#detail'); if(!box) return; const rows=A.rows||[]; const len=days.length;
         let dist='';
         if(deptSel==='cs'){
           dist=`<div class="iv-secttl">CS 분포 분석</div><div class="dist-grid">
@@ -314,15 +390,20 @@
             ${distCard('고객유형별', distByField(rows,'customerType',8),'users')}</div>`;
         } else if(deptSel==='md'){
           dist=`<div class="iv-secttl">MD 분포 분석</div><div class="dist-grid">
-            ${distCard('구매처 TOP', distByField(rows,'vendor',8),'truck')}
-            ${distCard('주문경로별', distByField(rows,'route',8),'chart')}
+            ${vendorPerfCard(A, P)}
+            ${distCard('주문경로별', distByField(rows,'route',8),'chart')}</div>
+            <div class="dist-grid" style="margin-top:12px">
             ${distCard('정산구분별', distByField(rows,'settle',6),'grid')}</div>`;
+        } else {
+          dist=crossCard(A);
         }
+        // 심화: 기간 비교(전 탭 공통)
+        const compare=`<div class="iv-secttl">기간 비교</div>${compareCard(A, P, len, deptSel)}`;
         const facts=funFacts(A, days, deptSel);
         const fun = facts.length? `<div class="iv-secttl">재미 포인트</div>
           <div class="fun-card"><div class="fun-hd">🎉 데이터 재미 포인트 <span class="muted" style="margin-left:auto;font-weight:600;font-size:12px">기록 기반 자동 분석</span></div>
             <div class="fun-grid">${facts.map(f=>`<div class="fun"><span class="fe">${f.e}</span><div><div class="fl">${esc(f.l)}</div><div class="fv">${esc(f.v)}</div></div></div>`).join('')}</div></div>` : '';
-        box.innerHTML = dist + fun;
+        box.innerHTML = dist + compare + fun;
       }
 
       /* 선 그래프 SVG (여러 직무면 각 직무 1선) + hover 가이드/포커스 레이어 */
@@ -334,10 +415,15 @@
         const iw=W-padL-padR, ih=H-padT-padB, n=days.length;
         const max=chartMax(days,perDay,depts);
         const X=i=>chartX(i,n), Y=v=>chartY(v,max);
+        // 다크모드 대응: 축·격자·라벨색을 현재 테마 토큰에서 읽어 반영(배경은 투명 → 카드색 사용)
+        const cs=getComputedStyle(document.documentElement);
+        const cGrid=cs.getPropertyValue('--line').trim()||'#eef0f3';
+        const cAxis=cs.getPropertyValue('--faint').trim()||'#98a0ab';
+        const cLbl=cs.getPropertyValue('--muted').trim()||'#69727e';
         const grid=[0,.25,.5,.75,1].map(f=>{ const gy=padT+ih-f*ih;
-          return `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#eef0f3"/><text x="${padL-6}" y="${gy+3}" text-anchor="end" font-size="9" fill="#98a0ab">${Math.round(max*f)}</text>`; }).join('');
+          return `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="${cGrid}"/><text x="${padL-6}" y="${gy+3}" text-anchor="end" font-size="9" fill="${cAxis}">${Math.round(max*f)}</text>`; }).join('');
         const showEvery=Math.ceil(n/12); let labels='';
-        days.forEach((d,i)=>{ if(i%showEvery===0||i===n-1) labels+=`<text x="${X(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#69727e">${mdLabel(d)}</text>`; });
+        days.forEach((d,i)=>{ if(i%showEvery===0||i===n-1) labels+=`<text x="${X(i).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="${cLbl}">${mdLabel(d)}</text>`; });
         let series='';
         depts.forEach(dp=>{ const col=CHART[dp];
           const pts=days.map((d,i)=>[X(i),Y((perDay[d]&&perDay[d][dp])||0)]);
@@ -349,7 +435,7 @@
           if(n<=40) pts.forEach(p=>{ series+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.7" fill="#fff" stroke="${col}" stroke-width="1.6"/>`; });
         });
         return `<svg id="ivChart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:100%;height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
-          <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${grid}
+          ${grid}
           <line id="ivGuide" x1="0" x2="0" y1="${padT}" y2="${(padT+ih).toFixed(1)}" stroke="#b9c0ca" stroke-width="1" stroke-dasharray="4 3" style="display:none"/>
           ${series}<g id="ivFocus"></g>${labels}</svg>`;
       }
