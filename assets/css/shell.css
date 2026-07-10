@@ -178,18 +178,25 @@
    공통 모듈 헤더 · 탭 · 본문 (전 기능 디자인 통일)
    각 모듈은 .mhead(제목/설명/액션) + .mtabs(탭) + .mbody(내용) 를 사용
    =========================================================================== */
-.mhead{position:sticky;top:0;z-index:6;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 24px 0}
+.mhead{position:sticky;top:0;z-index:6;background:color-mix(in srgb,var(--panel) 88%,transparent);
+  -webkit-backdrop-filter:saturate(1.4) blur(10px);backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);padding:17px 24px 0}
 .mhead.pad{padding-bottom:16px}
 .mhead-row{display:flex;align-items:flex-start;gap:14px}
-.mhead .tt{font-size:19px;font-weight:800;letter-spacing:-.01em}
-.mhead .ds{font-size:13.5px;color:var(--muted);margin-top:4px;line-height:1.5;max-width:860px}
+.mhead .tt{position:relative;font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.2;padding-left:13px;
+  text-rendering:optimizeLegibility}
+.mhead .tt::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:3px;
+  background:linear-gradient(180deg,var(--red),color-mix(in srgb,var(--red) 55%,var(--info)))}
+.mhead .ds{font-size:13.5px;color:var(--muted);margin-top:5px;margin-left:13px;line-height:1.5;max-width:860px}
 .mhead-act{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;flex:none}
-.mtabs{display:flex;gap:3px;margin-top:15px}
-.mtabs .t{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;font-size:14px;font-weight:700;color:var(--muted);
-  cursor:pointer;border-radius:9px 9px 0 0;position:relative;transition:.12s;white-space:nowrap;user-select:none}
+.mtabs{display:flex;gap:2px;margin-top:16px;border-bottom:1px solid var(--line)}
+.mtabs .t{display:inline-flex;align-items:center;gap:7px;padding:10px 16px 11px;font-size:14px;font-weight:700;color:var(--muted);
+  cursor:pointer;border-radius:8px 8px 0 0;position:relative;transition:color .14s,background .14s;white-space:nowrap;user-select:none}
+.mtabs .t::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2.5px;border-radius:3px 3px 0 0;
+  background:var(--red);transform:scaleX(0);transform-origin:center;transition:transform .18s cubic-bezier(.4,0,.2,1)}
 .mtabs .t:hover{color:var(--ink);background:var(--hover)}
-.mtabs .t.on{color:var(--red);background:var(--red-soft)}
-.mtabs .t.on::after{content:"";position:absolute;left:13px;right:13px;bottom:-1px;height:3px;background:var(--red);border-radius:3px 3px 0 0}
+.mtabs .t.on{color:var(--red)}
+.mtabs .t.on::after{transform:scaleX(1)}
 .mtabs .tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
   border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:800}
 /* 모든 기능 페이지는 상단 헤더(.mhead)와 동일하게 전체 폭을 사용해 정렬을 통일.
