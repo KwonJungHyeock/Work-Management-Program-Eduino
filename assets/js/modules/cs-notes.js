@@ -20,17 +20,13 @@
 `[{날짜} CS 상담 결산]
 총 {총건수}건
 
-■ 분류별
+■ 문의유형별
 {분류별}
-
-■ 고객유형별
-{고객유형별}
 
 ■ 상담사별
 {상담사별}
 
-■ 후속조치(콜백) 필요: {콜백건수}건
-{콜백목록}`;
+후속조치(콜백) 필요: {콜백건수}건`;
 
   /* ---- 목적지(destination) 추상화 ----
      새 대상(예: 노션)은 여기 객체만 추가하면 됩니다. */
@@ -627,13 +623,19 @@
         reload();
       }
 
-      /* ---------------- 일일 결산 탭 ---------------- */
+      /* ---------------- 일일 결산 탭 (기간 조회 지원) ---------------- */
       function drawSummary(){
-        let date=todayStr();
+        const isoOf=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        let from=todayStr(), to=todayStr();
         body.innerHTML=`
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-            <label class="fld" style="width:190px">${icon('calendar')} 결산 날짜<input type="date" id="sumDate" value="${date}"></label>
-            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            <label class="fld" style="width:168px">${icon('calendar')} 시작일<input type="date" id="sumFrom" value="${from}"></label>
+            <label class="fld" style="width:168px">종료일<input type="date" id="sumTo" value="${to}"></label>
+            <span style="display:flex;gap:6px;padding-bottom:2px">
+              <button class="btn sm" data-range="today">오늘</button>
+              <button class="btn sm" data-range="7">최근 7일</button>
+              <button class="btn sm" data-range="month">이번 달</button></span>
+            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;padding-bottom:2px">
               ${isAdmin?`<button class="btn" id="editTpl">${icon('settings')}양식 편집</button>`:''}
               <button class="btn" id="copySum">${icon('copy')}텍스트 복사</button>
               <button class="btn pri" id="saveTxt">${icon('download')}메모장 저장(.txt)</button>
@@ -641,15 +643,21 @@
           </div>
           <div id="tplBox" class="hidden"></div>
           <div id="sumWrap"></div>`;
-        body.querySelector('#sumDate').onchange=e=>{ date=e.target.value; renderSum(); };
-        body.querySelector('#copySum').onclick=()=>copyText(buildSummary(date));
-        body.querySelector('#saveTxt').onclick=()=>{ downloadBlob(new Blob([buildSummary(date)],{type:'text/plain;charset=utf-8'}),`CS결산_${date}.txt`); toast('메모장(.txt)으로 저장했습니다'); };
+        const fEl=body.querySelector('#sumFrom'), tEl=body.querySelector('#sumTo');
+        fEl.onchange=e=>{ from=e.target.value||from; if(from>to){ to=from; tEl.value=to; } renderSum(); };
+        tEl.onchange=e=>{ to=e.target.value||to; if(to<from){ from=to; fEl.value=from; } renderSum(); };
+        body.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{ const r=b.dataset.range, t=todayStr();
+          if(r==='today'){ from=t; to=t; } else if(r==='month'){ from=t.slice(0,8)+'01'; to=t; }
+          else if(r==='7'){ const d=new Date(); d.setDate(d.getDate()-6); from=isoOf(d); to=t; }
+          fEl.value=from; tEl.value=to; renderSum(); });
+        body.querySelector('#copySum').onclick=()=>copyText(buildSummary(from,to));
+        body.querySelector('#saveTxt').onclick=()=>{ downloadBlob(new Blob([buildSummary(from,to)],{type:'text/plain;charset=utf-8'}),`CS결산_${from===to?from:from+'_'+to}.txt`); toast('메모장(.txt)으로 저장했습니다'); };
         { const et=body.querySelector('#editTpl'); if(et) et.onclick=openTpl; }
         body.querySelector('#pushSum').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false; renderSum();
           toast(r.ok?(r.unconfirmed?SHEET_MSG.unconf(r.synced):SHEET_MSG.ok(r.synced)):SHEET_MSG.fail(r.error)); };
         renderSum();
-        function dayNotes(){ return getNotes().filter(r=>todayStr(r.createdAt)===date); }
+        function rangeNotes(){ return getNotes().filter(r=>{ const d=todayStr(r.createdAt); return d>=from&&d<=to; }); }
         function agg(list){
           const byCat={}; getTypes().forEach(t=>byCat[t]=0);
           const byCust={}; CS_CUSTOMER_TYPES.forEach(t=>byCust[t]=0);
@@ -660,43 +668,39 @@
           return { total:list.length, byCat, byCust, byAgent };
         }
         function renderSum(){
-          const list=dayNotes(), a=agg(list); const wrap=body.querySelector('#sumWrap');
-          const cbList=list.filter(r=>r.callback);
+          const list=rangeNotes(), a=agg(list); const wrap=body.querySelector('#sumWrap'); if(!wrap) return;
+          const cbCount=list.filter(r=>r.callback).length;
           wrap.innerHTML=`
             <div class="sum-grid" style="margin-bottom:16px">
               <div class="sum-card"><div class="lb">총 상담 건수</div><div class="vl">${a.total}</div></div>
-              ${getTypes().map(t=>`<div class="sum-card"><div class="lb">${esc(t)}</div><div class="vl">${a.byCat[t]||0}</div></div>`).join('')}
-              <div class="sum-card" style="border-color:#ead9b0;background:var(--warn-bg)"><div class="lb">콜백 필요</div><div class="vl" style="color:var(--warn)">${cbList.length}</div></div>
+              <div class="sum-card" style="border-color:#ead9b0;background:var(--warn-bg)"><div class="lb">콜백 필요</div><div class="vl" style="color:var(--warn)">${cbCount}</div></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
               <div class="card"><div class="card-hd"><b>상담사별 처리 건수</b></div><div class="card-bd" style="padding:0">
                 <table class="tbl"><thead><tr><th>상담사</th><th class="num">건수</th></tr></thead><tbody>
                   ${Object.keys(a.byAgent).length?Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v}</td></tr>`).join(''):'<tr><td colspan="2" class="muted" style="text-align:center;padding:16px">기록 없음</td></tr>'}
                 </tbody></table></div></div>
-              <div class="card"><div class="card-hd"><b>고객유형별 건수</b></div><div class="card-bd" style="padding:0">
-                <table class="tbl"><thead><tr><th>고객유형</th><th class="num">건수</th></tr></thead><tbody>
-                  ${CS_CUSTOMER_TYPES.some(t=>a.byCust[t])?CS_CUSTOMER_TYPES.filter(t=>a.byCust[t]).map(t=>`<tr><td>${esc(t)}</td><td class="num">${a.byCust[t]}</td></tr>`).join(''):'<tr><td colspan="2" class="muted" style="text-align:center;padding:16px">기록 없음</td></tr>'}
+              <div class="card"><div class="card-hd"><b>문의유형별 건수</b></div><div class="card-bd" style="padding:0">
+                <table class="tbl"><thead><tr><th>문의유형</th><th class="num">건수</th></tr></thead><tbody>
+                  ${getTypes().some(t=>a.byCat[t])?getTypes().filter(t=>a.byCat[t]).map(t=>`<tr><td>${esc(t)}</td><td class="num">${a.byCat[t]}</td></tr>`).join(''):'<tr><td colspan="2" class="muted" style="text-align:center;padding:16px">기록 없음</td></tr>'}
                 </tbody></table></div></div>
             </div>
-            <div class="card" style="margin-top:16px"><div class="card-hd"><b>콜백 필요 목록</b></div><div class="card-bd" style="padding:0">
-              <table class="tbl"><thead><tr><th style="width:70px">시각</th><th style="width:90px">분류</th><th>주문자/업체</th><th>연락처</th><th>내용</th></tr></thead><tbody>
-                ${cbList.length?cbList.sort((x,y)=>x.createdAt.localeCompare(y.createdAt)).map(r=>`<tr><td>${timeHM(r.createdAt)}</td><td>${esc(r.category||'-')}</td><td>${esc(r.name||'-')}</td><td>${esc(r.contact||'-')}</td><td>${esc((r.content||'').slice(0,40))}</td></tr>`).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">콜백 필요 없음</td></tr>'}
-              </tbody></table></div></div>
             <div class="card" style="margin-top:16px"><div class="card-hd">${icon('clipboard')}<b>저장 텍스트 미리보기</b>
               <span class="muted" style="margin-left:auto;font-size:12px">[양식 편집]에서 형식을 바꿀 수 있습니다</span></div>
               <div class="card-bd"><pre id="sumPre" style="white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;line-height:1.55;margin:0;color:var(--ink-2)"></pre></div></div>`;
-          const pre=body.querySelector('#sumPre'); if(pre) pre.textContent=buildSummary(date);
+          const pre=body.querySelector('#sumPre'); if(pre) pre.textContent=buildSummary(from,to);
         }
-        // 토큰 치환으로 결산 텍스트 생성 (커스텀 양식 반영)
-        function buildSummary(d){
-          const list=getNotes().filter(r=>todayStr(r.createdAt)===d), a=agg(list);
-          const catLines=getTypes().map(t=>`- ${t}: ${a.byCat[t]||0}건`).join('\n');
-          const custLines=CS_CUSTOMER_TYPES.filter(t=>a.byCust[t]).map(t=>`- ${t}: ${a.byCust[t]}건`).join('\n') || '- (없음)';
+        // 토큰 치환으로 결산 텍스트 생성 (기간·커스텀 양식 반영)
+        function buildSummary(f,t){
+          const list=getNotes().filter(r=>{ const d=todayStr(r.createdAt); return d>=f&&d<=t; }), a=agg(list);
+          const catLines=getTypes().map(t2=>`- ${t2}: ${a.byCat[t2]||0}건`).join('\n');
+          const custLines=CS_CUSTOMER_TYPES.filter(t2=>a.byCust[t2]).map(t2=>`- ${t2}: ${a.byCust[t2]}건`).join('\n') || '- (없음)';
           const agentLines=Object.entries(a.byAgent).sort((x,y)=>y[1]-x[1]).map(([k,v])=>`- ${k}: ${v}건`).join('\n') || '- (없음)';
           const cbList=list.filter(r=>r.callback);
           const cbLines=cbList.length? cbList.sort((x,y)=>x.createdAt.localeCompare(y.createdAt))
             .map(r=>`- ${timeHM(r.createdAt)} ${r.name||'-'}${r.contact?`(${r.contact})`:''}: ${(r.content||'').slice(0,40)}${r.callbackDone?' [완료]':''}`).join('\n') : '- (없음)';
-          const map={ '{날짜}':d, '{총건수}':a.total, '{분류별}':catLines, '{고객유형별}':custLines,
+          const label = f===t? f : `${f} ~ ${t}`;
+          const map={ '{날짜}':label, '{총건수}':a.total, '{분류별}':catLines, '{고객유형별}':custLines,
             '{상담사별}':agentLines, '{콜백건수}':cbList.length, '{콜백목록}':cbLines };
           let out=getSumTpl(); Object.keys(map).forEach(k=>{ out=out.split(k).join(map[k]); }); return out;
         }
@@ -713,7 +717,7 @@
               <div class="tpl-tokens" id="tplTokens"></div>
               <textarea id="tplArea" rows="12" style="width:100%;font-family:var(--mono);font-size:13px;line-height:1.5">${esc(getSumTpl())}</textarea>
             </div></div>`;
-          const tokens=[['{날짜}','날짜'],['{총건수}','총 건수'],['{분류별}','분류별 목록'],['{고객유형별}','고객유형별 목록'],['{상담사별}','상담사별 목록'],['{콜백건수}','콜백 건수'],['{콜백목록}','콜백 목록']];
+          const tokens=[['{날짜}','기간'],['{총건수}','총 건수'],['{분류별}','문의유형별 목록'],['{상담사별}','상담사별 목록'],['{콜백건수}','콜백 건수']];
           const tt=box.querySelector('#tplTokens');
           tokens.forEach(([k,d2])=>{ const b=el('button','chip sm'); b.type='button'; b.textContent=k; b.title=d2;
             b.onclick=()=>{ const ta=box.querySelector('#tplArea'); const s=ta.selectionStart??ta.value.length, e2=ta.selectionEnd??s;
@@ -723,7 +727,7 @@
           box.querySelector('#tplReset').onclick=()=>{ box.querySelector('#tplArea').value=DEFAULT_SUM_TPL; };
           box.querySelector('#tplSave').onclick=()=>{ setSumTpl(box.querySelector('#tplArea').value); toast('양식을 저장했습니다'); renderSum(); };
         }
-        window.__csBuildSummary=buildSummary; // (테스트 편의)
+        window.__csBuildSummary=(d)=>buildSummary(d,d); // (테스트 편의)
       }
 
       /* ---------------- 연동 설정 탭 ---------------- */

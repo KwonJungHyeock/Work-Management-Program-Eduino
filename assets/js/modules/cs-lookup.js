@@ -72,14 +72,14 @@
           <div class="lk-top">
             <div style="flex:1;min-width:0"><div class="code">${esc(p.selfCode)}</div>
               <div class="nm">${p.name?esc(p.name):'<span class="muted">(품명 없음)</span>'}</div></div>
-            <button class="btn sm" id="lkCopy">${icon('copy')}코드 복사</button></div>
+            <button class="btn sm" id="lkCopy">${icon('copy')}제품명 복사</button></div>
           <div class="lk-grid">
             ${cell('구매처명', `<span class="v">${vendor?esc(vendor):'<span class="muted">미지정</span>'}</span>`)}
             ${cell('상품분류', `<span class="v">${category?esc(category):'<span class="muted">-</span>'}</span>`)}
             ${cell('입고단가', won(p.inPrice))}
             ${cell('출고단가', won(p.outPrice))}
           </div></div>`;
-        const cp=root.querySelector('#lkCopy'); if(cp) cp.onclick=()=>{ copyText(p.selfCode); toast('상품코드 복사: '+p.selfCode); };
+        const cp=root.querySelector('#lkCopy'); if(cp) cp.onclick=()=>{ copyText(p.name||''); toast('제품명 복사'); };
       }
       qEl.oninput=()=>{ const t=qEl.value.trim(); clearTimeout(timer); timer=setTimeout(()=>run(t), 260); };
       qEl.onkeydown=e=>{ if(e.key==='Enter'){ clearTimeout(timer); run(qEl.value.trim()); } };

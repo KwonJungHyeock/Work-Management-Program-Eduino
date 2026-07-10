@@ -58,7 +58,8 @@
               <button data-r="30">30일</button><button data-r="month" class="on">이번달</button>
               <button data-r="custom">지정</button></span>
             <span class="sv-dates" id="dates"><input type="date" id="dFrom"> ~ <input type="date" id="dTo"></span>
-            <select class="sv-in" id="fWho"><option value="">담당자 전체</option></select>
+            <select class="sv-in" id="fWho"><option value="">${esc(cfg.whoLabel||'담당자')} 전체</option></select>
+            ${(cfg.filters||[]).map(f=>`<select class="sv-in" data-fk="${esc(f.k)}"><option value="">${esc(f.label)} 전체</option></select>`).join('')}
             <input class="sv-in" id="fQ" type="text" placeholder="검색어…">
             <span class="sv-sp"></span>
             <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
@@ -71,6 +72,7 @@
 
         const $=s=>root.querySelector(s);
         let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null;
+        const fvals={};   // 컬럼 필터 값 { 컬럼키: 선택값 }
         const myDept=(Auth.user&&Auth.user()||{}).dept;
         const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
         const hasActions=isAdmin||canEdit;
@@ -86,6 +88,7 @@
           const {from,to}=range();
           let rows=all.filter(r=>{ const d=r.day||r.date||''; return d>=from&&d<=to; });
           if(who) rows=rows.filter(r=>(r.whoName||r.agent||'')===who);
+          (cfg.filters||[]).forEach(f=>{ const v=fvals[f.k]; if(v) rows=rows.filter(r=>String(r[f.k]??'').trim()===v); });
           if(q){ const s=q.toLowerCase(); rows=rows.filter(r=>cfg.cols.some(c=>String(r[c.k]??'').toLowerCase().includes(s))); }
           rows.sort((a,b)=>String(b.day||b.date||'').localeCompare(String(a.day||a.date||''))
             || String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
@@ -151,7 +154,14 @@
         }
         function paintWho(){
           const names=[...new Set(all.map(r=>r.whoName||r.agent).filter(Boolean))].sort();
-          const cur=who; $('#fWho').innerHTML=`<option value="">담당자 전체</option>`+names.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('');
+          const cur=who; $('#fWho').innerHTML=`<option value="">${esc(cfg.whoLabel||'담당자')} 전체</option>`+names.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('');
+        }
+        function paintFilters(){
+          (cfg.filters||[]).forEach(f=>{ const sel=root.querySelector(`[data-fk="${f.k}"]`); if(!sel) return;
+            const vals=[...new Set(all.map(r=>String(r[f.k]??'').trim()).filter(Boolean))].sort();
+            const cur=fvals[f.k]||''; if(cur && !vals.includes(cur)){ fvals[f.k]=''; }
+            sel.innerHTML=`<option value="">${esc(f.label)} 전체</option>`+vals.map(v=>`<option ${v===(fvals[f.k]||'')?'selected':''}>${esc(v)}</option>`).join('');
+          });
         }
 
         $('#segR').querySelectorAll('button').forEach(b=>b.onclick=()=>{ preset=b.dataset.r;
@@ -162,6 +172,7 @@
         $('#dFrom').onchange=()=>{ custom.from=$('#dFrom').value||custom.from; load(); };
         $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; load(); };
         $('#fWho').onchange=()=>{ who=$('#fWho').value; paint(); };
+        (cfg.filters||[]).forEach(f=>{ const sel=root.querySelector(`[data-fk="${f.k}"]`); if(sel) sel.onchange=()=>{ fvals[f.k]=sel.value; paint(); }; });
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
         $('#btnReload').onclick=load;
         $('#btnCsv').onclick=()=>{
@@ -183,7 +194,7 @@
             $('#tbl').innerHTML=`<tbody><tr><td class="sv-empty" colspan="${cfg.cols.length+1}">서버에서 기록을 불러오지 못했습니다. 연동 상태를 확인하세요.</td></tr></tbody>`; return; }
           const map={}; packs.forEach(p=>(p||[]).forEach(r=>{ if(r&&r.id) map[r.id]=r; }));
           all=Object.values(map);
-          paintWho(); paint();
+          paintWho(); paintFilters(); paint();
         }
         load();
       }
@@ -192,7 +203,8 @@
 
   build({ key:'cs.records', dept:'cs', sheet:'notes', title:'상담 기록', icon:'sheet',
     desc:'전 상담사의 상담 메모가 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
-    editable:true,
+    editable:true, whoLabel:'상담사',
+    filters:[ {k:'category',label:'분류'}, {k:'customerType',label:'고객유형'} ],
     onSave: async(rec, old)=>{
       rec.agent = rec.whoName || rec.agent;                         // 상담사 편집 반영
       const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
