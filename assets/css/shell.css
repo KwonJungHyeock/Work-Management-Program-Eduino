@@ -8,7 +8,7 @@
 .app.nav-collapsed{grid-template-columns:56px 1fr}
 
 /* ---- 사이드바 (메뉴) ---- */
-.side{grid-area:side;background:#1e2531;border-right:1px solid #171c25;
+.side{grid-area:side;background:var(--ck-1,#161b24);border-right:1px solid var(--ck-line,#0f1319);
   display:flex;flex-direction:column;min-height:0;color:#c7cdd6}
 .side-brand{display:flex;align-items:center;gap:13px;height:var(--topbar-h);padding:0 16px;width:100%;
   border-bottom:1px solid #2a3240;flex:none;background:none;border-left:0;border-right:0;border-top:0;

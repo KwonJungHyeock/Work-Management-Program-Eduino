@@ -222,52 +222,44 @@
       const localNotes=()=>{ try{ return JSON.parse(localStorage.getItem(STORE.csNotes)||'[]'); }catch{ return []; } };
       root.innerHTML=`
       <style>
-        .dash-hero{position:relative;overflow:hidden;border-radius:16px;padding:26px 28px;margin-bottom:20px;color:#fff;
-          background:linear-gradient(118deg,#173f7a 0%,#1f56a3 46%,#2f6fd0 100%);box-shadow:0 10px 30px rgba(23,63,122,.24)}
-        .dash-hero::before{content:"";position:absolute;right:-30px;top:-50px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.07)}
-        .dash-hero::after{content:"";position:absolute;right:80px;bottom:-70px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.05)}
-        .dash-hero .hi{font-size:24px;font-weight:800;letter-spacing:-.015em;position:relative}
-        .dash-hero .sub{font-size:13.5px;opacity:.92;margin-top:7px;font-weight:500;position:relative}
-        .dash-hero .hero-ic{position:absolute;right:26px;top:50%;transform:translateY(-50%);opacity:.18}
-        .dash-hero .hero-ic svg{width:82px;height:82px;stroke:#fff}
-        .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:13px;margin:0 0 22px}
-        .stat{display:flex;align-items:center;gap:13px;border:1px solid var(--line);border-radius:13px;background:#fff;padding:14px 16px;box-shadow:var(--sh-sm);cursor:pointer;transition:.14s}
-        .stat:hover{box-shadow:var(--sh);transform:translateY(-2px);border-color:var(--line-strong)}
-        .stat-ic{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;
-          background:color-mix(in srgb,var(--c,#1f56a3) 13%,#fff);color:var(--c,#1f56a3)}
-        .stat-ic svg{width:21px;height:21px}
-        .stat .sl{font-size:12.5px;color:var(--muted);font-weight:600}
-        .stat .sv{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.08;margin-top:2px}
-        .stat .sv small{font-size:13px;font-weight:600;color:var(--muted);margin-left:2px}
-        .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+        .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start;margin-top:16px}
         @media(max-width:900px){.dash-2{grid-template-columns:1fr}}
-        .dcard{border:1px solid var(--line);border-radius:13px;background:#fff;overflow:hidden}
-        .dcard-hd{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
-        .dcard-hd .more{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
+        .dcard{border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;overflow:hidden;box-shadow:var(--sh-sm)}
+        .dcard-hd{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);
+          font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--panel-2)}
+        .dcard-hd .ic{font-size:14px;color:var(--faint)}
+        .dcard-hd .more{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;text-transform:none;letter-spacing:0}
         .dcard-hd .more:hover{color:var(--red)}
-        .dcard-bd{padding:8px 8px}
-        .drow{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;font-size:13.5px}
-        .drow:hover{background:var(--hover)}
-        .drow .dt{font-weight:700}
-        .drow .dm{color:var(--muted);font-size:12.5px;margin-left:auto;white-space:nowrap}
-        .drow .pin{width:7px;height:7px;border-radius:50%;background:var(--red);flex:none}
-        .ql-row{display:flex;gap:8px;flex-wrap:wrap;padding:6px 8px 10px}
-        .ql-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid var(--line-strong);border-radius:9px;
+        .dcard-bd{padding:7px 8px}
+        .drow{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;font-size:13.5px}
+        .drow:hover{background:var(--hover);cursor:pointer}
+        .drow .dt{font-weight:600;color:var(--ink)}
+        .drow .dm{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+        .drow .pin{width:7px;height:7px;border-radius:50%;background:var(--danger);flex:none}
+        .ql-row{display:flex;gap:8px;flex-wrap:wrap;padding:5px 8px 10px}
+        .ql-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid var(--line-strong);border-radius:8px;
           font-size:13px;font-weight:600;color:var(--ink-2);text-decoration:none;background:#fff}
         .ql-chip:hover{border-color:var(--red);color:var(--red);background:var(--red-soft)}
+        .ql-chip .ic{color:var(--faint)}.ql-chip:hover .ic{color:var(--red)}
         .pp-dot2{width:8px;height:8px;border-radius:50%;background:#42c98a;box-shadow:0 0 0 3px rgba(66,201,138,.18);flex:none}
       </style>
       <div class="mbody">
-        <div class="dash-hero">
-          <div class="hero-ic">${icon('dashboard')}</div>
-          <div class="hi">${greeting()}, ${esc(u.name||'')}님 👋</div>
-          <div class="sub">${esc({cs:'CS · 고객 상담',md:'MD · 상품 기획',admin:'관리자'}[u.dept]||'통합 업무관리')} · ${todayStr()} (${weekday()}) · 오늘도 좋은 하루 되세요.</div>
+        <div class="console">
+          <div>
+            <div class="hi">${greeting()}, ${esc(u.name||'')}님</div>
+            <div class="sub">${esc({cs:'CS · 고객 상담',md:'MD · 상품 기획',admin:'관리자'}[u.dept]||'통합 업무관리')} · 통합 업무관리 콘솔</div>
+          </div>
+          <div class="c-right">
+            <div class="c-metric"><small>오늘</small><b class="mono">${todayStr()} <span style="color:#818da0">(${weekday()})</span></b></div>
+            <div class="c-metric"><small>현재 시각</small><b class="mono" id="ckClock">--:--:--</b></div>
+            <div class="c-metric"><small>접속</small><span class="c-live"><i></i><span id="ckPres">–</span>명</span></div>
+          </div>
         </div>
-        <div class="stat-row" id="statRow"></div>
+        <div class="tile-row" id="statRow"></div>
         <div class="dash-2">
           <div class="dcard"><div class="dcard-hd">${icon('megaphone')}공지사항 <span class="more" data-go="home.notice">전체 보기</span></div>
             <div class="dcard-bd" id="dNotice"><div class="muted" style="padding:10px">불러오는 중…</div></div></div>
-          <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;flex-direction:column;gap:14px">
             <div class="dcard"><div class="dcard-hd">${icon('users')}접속 중 <span class="more" id="presMore"></span></div>
               <div class="dcard-bd" id="dPres"><div class="muted" style="padding:10px">…</div></div></div>
             <div class="dcard"><div class="dcard-hd">${icon('external')}바로가기</div>
@@ -275,6 +267,11 @@
           </div>
         </div>
       </div>`;
+      // 콘솔 라이브 시계
+      (function(){ const el2=root.querySelector('#ckClock');
+        const tick=()=>{ if(!root.isConnected){ clearInterval(t); return; } if(el2){ const d=new Date();
+          el2.textContent=[d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':'); } };
+        const t=setInterval(tick,1000); tick(); })();
 
       // 바로가기
       const ql=root.querySelector('#dQuick');
@@ -286,16 +283,16 @@
         const notes=localNotes();
         const todayCs=notes.filter(r=>todayStr(r.createdAt)===todayStr()).length;
         const cards=[
-          { k:'home.notice', ic:'megaphone', l:'새 공지', v:nUnreadNotice, c:'var(--red)' },
-          { k:'home.memo',   ic:'send',      l:'새 메모', v:nMemo, c:'#5b3fc4' },
+          { k:'home.notice', ic:'megaphone', l:'미확인 공지', v:nUnreadNotice, c:'var(--d1)' },
+          { k:'home.memo',   ic:'send',      l:'새 메모',     v:nMemo, c:'var(--d4)' },
         ];
         if(u.dept==='cs'||u.role==='admin'){
-          cards.push({ k:'cs.notes', ic:'clipboard', l:'미처리 콜백', v:nCbOpen, c:'#b26a00' });
-          cards.push({ k:'cs.notes', ic:'headset', l:'오늘 상담', v:todayCs, c:'#4d9bff' });
+          cards.push({ k:'cs.notes', ic:'clipboard', l:'미처리 콜백', v:nCbOpen, c:'var(--d3)' });
+          cards.push({ k:'cs.notes', ic:'headset',   l:'오늘 상담',   v:todayCs, c:'var(--d1)' });
         }
         const row=root.querySelector('#statRow'); if(!row) return; row.innerHTML='';
-        cards.forEach(c=>{ const d=el('div','stat'); d.style.setProperty('--c',c.c);
-          d.innerHTML=`<div class="stat-ic">${icon(c.ic)}</div><div><div class="sl">${c.l}</div><div class="sv">${c.v}<small>건</small></div></div>`;
+        cards.forEach(c=>{ const d=el('div','tile click'); d.style.setProperty('--tc',c.c);
+          d.innerHTML=`<div class="tl">${icon(c.ic)}${c.l}</div><div class="tv">${c.v}<small>건</small></div>`;
           d.onclick=()=>{ location.hash=c.k; }; row.appendChild(d); });
       }
 
@@ -330,6 +327,7 @@
         if(!root.isConnected || !root.querySelector('#dPres')) return;
         if(!list){ box.innerHTML=`<div class="muted" style="padding:10px">불러오지 못했습니다.</div>`; return; }
         const pm=root.querySelector('#presMore'); if(pm) pm.textContent=`${list.length}명`;
+        const ckp=root.querySelector('#ckPres'); if(ckp) ckp.textContent=list.length;
         box.innerHTML = list.length? list.map(p=>`<div class="drow"><span class="pp-dot2"></span><span class="dt">${esc(p.device)}</span>${p.device===u.name?'<span class="dm">나</span>':''}</div>`).join('')
           : `<div class="muted" style="padding:10px">접속자 정보가 없습니다.</div>`;
       })();

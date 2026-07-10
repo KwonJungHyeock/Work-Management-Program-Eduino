@@ -52,8 +52,9 @@
         .iv-dates input{height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font-size:13px}
         .iv-sp{flex:1}
         .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0 20px}
-        .kpi{border:1px solid var(--line);border-radius:12px;background:#fff;padding:15px 16px;box-shadow:var(--sh-sm)}
-        .kpi .kl{font-size:12.5px;color:var(--muted);font-weight:600}
+        .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;padding:15px 16px 15px 18px;box-shadow:var(--sh-sm)}
+        .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kc,var(--d1))}
+        .kpi .kl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
         .kpi .kv{font-size:29px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:5px;color:var(--ink)}
         .kpi .kv small{font-size:13.5px;font-weight:600;color:var(--muted);margin-left:3px}
         .kpi .kd{font-size:12px;font-weight:700;margin-top:4px}
@@ -168,26 +169,26 @@
         if(allMode){
           const ct=topOf('cs'), mt=topOf('md');
           $('#kpis').innerHTML=`
-            <div class="kpi"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
+            <div class="kpi" style="--kc:var(--d1)"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
               <div class="kd ${dcls}">${darrow} 이전 동기간 대비 ${diff>=0?'+':''}${diff}건 (${pct>=0?'+':''}${pct}%)</div></div>
-            <div class="kpi"><div class="kl"><span class="dot" style="background:${CHART.cs}"></span>CS 일평균</div><div class="kv">${(csTotal/len).toFixed(1)}<small>건/일</small></div>
+            <div class="kpi" style="--kc:${CHART.cs}"><div class="kl"><span class="dot" style="background:${CHART.cs}"></span>CS 일평균</div><div class="kv">${(csTotal/len).toFixed(1)}<small>건/일</small></div>
               <div class="kd flat">총 ${csTotal}건 · ${len}일</div></div>
-            <div class="kpi"><div class="kl"><span class="dot" style="background:${CHART.md}"></span>MD 일평균</div><div class="kv">${(mdTotal/len).toFixed(1)}<small>건/일</small></div>
+            <div class="kpi" style="--kc:${CHART.md}"><div class="kl"><span class="dot" style="background:${CHART.md}"></span>MD 일평균</div><div class="kv">${(mdTotal/len).toFixed(1)}<small>건/일</small></div>
               <div class="kd flat">총 ${mdTotal}건 · ${len}일</div></div>
-            <div class="kpi"><div class="kl">최다 담당자 · 직무별</div>
+            <div class="kpi" style="--kc:var(--d4)"><div class="kl">최다 담당자 · 직무별</div>
               <div class="kd" style="margin-top:9px;font-size:13.5px;line-height:2">
                 <span class="dbadge" style="background:${CHART.cs}">CS</span> ${ct?esc(ct.name)+' <b style="color:var(--ink)">'+ct.count+'</b>건':'—'}<br>
                 <span class="dbadge" style="background:${CHART.md}">MD</span> ${mt?esc(mt.name)+' <b style="color:var(--ink)">'+mt.count+'</b>건':'—'}</div></div>`;
         } else {
           const top=people[0];
           $('#kpis').innerHTML=`
-            <div class="kpi"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
+            <div class="kpi" style="--kc:var(--d1)"><div class="kl">총 처리 건수</div><div class="kv">${A.total.toLocaleString()}<small>건</small></div>
               <div class="kd ${dcls}">${darrow} 이전 동기간 대비 ${diff>=0?'+':''}${diff}건 (${pct>=0?'+':''}${pct}%)</div></div>
-            <div class="kpi"><div class="kl">1일 평균</div><div class="kv">${(A.total/len).toFixed(1)}<small>건/일</small></div>
+            <div class="kpi" style="--kc:var(--d2)"><div class="kl">1일 평균</div><div class="kv">${(A.total/len).toFixed(1)}<small>건/일</small></div>
               <div class="kd flat">${len}일 · 활동 ${Object.keys(A.perDay).length}일</div></div>
-            <div class="kpi"><div class="kl">최다 담당자</div><div class="kv" style="font-size:22px">${top?esc(top.name):'—'}</div>
+            <div class="kpi" style="--kc:var(--d4)"><div class="kl">최다 담당자</div><div class="kv" style="font-size:22px">${top?esc(top.name):'—'}</div>
               <div class="kd flat">${top?top.count+'건':'데이터 없음'}</div></div>
-            <div class="kpi"><div class="kl">참여 인원</div><div class="kv">${people.length}<small>명</small></div>
+            <div class="kpi" style="--kc:var(--d5)"><div class="kl">참여 인원</div><div class="kv">${people.length}<small>명</small></div>
               <div class="kd flat">${DLABEL[dept]||dept}</div></div>`;
         }
 
