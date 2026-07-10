@@ -137,6 +137,7 @@
           <span class="iv-sp"></span>
           <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
           <button class="btn ghost sm" id="btnPng">${icon('image')}차트 PNG</button>
+          <button class="btn ghost sm" id="btnPrint">${icon('sheet')}인쇄</button>
           <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
         </div>
         <div class="kpis" id="kpis"></div>
@@ -470,6 +471,7 @@
       $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; refresh(); };
       $('#btnCsv').onclick=exportCsv;
       $('#btnPng').onclick=exportPng;
+      $('#btnPrint').onclick=()=>window.print();
       $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); loadErr=false; load(); };
 
       async function load(){

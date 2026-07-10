@@ -184,6 +184,23 @@ table.tbl tbody tr:last-child td{border-bottom:0}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 /* ---- 빈 상태 ---- */
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-  padding:48px 20px;color:var(--muted);text-align:center}
-.empty .ic{font-size:34px;color:var(--faint)}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  padding:52px 20px;color:var(--muted);text-align:center}
+.empty .ic{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  background:var(--panel-2);border:1px solid var(--line);font-size:26px;color:var(--faint)}
+.empty > div{font-size:14px;line-height:1.6;max-width:360px}
+
+/* ---- 인쇄 / 리포트 출력 ---- */
+@media print{
+  .side,.top,.status,.app-intro,.pal-ov,.toast,.syncchip,.topsearch,.presence,.device,.navtoggle,
+  .iv-ctrl,.mtabs,.mhead-act,#btnReload,[data-noprint]{display:none!important}
+  .app{display:block!important;height:auto!important;grid-template-columns:1fr!important}
+  .main{overflow:visible!important}
+  .mhead{position:static!important;border:0!important;padding:0 0 8px!important}
+  .mbody{max-width:none!important;padding:0!important}
+  .card,.tile,.kpi,.fun-card,.dcard,.console{box-shadow:none!important;break-inside:avoid}
+  .console{color:#111!important;background:#fff!important;border:1px solid #ccc!important}
+  body{background:#fff!important}
+  a{color:#000!important}
+  @page{margin:14mm}
+}
