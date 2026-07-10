@@ -69,6 +69,21 @@
   };
   async function fetchRoster(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch{ return []; } }
 
+  /* 한국 전화번호 서식 — 서울(02, 9~10자리) / 그 외 지역·휴대폰(10~11자리) 모두 대응 */
+  function fmtPhone(v){
+    let d=String(v||'').replace(/\D/g,'');
+    if(!d) return '';
+    if(d.startsWith('02')){ d=d.slice(0,10); const r=d.slice(2);
+      if(d.length<=2) return '02';
+      if(d.length<=8) return '02-'+r;                                   // 입력 중
+      return '02-'+r.slice(0,r.length-4)+'-'+r.slice(-4);               // 02-XXX-XXXX / 02-XXXX-XXXX
+    }
+    d=d.slice(0,11);
+    if(d.length<=3) return d;
+    if(d.length<=7) return d.slice(0,3)+'-'+d.slice(3);                 // 0XX-XXXX (입력 중)
+    return d.slice(0,3)+'-'+d.slice(3,d.length-4)+'-'+d.slice(-4);      // 0XX-XXX-XXXX / 0XX-XXXX-XXXX
+  }
+
   /* ---- 데이터/동기화 ---- */
   const notesDB = ()=>store(STORE.csNotes);
   const cfgDB   = ()=>store(STORE.csNoteCfg);
@@ -144,7 +159,7 @@
       if(!isAdmin && meName) lastAgent=meName;
       let typeEdit=false, agentEdit=false;
       // 폼 상태 (분류·상담사·날짜는 저장 후에도 유지되는 컨텍스트)
-      let form={ category:getTypes()[0], customerType:'', prodCategory:'', date:todayStr(), agent:lastAgent };
+      let form={ category:getTypes()[0], customerType:'', prodCategory:'', route:'', date:todayStr(), agent:lastAgent };
 
       root.innerHTML=`
       <style>
@@ -271,6 +286,10 @@
                       <div class="chips" id="prodGroup"></div>
                     </div>
                     <div>
+                      <div class="q-sec-cap">주문경로 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="chips" id="routeGroup"></div>
+                    </div>
+                    <div>
                       <div class="q-sec-cap">내용 <span class="req">필수</span></div>
                       <textarea id="fContent" class="q-memo" placeholder="문의 내용을 입력하세요 —  통화하면서 자유롭게 기록" required></textarea>
                     </div>
@@ -289,7 +308,7 @@
                     </div>
                     <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
                     <div><span class="cap">연락처 <em>선택</em></span><input type="tel" inputmode="numeric" id="fContact" placeholder="010-0000-0000" maxlength="13"></div>
-                    <div><span class="cap">주문자/학교/업체명 <em>선택</em></span><input type="text" id="fName" list="dlName" autocomplete="off" placeholder="예: 에듀이노초 / 홍길동"><datalist id="dlName"></datalist></div>
+                    <div><span class="cap">이름/학교명/업체명 <em>선택</em></span><input type="text" id="fName" list="dlName" autocomplete="off" placeholder="예: 홍길동 / 에듀이노초"><datalist id="dlName"></datalist></div>
                     <div><span class="cap">상품코드 <em>선택</em></span><input type="text" id="fProdCode" list="dlCode" autocomplete="off" placeholder="예: A-100"><datalist id="dlCode"></datalist></div>
                     <label class="q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
                     <button type="submit" class="btn pri lg q-save">${icon('save')}저장 <span style="opacity:.7;font-weight:500;font-size:12px">Ctrl+Enter</span></button>
@@ -348,18 +367,12 @@
         }
         renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
         renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
+        renderChoice('#routeGroup', CS_ORDER_ROUTES, 'route');
 
-        /* --- 입력 편의: 연락처 자동 하이픈 + 최근값 자동완성 --- */
+        /* --- 입력 편의: 연락처 한국 전화 서식(서울 02 포함) + 최근값 자동완성 --- */
         (function(){
           const ct=body.querySelector('#fContact');
-          if(ct) ct.addEventListener('input',()=>{ const s=ct.selectionStart, len0=ct.value.length;
-            let d=ct.value.replace(/\D/g,'').slice(0,11); let out=d;
-            if(d.length<4) out=d;
-            else if(d.length<7) out=d.slice(0,3)+'-'+d.slice(3);
-            else if(d.length<11) out=d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
-            else out=d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
-            ct.value=out; try{ ct.setSelectionRange(s+(out.length-len0), s+(out.length-len0)); }catch(e){}
-          });
+          if(ct) ct.addEventListener('input',()=>{ ct.value=fmtPhone(ct.value); });
           const notes=getNotes(); const recent=(k)=>[...new Set(notes.map(r=>r[k]).filter(Boolean))].slice(-40).reverse();
           const nl=body.querySelector('#dlName'), cl=body.querySelector('#dlCode');
           if(nl) nl.innerHTML=recent('name').map(v=>`<option value="${esc(v)}">`).join('');
@@ -423,7 +436,7 @@
           store(STORE.csAgent).set(agent); lastAgent=agent;
           form.date=body.querySelector('#fDate').value||todayStr();
           const rec={ id:uuid(), createdAt:nowISO(),
-            date:form.date, category:form.category,
+            date:form.date, category:form.category, route:form.route,
             contact:body.querySelector('#fContact').value.trim(),
             customerType:form.customerType,
             name:body.querySelector('#fName').value.trim(),
@@ -437,10 +450,11 @@
           // 콜백(후속조치) 체크 시 → 팀 공용 처리대기 큐에 등록
           if(rec.callback){ Q.push({ id:rec.id, category:rec.category, name:rec.name, contact:rec.contact,
             content:rec.content, agent:rec.agent, createdAt:rec.createdAt, done:false, assignee:'', assigneeName:'', note:'' }); }
-          // 폼 초기화 (분류·상담사·날짜 유지 · 고객유형/상품분류/텍스트는 비움)
-          form.customerType=''; form.prodCategory='';
+          // 폼 초기화 (분류·상담사·날짜 유지 · 고객유형/상품분류/주문경로/텍스트는 비움)
+          form.customerType=''; form.prodCategory=''; form.route='';
           renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
           renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
+          renderChoice('#routeGroup', CS_ORDER_ROUTES, 'route');
           ['fContent','fAnswer','fContact','fName','fProdCode'].forEach(id=>body.querySelector('#'+id).value='');
           body.querySelector('#fCallback').checked=false;
           body.querySelector('#fContent').focus();
@@ -507,7 +521,7 @@
             <label class="fld">상품분류<select id="eProdCat">${selOpts(CS_PRODUCT_CATEGORIES, r.prodCategory, '(없음)')}</select></label>
             <label class="fld">상담사<input type="text" id="eAgent" value="${esc(r.agent||'')}"></label>
             <label class="fld">연락처<input type="text" id="eContact" value="${esc(r.contact||'')}"></label>
-            <label class="fld">주문자/학교/업체명<input type="text" id="eName" value="${esc(r.name||'')}"></label>
+            <label class="fld">이름/학교명/업체명<input type="text" id="eName" value="${esc(r.name||'')}"></label>
             <label class="fld">상품코드<input type="text" id="eProdCode" value="${esc(r.prodCode||'')}"></label>
             <label class="fld">날짜<input type="date" id="eDate" value="${esc(r.date||todayStr(r.createdAt))}"></label>
           </div>
@@ -527,10 +541,14 @@
             t.contact=box.querySelector('#eContact').value.trim(); t.name=box.querySelector('#eName').value.trim();
             t.prodCode=box.querySelector('#eProdCode').value.trim(); t.date=box.querySelector('#eDate').value||t.date;
             t.content=box.querySelector('#eContent').value.trim(); t.answer=box.querySelector('#eAnswer').value.trim();
-            t.callback=box.querySelector('#eCb').checked;
+            const wasCb=r.callback; t.callback=box.querySelector('#eCb').checked;
             t.syncedAt=null; // 수정되었으므로 재동기화 필요
             setNotes(all);
             if(window.Records) Records.pushCS(t);   // 서버 시트 반영(편집이면 카운터 중복 없이 덮어씀)
+            // 편집으로 콜백을 새로 켜면 처리대기 큐에 등록, 끄면 제거
+            if(t.callback && !wasCb){ Q.push({ id:t.id, category:t.category, name:t.name, contact:t.contact,
+              content:t.content, agent:t.agent, createdAt:t.createdAt, done:false, assignee:'', assigneeName:'', note:'' }); updatePendCnt(); }
+            else if(!t.callback && wasCb){ Q.del(t.id); updatePendCnt(); }
           }
           renderList(); renderSyncBar(); toast('수정되었습니다');
         };

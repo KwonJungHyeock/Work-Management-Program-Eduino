@@ -11,6 +11,9 @@
     const ey=Number(to.slice(0,4)), em=Number(to.slice(5,7)); let g=0;
     while((y<ey||(y===ey&&m<=em))&&g++<60){ out.push(`${y}-${String(m).padStart(2,'0')}`); m++; if(m>12){m=1;y++;} } return out; };
   const fmtNum=n=>{ const x=Number(n); return isFinite(x)?x.toLocaleString():(n??''); };
+  /* 담당자(상담사)별 고정 컬러 — 이름 해시로 팔레트에서 배정(일관됨) */
+  const NAME_PALETTE=['#2f6fed','#0f9d8e','#e0743a','#7a5af0','#1a8f4a','#e0518f','#0d8bd9','#b26a00','#8e44ad','#d4327a'];
+  function colorForName(n){ const s=String(n||''); let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return NAME_PALETTE[h%NAME_PALETTE.length]; }
 
   function build(cfg){
     MODULES[cfg.key]={
@@ -91,6 +94,9 @@
         function cell(r,c){
           let v=r[c.k]; if(c.money) v=fmtNum(v)+'원'; else if(c.num) v=fmtNum(v); else v=v==null?'':String(v);
           if(c.wrap) v=v.replace(/[ \t]*\n[ \t]*(?:\n[ \t]*)+/g,'\n');   // 빈 줄 접어 1·2번 줄이 이어지게(행 높이 절약)
+          // 담당자 컬러 배지(상담사별 색 구분)
+          if(c.color && v){ const col=colorForName(v);
+            return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:800;color:${col};background:${col}1a;border-radius:6px;padding:2px 9px">${esc(v)}</span></td>`; }
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
           return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||180}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
@@ -194,8 +200,8 @@
       if(window.Records) await Records.pushCS(rec);                 // 내부 상담 기록 갱신(중복 없이 덮어씀)
       if(window.CSSheet && CSSheet.configured()) CSSheet.send([rec]); // 구글시트 갱신(id 기준 upsert)
     },
-    cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'상담사',w:80}, {k:'category',h:'분류',w:78},
-      {k:'customerType',h:'고객유형',w:74}, {k:'name',h:'주문자/학교/업체',w:150}, {k:'contact',h:'연락처',w:120},
+    cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'상담사',w:80,color:true}, {k:'category',h:'분류',w:78},
+      {k:'route',h:'주문경로',w:78}, {k:'customerType',h:'고객유형',w:78}, {k:'name',h:'이름/학교/업체',w:150}, {k:'contact',h:'연락처',w:120},
       {k:'prodCategory',h:'상품분류',w:90}, {k:'prodCode',h:'상품코드',w:84},
       {k:'content',h:'내용',w:260,wrap:true}, {k:'answer',h:'답변',w:200,wrap:true} ] });
 

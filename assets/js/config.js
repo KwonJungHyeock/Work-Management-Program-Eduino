@@ -82,12 +82,13 @@ const QUICK_LINKS = [
 /* CS 상담 메모 — 연동 구글시트 컬럼(날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사)에 맞춘 값
    · 수정이 잦은 값은 상수로 분리 (분류는 사용자가 화면에서 편집 가능) */
 const CS_INQUIRY_TYPES = ['후불','견적','상품/재고','주문/배송','기타'];   // 시트 '분류'
-const CS_CUSTOMER_TYPES = ['학교','개인','기관','업체','입점사','파트너사'];   // 시트 '고객유형'
+const CS_CUSTOMER_TYPES = ['유치원','초등학교','중학교','고등학교','대학교','기관','개인','업체','입점사','파트너사']; // 시트 '고객유형' (학교 세분화)
 const CS_PRODUCT_CATEGORIES = ['자사키트','자사부품','입점사키트','입점사부품']; // 시트 '상품분류'
+const CS_ORDER_ROUTES = ['사이트','스팜','후불','발주'];                     // 시트 '주문경로'
 const CS_AGENTS = ['함인영','신아름','송민희','박정길'];                      // 시트 '상담사'
 /* 상담 메모 내부필드 → 구글시트 헤더 이름 매핑 (Apps Script가 헤더 이름으로 칸을 맞춤) */
 const CS_SHEET_MAP = {
-  date:'날짜', category:'분류', contact:'연락처', customerType:'고객유형',
+  date:'날짜', category:'분류', route:'주문경로', contact:'연락처', customerType:'고객유형',
   name:'주문자/학교/업체명', prodCategory:'상품분류', prodCode:'상품코드',
   content:'내용', answer:'답변', agent:'상담사',
 };
@@ -103,6 +104,7 @@ const NAV = [
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
+      { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
       { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
       { key:'cs.records',   name:'상담 기록',   icon:'sheet' },
   ]},
@@ -133,6 +135,7 @@ const STORE = {
   mdVendors:'eduino.md.vendors',   // 입점사 배송비
   mdOrderCfg:'eduino.md.order.cfg', // 발주 구글시트 연동 설정
   csTpl:    'eduino.cs.templates',
+  csMailTpl:'eduino.cs.mailtpl',      // 메일 템플릿(고객 메일용)
   csNotes:  'eduino.cs.notes',       // 상담 메모 레코드 배열
   csNoteCfg:'eduino.cs.notes.cfg',   // { sheetUrl, syncMode }
   csAgent:  'eduino.cs.notes.agent', // 마지막 선택 담당자
@@ -154,7 +157,7 @@ const SHARE_SCOPES = [
 const SHARE_DEFAULT = {
   [STORE.platforms]:'md', [STORE.mdPresets]:'md', [STORE.mdProducts]:'md',
   [STORE.mdVendors]:'md', [STORE.mdOrderCfg]:'md',
-  [STORE.csTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
+  [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
   [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
 };
@@ -175,7 +178,7 @@ function myShareScopes(){
 /* 공용(구글) 동기화 대상 = 팀 공통 설정만 (기기/세션/상담·발주 거래데이터 제외) */
 const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
-  STORE.mdOrderCfg, STORE.csTpl, STORE.csNoteCfg, STORE.csAgents,
+  STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.shareMap,
 ];
 /* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
@@ -186,6 +189,7 @@ const SHARED_LABELS = {
   [STORE.mdVendors]:'입점사 정보(배송비·정책)',
   [STORE.mdOrderCfg]:'발주 시트 연동 URL',
   [STORE.csTpl]:'CS 답변 템플릿',
+  [STORE.csMailTpl]:'CS 메일 템플릿',
   [STORE.csNoteCfg]:'CS 상담시트 연동 URL',
   [STORE.csAgents]:'상담사 목록',
   [STORE.csTypes]:'CS 분류',
