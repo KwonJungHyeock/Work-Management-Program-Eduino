@@ -22,9 +22,10 @@
           .lk-top{display:flex;align-items:center;gap:12px;padding:16px 18px;background:linear-gradient(0deg,var(--panel-2),var(--panel));border-bottom:1px solid var(--line)}
           .lk-top .code{font-family:var(--mono);font-weight:800;font-size:20px;letter-spacing:.02em}
           .lk-top .nm{font-size:14.5px;color:var(--ink-2);font-weight:600;line-height:1.4}
-          .lk-grid{display:grid;grid-template-columns:repeat(2,1fr)}
-          .lk-cell{padding:14px 18px;border-top:1px solid var(--line)}
-          .lk-cell:nth-child(odd){border-right:1px solid var(--line)}
+          .lk-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+          .lk-cell{padding:13px 16px;border-top:1px solid var(--line)}
+          .lk-cell + .lk-cell{border-left:1px solid var(--line)}
+          @media(max-width:620px){ .lk-grid{grid-template-columns:repeat(2,1fr)} .lk-cell:nth-child(odd){border-left:none} }
           .lk-cell .k{font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.03em;margin-bottom:5px}
           .lk-cell .v{font-size:15px;font-weight:700;color:var(--ink)}
           .lk-cell .v.num{font-family:var(--mono)}
