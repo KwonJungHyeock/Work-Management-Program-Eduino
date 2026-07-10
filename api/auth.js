@@ -73,7 +73,7 @@ module.exports = async function handler(req, res) {
 
     if (op === 'roster') {
       // 이름/부서만 (접속코드·이메일 제외) — 공지/메모 수신자 선택용, 로그인 사용자 누구나
-      const list = (await allAccounts()).map(a => ({ loginId: a.loginId, name: a.name || a.loginId, dept: a.dept || '' }));
+      const list = (await allAccounts()).map(a => ({ loginId: a.loginId, name: a.name || a.loginId, dept: a.dept || '', role: a.role || 'member' }));
       return res.status(200).json({ ok: true, roster: list });
     }
 
@@ -85,9 +85,15 @@ module.exports = async function handler(req, res) {
       if (loginId === ADMIN_ID) return res.status(400).json({ ok: false, error: '예약된 아이디입니다' });
       if (!String(u.code || '').trim()) return res.status(400).json({ ok: false, error: '접속코드를 입력하세요' });
       const perms = Array.isArray(u.perms) ? u.perms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
+      const role = u.role === 'lead' ? 'lead' : 'member';
+      // 파트장은 직무별 1명 제한 (서버 측 이중 방어)
+      if (role === 'lead') {
+        const dup = (await allAccounts()).find(a => a.loginId !== loginId && (a.dept || '') === String(u.dept || '') && a.role === 'lead');
+        if (dup) return res.status(400).json({ ok: false, error: '해당 직무에 이미 파트장이 있습니다 (기존 파트장을 팀원으로 변경 후 지정하세요)' });
+      }
       const acc = {
         loginId, code: String(u.code), name: String(u.name || ''), dept: String(u.dept || ''),
-        email: String(u.email || ''), role: 'member', active: u.active !== false, perms,
+        email: String(u.email || ''), role, active: u.active !== false, perms,
         createdAt: u.createdAt || new Date().toISOString(),
       };
       await putAccount(acc);

@@ -34,6 +34,8 @@
         .code-cell{font-family:var(--mono);letter-spacing:.02em}
         .dept-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px}
         .dept-badge.cs{background:#e7f0ff;color:#2d6cdf}.dept-badge.md{background:#ffe9ea;color:#e0313b}
+        .lead-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;
+          background:#efe9ff;color:#5b3fc4;margin-left:6px;letter-spacing:.02em}
         .u-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
         .u-form .fld{margin:0}
         .perm-sec{margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px}
@@ -59,6 +61,7 @@
               <label class="fld">아이디<input type="text" id="fId" placeholder="cs.kim" autocomplete="off"></label>
               <label class="fld">이름<input type="text" id="fName" placeholder="김상담"></label>
               <label class="fld">부서<select id="fDept">${DEPTS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
+              <label class="fld">역할<select id="fRole"><option value="member">팀원</option><option value="lead">파트장</option></select></label>
               <label class="fld">업무 이메일<input type="text" id="fEmail" placeholder="kim@robodyne.co.kr"></label>
               <label class="fld">접속코드
                 <span style="display:flex;gap:6px"><input type="text" id="fCode" placeholder="접속코드" style="flex:1">
@@ -83,25 +86,29 @@
       </div>`;
 
       const $=s=>root.querySelector(s);
-      let editing=null;
+      let editing=null, usersCache=[];
+      const roleLabel=r=>r==='lead'?'파트장':'팀원';
       function renderPerms(sel){ const box=$('#permPick'); const S=new Set(sel||[]);
         box.innerHTML=FEATURES.map(g=>`<div class="perm-grp"><div class="perm-gl ${g.dept}">${esc(g.name)}</div>
           <div class="perm-items">${g.items.map(it=>`<label class="perm-chk"><input type="checkbox" data-perm="${it.key}" ${S.has(it.key)?'checked':''}> ${esc(it.name)}</label>`).join('')}</div></div>`).join(''); }
       const collectPerms=()=>[...$('#permPick').querySelectorAll('[data-perm]:checked')].map(c=>c.dataset.perm);
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
       $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur]); };
-      function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs';
+      function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member';
         renderPerms(deptDefault('cs')); $('#fId').disabled=false; $('#editHint').textContent=''; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
-        $('#fDept').value=u.dept||'cs'; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
+        $('#fDept').value=u.dept||'cs'; $('#fRole').value=u.role==='lead'?'lead':'member'; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'));
         $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
       renderPerms(deptDefault('cs'));
 
       $('#saveUser').onclick=async()=>{
-        const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value,
+        const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value, role:$('#fRole').value,
           email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), perms:collectPerms() };
         if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--danger)">아이디와 접속코드는 필수입니다.</span>'; return; }
+        // 파트장은 직무별 1명 제한
+        if(user.role==='lead'){ const other=usersCache.find(x=>x.dept===user.dept && x.role==='lead' && x.loginId!==user.loginId);
+          if(other){ $('#admStat').innerHTML=`<span style="color:var(--danger)">이미 ${esc(deptLabel(user.dept))} 파트장(${esc(other.name||other.loginId)})이 있습니다. 기존 파트장을 팀원으로 바꾼 뒤 지정하세요.</span>`; return; } }
         $('#admStat').textContent='저장 중…';
         try{ await authApi('saveUser',{user}); $('#admStat').innerHTML='<span style="color:var(--ok)">저장되었습니다.</span>'; resetForm(); load(); }
         catch(err){ $('#admStat').innerHTML=`<span style="color:var(--danger)">${esc(err.message)}</span>`; }
@@ -114,12 +121,14 @@
           <tbody><tr><td colspan="6" class="muted" style="text-align:center;padding:16px">불러오는 중…</td></tr></tbody>`;
         try{
           const d=await authApi('listUsers');
-          const users=(d.users||[]).sort((a,b)=>(a.dept||'').localeCompare(b.dept||'')||a.loginId.localeCompare(b.loginId));
+          const rank=u=>u.role==='lead'?0:1;
+          const users=(d.users||[]).sort((a,b)=>(a.dept||'').localeCompare(b.dept||'')||rank(a)-rank(b)||a.loginId.localeCompare(b.loginId));
+          usersCache=users;
           $('#uCnt').textContent=`· ${users.length}명`;
           const tb=t.querySelector('tbody'); tb.innerHTML='';
           if(!users.length){ tb.innerHTML=`<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">발급된 계정이 없습니다. 위에서 발급하세요.</td></tr>`; return; }
           users.forEach(u=>{ const tr=el('tr');
-            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}</td>
+            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${u.role==='lead'?'<span class="lead-badge">파트장</span>':''}</td>
               <td><span class="dept-badge ${esc(u.dept||'')}">${esc(deptLabel(u.dept))}</span></td>
               <td class="muted">${esc(u.email||'-')}</td>
               <td class="code-cell">${esc(u.code||'-')}</td>
