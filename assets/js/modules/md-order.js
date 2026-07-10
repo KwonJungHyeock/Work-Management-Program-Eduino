@@ -172,7 +172,7 @@
                 <label class="fld">담당자<select id="fHandler"><option value="">담당자 선택</option></select></label>
                 <label class="fld">수량<input type="number" id="fQty" value="${form.qty}" min="1"></label>
                 <label class="fld">주문자명<input type="text" id="fOrderer" value="${esc(form.orderer)}"></label>
-                <label class="fld">주문경로<input type="text" id="fRoute" value="${esc(form.route)}" placeholder="예: 스팸"></label>
+                <label class="fld">주문경로<input type="text" id="fRoute" value="${esc(form.route)}" placeholder="예: 사이트"></label>
                 <label class="fld">구분<input type="text" id="fGubun" value="${esc(form.gubun)}" placeholder="예: 직배"></label>
                 <label class="fld">일자<input type="text" id="fDate" value="${esc(form.date)}" placeholder="7/7"></label>
               </div>
