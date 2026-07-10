@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
     const r = await fetchEcount();
     if (req.query && (req.query.diag || req.query.test)) {
       return res.status(200).json({ ok: true, zone: r.zone, detected: r.products.length,
-        custCount: r.custCount, custSample: r.custSample,
+        custCount: r.custCount, classCount: r.classCount, custSample: r.custSample,
         sampleRaw: r.sampleRaw, sampleMapped: r.products.slice(0, 3) });
     }
     const n = await catalog.bulkUpsert(r.products);
@@ -94,22 +94,28 @@ async function fetchEcount() {
 
   // 3b) 거래처(구매처) 이름 맵 — 품목의 거래처코드(CUST)를 회사명으로 치환
   const cust = await fetchCustMap(host(zone), sid);
+  // 3c) 품목분류 이름 맵 — CLASS_CD 코드를 분류명으로 치환(best-effort)
+  const cls = await fetchClassMap(host(zone), sid);
 
   const M = (k, d) => process.env['ECOUNT_MAP_' + k] || d;
   const VCODE = M('VENDORCODE', 'CUST');   // 품목 레코드에서 거래처코드가 들어있는 필드
   const products = arr.map(x => {
     const vcode = String(x[VCODE] || '').trim();
     const vname = cust.map[vcode] || (M('VENDOR', '') ? x[M('VENDOR', '')] : '');
+    const ccode = String(x[M('CLASSCODE', 'CLASS_CD')] || '').trim();
     return {
       selfCode: x[M('CODE', 'PROD_CD')],
       code: '',
       name: x[M('NAME', 'PROD_DES')],
       vendor: vname,
+      category: cls.map[ccode] || (M('CATEGORY', '') ? x[M('CATEGORY', '')] : ''),
+      inPrice: Number(x[M('INPRICE', 'IN_PRICE')]) || 0,
+      outPrice: Number(x[M('OUTPRICE', 'OUT_PRICE')]) || 0,
       settle: M('SETTLE', '') ? x[M('SETTLE', '')] : '',
       ship: M('SHIP', '') ? (Number(x[M('SHIP', '')]) || 0) : 0,
     };
   }).filter(p => p.selfCode);
-  return { zone, products, sampleRaw: arr.slice(0, 2), custCount: cust.count, custSample: cust.sample };
+  return { zone, products, sampleRaw: arr.slice(0, 2), custCount: cust.count, custSample: cust.sample, classCount: cls.count };
 }
 
 // 이카운트 거래처 목록 → { code: 회사명 } 맵. 실패 시 빈 맵(품목만 업로드).
@@ -130,6 +136,28 @@ async function fetchCustMap(hostUrl, sid) {
     return { map, count: Object.keys(map).length, sample: list.slice(0, 2) };
   } catch (e) {
     return { map: {}, count: 0, sample: 'ERR: ' + (e && e.message || e) };
+  }
+}
+
+// 이카운트 품목분류 목록 → { code: 분류명 } 맵(best-effort). 실패 시 빈 맵.
+async function fetchClassMap(hostUrl, sid) {
+  try {
+    const path = process.env.ECOUNT_CLASS_PATH;
+    if (!path) return { map: {}, count: 0 };   // 엔드포인트 미설정 시 건너뜀(원본 필드로 폴백)
+    let params = {}; if (process.env.ECOUNT_CLASS_BODY) { try { params = JSON.parse(process.env.ECOUNT_CLASS_BODY); } catch (e) {} }
+    const cr = await postJson(`${hostUrl}${path}?SESSION_ID=${encodeURIComponent(sid)}`, params);
+    const list = pickArray(cr, process.env.ECOUNT_CLASS_ARRAY_PATH);
+    const codeF = process.env.ECOUNT_CLASS_CODE || 'CLASS_CD';
+    const nameCands = [process.env.ECOUNT_CLASS_NAME, 'CLASS_DES', 'CLASS_NAME', 'CLASS_NM'].filter(Boolean);
+    const map = {};
+    for (const c of list) {
+      const code = String(c[codeF] || '').trim(); if (!code) continue;
+      let name = ''; for (const f of nameCands) { if (c[f]) { name = String(c[f]).trim(); break; } }
+      if (name) map[code] = name;
+    }
+    return { map, count: Object.keys(map).length };
+  } catch (e) {
+    return { map: {}, count: 0 };
   }
 }
 module.exports.fetchEcount = fetchEcount;

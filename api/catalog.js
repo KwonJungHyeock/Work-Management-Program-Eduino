@@ -43,6 +43,9 @@ function normalizeProduct(p) {
     code: String(p.code || ''),
     name: String(p.name || ''),
     vendor: String(p.vendor || ''),
+    category: String(p.category || ''),
+    inPrice: Number(p.inPrice) || 0,
+    outPrice: Number(p.outPrice) || 0,
     settle: String(p.settle || ''),
     ship: Number(p.ship) || 0,
   };
