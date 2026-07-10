@@ -104,17 +104,17 @@ const NAV = [
       { key:'home.memo',   name:'업무 메모',   icon:'send' },
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
+      { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
+      { key:'cs.records',   name:'상담 기록',   icon:'sheet' },
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
-      { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
-      { key:'cs.records',   name:'상담 기록',   icon:'sheet' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
-      { key:'md.product', name:'상품 데이터 관리', icon:'grid' },
-      { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
       { key:'md.order',   name:'입점사 발주',      icon:'truck' },
       { key:'md.records', name:'발주 기록',        icon:'sheet' },
+      { key:'md.product', name:'상품 데이터 관리', icon:'grid' },
+      { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
