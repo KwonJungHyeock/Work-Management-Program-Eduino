@@ -71,6 +71,27 @@ module.exports = async function handler(req, res) {
         if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1];
         return res.status(200).json({ ok: true, count: Number(o.count) || 0, updatedAt: o.updatedAt || null });
       }
+      // 상품명/코드 부분 검색 (CS·MD 조회용) — GET /api/catalog?q=아두이노&limit=30
+      if (q.q != null) {
+        const term = String(q.q || '').trim().toLowerCase();
+        const limit = Math.min(Number(q.limit) || 30, 100);
+        if (!term) return res.status(200).json({ ok: true, items: [], total: 0 });
+        const flat = await redis(['HGETALL', CATALOG_KEY]);
+        const items = [];
+        if (Array.isArray(flat)) {
+          for (let i = 1; i < flat.length; i += 2) {
+            let p = null; try { p = JSON.parse(flat[i]); } catch (e) {}
+            if (!p) continue;
+            const hay = ((p.selfCode || '') + ' ' + (p.name || '')).toLowerCase();
+            if (hay.includes(term)) items.push(p);
+          }
+        }
+        // 관련도 순 정렬: 코드/이름 완전일치 → 시작일치 → 부분일치
+        const rank = (p) => { const c = String(p.selfCode || '').toLowerCase(), n = String(p.name || '').toLowerCase();
+          if (c === term) return 0; if (c.startsWith(term)) return 1; if (n.startsWith(term)) return 2; return 3; };
+        items.sort((a, b) => rank(a) - rank(b) || String(a.selfCode).localeCompare(String(b.selfCode)));
+        return res.status(200).json({ ok: true, items: items.slice(0, limit), total: items.length });
+      }
       const code = normCode(q.code);
       if (!code) return res.status(400).json({ ok: false, error: 'code required' });
       const v = await redis(['HGET', CATALOG_KEY, code]);

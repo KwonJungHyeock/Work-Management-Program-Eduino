@@ -106,6 +106,7 @@ const NAV = [
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
       { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
+      { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
       { key:'cs.records',   name:'상담 기록',   icon:'sheet' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
@@ -124,7 +125,7 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'md.records'];
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'md.records'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }
