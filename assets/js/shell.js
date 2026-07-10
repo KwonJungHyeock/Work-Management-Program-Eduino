@@ -128,15 +128,25 @@ function bootShell(){
     s.textContent = n>99?'99+':(n||''); s.style.display = n?'':'none'; };
   async function fetchColl(coll){ try{ const r=await fetch('/api/store?type=coll&coll='+coll); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
   const noticeVisible=(dept)=>{ dept=dept||'all'; return dept==='all'||dept===myDept||isAdmin; };
-  async function updateBadges(){
+  let badgeAt=0, badgeBusy=false; const BADGE_TTL=20000;   // 최근 20초 내 재조회는 캐시로 대체(네비게이션 시 중복 호출 방지)
+  async function updateBadges(force){
+    if(badgeBusy) return;                                   // 진행 중이면 중복 실행 방지
+    if(!force && Date.now()-badgeAt < BADGE_TTL) return;    // 캐시 신선하면 스킵
+    badgeBusy=true;
     try{
       const uid=me.user.loginId;
+      const wantCb = isAdmin || myDept==='cs';
+      // 3개 컬렉션 병렬 조회(순차 왕복 → 1회 왕복으로 단축)
+      const [cbs, nts, mms] = await Promise.all([
+        wantCb ? fetchColl('callbacks') : Promise.resolve(null),
+        fetchColl('notice'),
+        fetchColl('memo'),
+      ]);
       let cbOpen=0, unreadN=0, myMemo=0;
-      if(isAdmin || myDept==='cs'){ const cbs=await fetchColl('callbacks'); if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); } }
-      const nts=await fetchColl('notice');
+      if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); }
       if(nts){ unreadN=nts.filter(x=>noticeVisible(x.dept) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
-      const mms=await fetchColl('memo');
       if(mms){ myMemo=mms.filter(m=>!m.done && noticeVisible(m.to||'all') && m.author!==uid).length; }
+      badgeAt=Date.now();
       // 알림 = 미확인 공지 + 나에게 온 메모 + (CS/관리자) 미처리 콜백
       const totalAlerts = unreadN + myMemo + cbOpen;
       setBadge('home.alerts', totalAlerts);
@@ -147,12 +157,13 @@ function bootShell(){
       }
       window.__prevAlerts = totalAlerts;
     }catch(e){}
+    finally{ badgeBusy=false; }
   }
-  window.refreshNavBadges = updateBadges;
-  updateBadges();
-  setInterval(updateBadges, 90000);
-  window.addEventListener('focus', updateBadges);
-  window.addEventListener('hashchange', ()=>setTimeout(updateBadges, 800));
+  window.refreshNavBadges = ()=>updateBadges(true);
+  updateBadges(true);
+  setInterval(()=>updateBadges(true), 90000);
+  window.addEventListener('focus', ()=>updateBadges(true));
+  window.addEventListener('hashchange', ()=>setTimeout(()=>updateBadges(false), 800));   // 네비게이션은 캐시 우선
 
   // 동기화 상태 칩 — 구글시트 백업 미전송분(내부 서버 저장은 별개로 정상)
   function updateSyncChip(){
