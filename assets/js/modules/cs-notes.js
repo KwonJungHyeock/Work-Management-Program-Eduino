@@ -161,7 +161,10 @@
       <style>
         /* 빠른 입력 (메모 중심) */
         .q-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
-        .q-hd{display:flex;align-items:center;gap:9px;padding:14px 20px;background:var(--panel-2);border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
+        .q-hd{display:flex;align-items:center;gap:10px;padding:14px 20px;background:linear-gradient(180deg,var(--panel-2),var(--panel));border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
+        .q-hd .q-ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;
+          background:var(--red-soft);color:var(--red);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 22%,transparent)}
+        .q-hd .q-ic svg{width:15px;height:15px}
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
         .q-hd .kbd b{background:var(--panel);border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
@@ -176,9 +179,10 @@
         /* 칩(토글) — 선택 시 소프트 틴트 + 컬러 보더 */
         .chips{display:flex;gap:7px;flex-wrap:wrap}
         .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);
-          font-size:13.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:.1s;user-select:none;line-height:1.2}
-        .chip:hover{border-color:var(--faint);background:var(--panel-2)}
-        .chip.on{border-color:var(--red);background:var(--red-soft);color:var(--red);font-weight:700;box-shadow:inset 0 0 0 1px var(--red)}
+          font-size:13.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s,transform .12s;user-select:none;line-height:1.2}
+        .chip:hover{border-color:var(--faint);background:var(--panel-2);transform:translateY(-1px)}
+        .chip.on{border-color:var(--red);background:var(--red-soft);color:var(--red);font-weight:700;box-shadow:inset 0 0 0 1px var(--red),0 1px 3px color-mix(in srgb,var(--red) 20%,transparent)}
+        .chip.on:hover{transform:translateY(-1px)}
         .chip .q-del{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
           background:var(--line-strong);color:#fff;font-size:10px;font-weight:800}
         .chip.on .q-del{background:var(--red);color:#fff}
@@ -262,7 +266,7 @@
       function drawMemo(){
         body.innerHTML=`
           <div class="q-card">
-            <div class="q-hd">${icon('phone')}빠른 입력
+            <div class="q-hd"><span class="q-ic">${icon('phone')}</span>빠른 입력
               <span class="kbd">저장 후 자동 초기화 · <b>Ctrl</b>+<b>Enter</b> 저장</span></div>
             <div class="q-bd">
               <form id="qform">

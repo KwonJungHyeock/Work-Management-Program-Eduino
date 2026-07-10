@@ -93,32 +93,38 @@
 
       root.innerHTML=`
       <style>
+        /* 빠른 발주 히어로 카드 */
+        .card.qk{border-radius:14px;box-shadow:var(--sh);overflow:hidden}
+        .card.qk .card-hd{background:linear-gradient(180deg,var(--panel-2),var(--panel));border-bottom:1px solid var(--line);font-weight:800}
+        .card.qk .qk-ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;
+          background:var(--red-soft);color:var(--red);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 22%,transparent)}
+        .card.qk .qk-ic svg{width:15px;height:15px}
         .code-in{font-size:20px;font-weight:800;font-family:var(--mono);height:54px;letter-spacing:.03em;border-width:2px}
         .code-in:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
         .oe{height:32px;font-size:13px;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel)}
         .oe:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);outline:none}
         #ordTable tr:has(.oe){background:var(--active-bg)}
         /* 자동 조회 */
-        .lookup{display:flex;align-items:center;padding:13px 16px;border-radius:11px;border:1.5px solid var(--line);background:var(--panel-2);min-height:66px;font-size:14px;transition:.14s}
-        .lookup.ok{border-color:#8fd3ab;background:linear-gradient(0deg,var(--ok-bg),#f4fbf6)}
-        .lookup.bad{border-color:#eecac6;background:#fdeef0;color:var(--danger);font-weight:600}
+        .lookup{display:flex;align-items:center;padding:13px 16px;border-radius:11px;border:1.5px solid var(--line);background:var(--panel-2);min-height:66px;font-size:14px;transition:border-color .14s,background .14s,box-shadow .14s}
+        .lookup.ok{border-color:color-mix(in srgb,var(--ok) 42%,var(--line));background:var(--ok-bg);box-shadow:inset 3px 0 0 var(--ok)}
+        .lookup.bad{border-color:color-mix(in srgb,var(--danger) 38%,var(--line));background:var(--danger-soft);color:var(--danger);font-weight:600;box-shadow:inset 3px 0 0 var(--danger)}
         .lk{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0}
         .lk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .lk-vn{font-weight:800;font-size:18px;color:var(--ink);white-space:nowrap;letter-spacing:-.01em}
         .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
         .lookup .pill{white-space:nowrap;background:var(--panel);font-weight:600;border-color:#b7dcc6}
         .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
-        .lookup .pill.pol{background:#fff7e8;border-color:#f0d08a;color:#8a5a00;display:inline-flex;align-items:center;gap:4px;max-width:100%}
-        .lookup .pill.pol b{color:#7a4f00;white-space:normal}
+        .lookup .pill.pol{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 45%,var(--line));color:var(--warn);display:inline-flex;align-items:center;gap:4px;max-width:100%}
+        .lookup .pill.pol b{color:var(--warn);white-space:normal}
         .lookup .pill.pol svg{width:13px;height:13px;flex:0 0 auto}
         /* 입점사 정보 표 */
         .ven-tbl{overflow:auto;border:1px solid var(--line);border-radius:9px;box-shadow:var(--sh-sm);max-height:560px}
-        .ven-tbl table.tbl th{background:#eef1f5;position:sticky;top:0;z-index:1}
+        .ven-tbl table.tbl th{background:var(--panel-2);position:sticky;top:0;z-index:1}
         .ven-tbl table.tbl tbody tr:nth-child(even){background:var(--zebra)}
         .ven-tbl input{min-width:0}
         /* 표 */
         .out-tbl{overflow:auto;max-height:320px;border:1px solid var(--line);border-radius:9px;box-shadow:var(--sh-sm)}
-        .out-tbl table.tbl th{background:#eef1f5}
+        .out-tbl table.tbl th{background:var(--panel-2)}
         .out-tbl table.tbl tbody tr:nth-child(even){background:var(--zebra)}
         .mini{font-size:11px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
         /* 자사/입점사 배지 */
@@ -159,13 +165,13 @@
       }
       function drawEntry(){
         body.innerHTML=`
-          <div class="card" style="margin-bottom:18px">
-            <div class="card-hd">${icon('search')}<b>상품코드로 빠른 발주</b>
+          <div class="card qk" style="margin-bottom:18px">
+            <div class="card-hd"><span class="qk-ic">${icon('search')}</span><b>상품코드로 빠른 발주</b>
               <span class="muted" style="margin-left:auto;font-size:12.5px">코드 입력 후 <b>Enter</b> → 목록에 추가</span></div>
             <div class="card-bd">
               <div style="display:grid;grid-template-columns:minmax(200px,1fr) minmax(260px,1.3fr);gap:16px;align-items:stretch">
                 <label class="fld">자체상품코드
-                  <input class="code-in" id="fCode" value="${esc(form.code)}" placeholder="예: ED-1004" autocomplete="off"></label>
+                  <input type="text" class="code-in" id="fCode" value="${esc(form.code)}" placeholder="예: ED-1004" autocomplete="off"></label>
                 <div><div class="mini" style="margin-bottom:6px">자동 조회</div><div class="lookup" id="lookup">상품코드를 입력하세요.</div></div>
               </div>
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:16px">
