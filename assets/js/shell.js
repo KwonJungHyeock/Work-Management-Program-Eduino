@@ -72,18 +72,20 @@ function bootShell(){
   // 계정 권한 (관리자가 기능별로 부여 · 관리자는 전체 · 공통(홈)은 누구나)
   const isAdmin = !!(me.user && me.user.role==='admin');
   const myDept = me.user && me.user.dept;
+  const isLead = !!(me.user && me.user.role==='lead' && (myDept==='cs'||myDept==='md'));   // 파트장(직무별)
   const perms = Array.isArray(me.user && me.user.perms) ? me.user.perms : null;
   const commonDepts = new Set(NAV.filter(g=>g.common).map(g=>g.dept));
   const deptOpen = new Set(typeof DEPT_OPEN_KEYS!=='undefined'?DEPT_OPEN_KEYS:[]);
   const hasPerm = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
     if(isAdmin) return true;
+    if(isLead && key==='admin.insights') return true;  // 파트장 → 자기 파트 업무 현황
     if(deptOpen.has(key) && d===myDept) return true;   // 누적 시트 등 직무 기본 열람
     if(perms) return perms.includes(key);
     return d===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
-    if(d==='admin') return isAdmin;
+    if(d==='admin') return isAdmin || (isLead && key==='admin.insights');
     return hasPerm(key); };
 
   // 내비게이션 — 공통(홈)은 항상, CS·MD는 표시하되 권한 없는 기능은 잠금
@@ -105,6 +107,17 @@ function bootShell(){
     });
     nav.appendChild(grp);
   });
+
+  // 파트장 전용 그룹 — 자기 파트 업무 현황 (관리자는 관리자 그룹에서 접근)
+  if(isLead && !isAdmin){
+    const lg=el('div','nav-group'); lg.style.setProperty('--dept', DEPT_COLOR[myDept]||'#8b93a1');
+    lg.innerHTML=`<div class="nav-glabel"><span class="gi">${icon('shield')}</span>
+      <span class="gtx"><b>파트 관리</b><small>${myDept==='cs'?'CS':'MD'} 파트장</small></span></div>`;
+    const it=el('div','nav-item'); it.dataset.key='admin.insights';
+    it.innerHTML=`${icon('chart')}<span class="txt">우리 파트 현황</span>`;
+    it.onclick=()=>{ location.hash='admin.insights'; };
+    lg.appendChild(it); nav.appendChild(lg);
+  }
 
   // 사이드바 알림 배지 — 미처리 콜백(CS·관리자) · 안 읽은 공지(전원)
   const setBadge=(key,n)=>{ const s=nav.querySelector(`.nav-item[data-key="${key}"] .nav-badge`); if(!s) return;

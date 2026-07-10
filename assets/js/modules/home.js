@@ -290,9 +290,12 @@
           cards.push({ k:'cs.notes', ic:'clipboard', l:'미처리 콜백', v:nCbOpen, c:'var(--d3)' });
           cards.push({ k:'cs.notes', ic:'headset',   l:'오늘 상담',   v:todayCs, c:'var(--d1)' });
         }
+        if(u.role==='lead'){ cards.push({ k:'admin.insights', ic:'chart', l:'우리 파트 현황', link:true, c:'var(--d2)' }); }
         const row=root.querySelector('#statRow'); if(!row) return; row.innerHTML='';
         cards.forEach(c=>{ const d=el('div','tile click'); d.style.setProperty('--tc',c.c);
-          d.innerHTML=`<div class="tl">${icon(c.ic)}${c.l}</div><div class="tv">${c.v}<small>건</small></div>`;
+          d.innerHTML=c.link
+            ? `<div class="tl">${icon(c.ic)}${c.l}</div><div class="tv" style="font-size:17px;color:var(--muted);font-weight:700;margin-top:9px">열기 →</div>`
+            : `<div class="tl">${icon(c.ic)}${c.l}</div><div class="tv">${c.v}<small>건</small></div>`;
           d.onclick=()=>{ location.hash=c.k; }; row.appendChild(d); });
       }
 

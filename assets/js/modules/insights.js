@@ -36,8 +36,12 @@
   MODULES['admin.insights']={
     title:'업무 현황', icon:'chart',
     render(root){
-      if(!Auth.isAdmin()){
-        root.innerHTML=`<div class="view"><div class="empty">${icon('shield')}<div style="font-size:14px">관리자(팀장)만 접근할 수 있는 화면입니다.</div></div></div>`;
+      const meU=(Auth.user&&Auth.user())||{};
+      const isAdminV=!!(Auth.isAdmin&&Auth.isAdmin());
+      const leadDept=(meU.role==='lead'&&(meU.dept==='cs'||meU.dept==='md'))?meU.dept:null;
+      const leadOnly = !isAdminV && !!leadDept;   // 파트장(비관리자) — 자기 부서만
+      if(!isAdminV && !leadDept){
+        root.innerHTML=`<div class="view"><div class="empty">${icon('shield')}<div style="font-size:14px">관리자(팀장) 또는 파트장만 접근할 수 있는 화면입니다.</div></div></div>`;
         return;
       }
       root.innerHTML=`
@@ -128,7 +132,11 @@
       </div>`;
 
       const $=s=>root.querySelector(s);
-      let records=[], roster=[], preset='7', dept='all', custom={from:todayStr(), to:todayStr()};
+      let records=[], roster=[], preset='7', dept=leadOnly?leadDept:'all', custom={from:todayStr(), to:todayStr()};
+      // 파트장은 자기 부서만 — 부서 전환 세그먼트 숨김 + 제목 조정
+      if(leadOnly){ const sd=$('#segDept'); if(sd) sd.style.display='none';
+        const tt=root.querySelector('.mhead .tt'); if(tt) tt.textContent=`우리 파트 현황 · ${DLABEL[leadDept]||''}`;
+        const ds=root.querySelector('.mhead .ds'); if(ds) ds.textContent=`${DLABEL[leadDept]||''} 파트의 일일 업무량을 집계해 보여줍니다. 매 상담/발주 저장 시 서버에 누적됩니다.`; }
 
       function curRange(){
         const to=todayStr();
