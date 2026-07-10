@@ -79,23 +79,23 @@ MODULES['md.product'] = {
         .pl-hd{flex:none;padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
         .pl-hd b{font-size:15px}
         .pl-scroll{flex:1;overflow:auto;padding:14px 16px}
-        .drop{border:2px dashed var(--line-strong);border-radius:10px;padding:22px;text-align:center;cursor:pointer;background:#fff;transition:.14s}
+        .drop{border:2px dashed var(--line-strong);border-radius:10px;padding:22px;text-align:center;cursor:pointer;background:var(--panel);transition:.14s}
         .drop:hover,.drop.over{border-color:var(--red);background:var(--red-soft)}
         .drop .ic{font-size:26px;color:var(--faint)}
-        .thumb{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:8px}
+        .thumb{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);margin-top:8px}
         .thumb img{width:42px;height:42px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
-        .preview-frame{margin-top:12px;border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}
+        .preview-frame{margin-top:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
         .preview-frame img{width:100%;display:block}
         .cutline{position:absolute;left:0;right:0;height:3px;background:var(--red);cursor:pointer;box-shadow:0 0 0 1px #fff}
         .cutline .no{position:absolute;left:6px;top:-9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px}
         .plat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         .plat-tile{position:relative;display:flex;flex-direction:column;gap:8px;padding:14px;border:2px solid var(--line);
-          border-radius:12px;background:#fff;cursor:pointer;transition:.14s}
+          border-radius:12px;background:var(--panel);cursor:pointer;transition:.14s}
         .plat-tile:hover{border-color:var(--line-strong);box-shadow:var(--sh-sm)}
         .plat-tile.on{border-color:var(--red);background:var(--red-soft);box-shadow:0 3px 10px rgba(31,86,163,.14)}
         .mono-badge{border-radius:9px;color:#fff;font-weight:800;font-size:14px;flex:none;
           align-items:center;justify-content:center}
-        .plat-logo-img{border-radius:9px;object-fit:contain;background:#fff;border:1px solid var(--line);display:block;flex:none}
+        .plat-logo-img{border-radius:9px;object-fit:contain;background:var(--panel);border:1px solid var(--line);display:block;flex:none}
         .plat-tile .mono-badge{width:46px;height:46px;border-radius:11px;font-size:18px}
         .plat-tile .plat-logo-img{width:46px;height:46px;border-radius:11px}
         .logo-edit{position:relative;padding:0;border:0;background:none;cursor:pointer;flex:none;line-height:0;border-radius:9px}
@@ -107,9 +107,9 @@ MODULES['md.product'] = {
         .plat-tile .pmeta{font-size:11.5px;color:var(--muted)}
         .plat-tile .ftags{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
         .plat-tile .ftag{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:4px;background:var(--line-2);color:var(--muted)}
-        .plat-tile.on .ftag{background:#fff;color:var(--red)}
+        .plat-tile.on .ftag{background:var(--panel);color:var(--red)}
         .plat-tile .chk{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;border:2px solid var(--line-strong);
-          background:#fff;display:flex;align-items:center;justify-content:center;color:#fff}
+          background:var(--panel);display:flex;align-items:center;justify-content:center;color:#fff}
         .plat-tile.on .chk{background:var(--red);border-color:var(--red)}
         .plat-tile .chk .ic{font-size:13px;opacity:0}.plat-tile.on .chk .ic{opacity:1}
         .pf-row{display:grid;grid-template-columns:1.5fr 1fr .8fr .8fr .8fr 40px;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line-2)}
@@ -117,7 +117,7 @@ MODULES['md.product'] = {
         .fmt-tags{display:flex;gap:5px;flex-wrap:wrap}
         .fmt-tag{font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px;background:var(--line-2);color:var(--muted);cursor:pointer;border:1.5px solid transparent}
         .fmt-tag.on{background:var(--red-soft);color:var(--red);border-color:#f4c9cb}
-        .out-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
+        .out-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
       </style>
       <div class="conv-wrap">
         <div class="conv-head">

@@ -95,7 +95,7 @@
       <style>
         .code-in{font-size:20px;font-weight:800;font-family:var(--mono);height:54px;letter-spacing:.03em;border-width:2px}
         .code-in:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
-        .oe{height:32px;font-size:13px;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:#fff}
+        .oe{height:32px;font-size:13px;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel)}
         .oe:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);outline:none}
         #ordTable tr:has(.oe){background:var(--active-bg)}
         /* 자동 조회 */
@@ -106,7 +106,7 @@
         .lk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .lk-vn{font-weight:800;font-size:18px;color:var(--ink);white-space:nowrap;letter-spacing:-.01em}
         .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
-        .lookup .pill{white-space:nowrap;background:#fff;font-weight:600;border-color:#b7dcc6}
+        .lookup .pill{white-space:nowrap;background:var(--panel);font-weight:600;border-color:#b7dcc6}
         .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
         .lookup .pill.pol{background:#fff7e8;border-color:#f0d08a;color:#8a5a00;display:inline-flex;align-items:center;gap:4px;max-width:100%}
         .lookup .pill.pol b{color:#7a4f00;white-space:normal}

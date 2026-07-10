@@ -33,7 +33,7 @@
           .sv-in{height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 11px;font-size:13px;min-width:120px}
           .sv-sp{flex:1}
           .sv-meta{font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600}
-          .sv-wrap{border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100vh - 290px);background:#fff;box-shadow:var(--sh-sm)}
+          .sv-wrap{border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100vh - 290px);background:var(--panel);box-shadow:var(--sh-sm)}
           table.sv{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
           table.sv th{position:sticky;top:0;z-index:2;background:#f4f6f9;color:var(--ink-2);font-size:11.5px;font-weight:800;
             letter-spacing:.02em;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}

@@ -160,10 +160,10 @@
       root.innerHTML=`
       <style>
         /* 빠른 입력 (메모 중심) */
-        .q-card{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
+        .q-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
         .q-hd{display:flex;align-items:center;gap:9px;padding:14px 20px;background:var(--panel-2);border-bottom:1px solid var(--line);font-weight:800;font-size:15.5px}
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
-        .q-hd .kbd b{background:#fff;border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
+        .q-hd .kbd b{background:var(--panel);border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
         /* 빠른 입력 2단 레이아웃 (오른쪽 메타 패널로 공간 활용) */
         .q-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:22px;align-items:start}
@@ -175,7 +175,7 @@
         .q-sec-cap .opt{font-size:11px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
         /* 칩(토글) — 선택 시 소프트 틴트 + 컬러 보더 */
         .chips{display:flex;gap:7px;flex-wrap:wrap}
-        .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;
+        .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);
           font-size:13.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:.1s;user-select:none;line-height:1.2}
         .chip:hover{border-color:var(--faint);background:var(--panel-2)}
         .chip.on{border-color:var(--red);background:var(--red-soft);color:var(--red);font-weight:700;box-shadow:inset 0 0 0 1px var(--red)}
@@ -187,7 +187,7 @@
         .chip-add{display:flex;gap:6px;align-items:center}
         .chip-add input{height:auto;padding:8px 10px;font-size:13.5px;width:118px}
         /* 내용/답변 */
-        .q-memo{width:100%;min-height:150px;font-size:15px;line-height:1.6;padding:14px;border:1.5px solid var(--line-strong);border-radius:10px;background:#fff;resize:vertical}
+        .q-memo{width:100%;min-height:150px;font-size:15px;line-height:1.6;padding:14px;border:1.5px solid var(--line-strong);border-radius:10px;background:var(--panel);resize:vertical}
         .q-memo:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
         .q-ans{width:100%;min-height:82px;font-size:14px;line-height:1.55;padding:12px;border:1.5px solid var(--line-strong);border-radius:10px;resize:vertical}
         .q-ans:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
@@ -202,7 +202,7 @@
         .q-save{width:100%;justify-content:center;margin-top:2px}
         .side-cap-row{display:flex;align-items:center;margin-bottom:6px}
         /* 처리 대기 카드 */
-        .pend-card{display:grid;grid-template-columns:1fr 210px;gap:14px;align-items:start;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:9px}
+        .pend-card{display:grid;grid-template-columns:1fr 210px;gap:14px;align-items:start;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:9px}
         .pend-card.done{opacity:.62;background:var(--panel-2)}
         .pend-card .pc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
         .pend-card .pc-name{font-weight:700}
@@ -219,7 +219,7 @@
         .tpl-tokens{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
         .chip.sm{padding:5px 10px;font-size:12px;font-family:var(--mono)}
         /* 오늘 기록 카드 */
-        .note-card{display:grid;grid-template-columns:58px 96px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-bottom:8px}
+        .note-card{display:grid;grid-template-columns:58px 96px 1fr auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel);margin-bottom:8px}
         .note-card .tm{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13.5px;font-weight:600}
         .note-card .memo{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
         .note-card .ans{font-size:13px;line-height:1.5;color:var(--ink-2);margin-top:3px;white-space:pre-wrap;word-break:break-word}
@@ -227,7 +227,7 @@
         .note-card .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
         .note-card .sub2{font-size:11.5px;color:var(--faint);margin-top:3px}
         .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-        .sum-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff}
+        .sum-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--panel)}
         .sum-card .lb{font-size:13px;color:var(--muted)}
         .sum-card .vl{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px}
         .syncbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #ead9b0;background:var(--warn-bg);border-radius:8px;margin-bottom:14px;font-size:13.5px;color:#7a4d06}

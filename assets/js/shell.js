@@ -32,6 +32,7 @@ function bootShell(){
       <div class="sp"></div>
       <button class="topsearch" id="btnSearch" title="전역 검색 (Ctrl+K)">${icon('search')}<span>검색</span><kbd>Ctrl K</kbd></button>
       <button class="navtoggle" id="btnBell" title="브라우저 알림 켜기/끄기">${icon('bell')}</button>
+      <button class="navtoggle" id="btnTheme" title="라이트/다크 모드" style="font-size:15px">🌙</button>
       <div class="syncchip ok" id="syncChip" title="상담·발주는 서버에 저장됩니다. 구글시트 백업 미전송분은 90초마다 자동 재시도됩니다.">${icon('check')}<span>저장 정상</span></div>
       <div class="quicklinks" id="quicklinks"></div>
       <div class="presence" id="presence" title="실시간 접속자 현황은 공용 서버 연동(예정) 후 표시됩니다">
@@ -212,6 +213,13 @@ function bootShell(){
   })();
 
   { const bs=$('btnSearch'); if(bs) bs.onclick=()=>window.__openPalette&&window.__openPalette(); }
+  // 라이트/다크 모드 토글
+  { const bt=$('btnTheme'); if(bt){ const de=document.documentElement;
+      const sync=()=>{ bt.textContent = de.getAttribute('data-theme')==='dark' ? '☀️' : '🌙'; };
+      bt.onclick=()=>{ const dark=de.getAttribute('data-theme')==='dark';
+        if(dark){ de.removeAttribute('data-theme'); localStorage.removeItem('eduino.theme'); }
+        else { de.setAttribute('data-theme','dark'); localStorage.setItem('eduino.theme','dark'); } sync(); };
+      sync(); } }
   // 최초 1회 온보딩 팁
   if(!localStorage.getItem('eduino.tip.k')){ setTimeout(()=>{ try{ toast('팁: Ctrl+K 로 메뉴·상품을 어디서든 검색하세요'); }catch(e){} localStorage.setItem('eduino.tip.k','1'); }, 2600); }
   // 브라우저 알림 토글

@@ -59,7 +59,7 @@
         .iv-dates input{height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font-size:13px}
         .iv-sp{flex:1}
         .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0 20px}
-        .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;padding:15px 16px 15px 18px;box-shadow:var(--sh-sm)}
+        .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);padding:15px 16px 15px 18px;box-shadow:var(--sh-sm)}
         .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kc,var(--d1))}
         .kpi .kl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
         .kpi .kv{font-size:29px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:5px;color:var(--ink)}
@@ -82,18 +82,18 @@
         .lgd{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:600;margin-left:12px}
         .lgd i{width:10px;height:10px;border-radius:3px;display:inline-block}
         .kpi .kl .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
-        .emp-tbl tr.grp td{background:#f6f8fb;padding-top:11px;padding-bottom:7px;border-bottom:1px solid var(--line-2)}
+        .emp-tbl tr.grp td{background:var(--panel-2);padding-top:11px;padding-bottom:7px;border-bottom:1px solid var(--line-2)}
         .emp-tbl .gsum{color:var(--muted);font-size:12px;font-weight:700;margin-left:7px}
         /* 자동 인사이트 하이라이트 */
         .hl-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:0 0 20px}
-        .hl{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;background:#fff;padding:13px 14px;box-shadow:var(--sh-sm)}
+        .hl{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 14px;box-shadow:var(--sh-sm)}
         .hl .hi{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto}
         .hl .ht{font-size:13px;line-height:1.5;color:var(--ink-2)}
         .hl .ht b{color:var(--ink);font-weight:800}
         .hl.up .hi{background:var(--ok-bg,#e8f6ee)} .hl.down .hi{background:#fdecee} .hl.flat .hi{background:var(--panel-2)}
         /* 차트 hover 툴팁 */
         #trend{position:relative}
-        .iv-tip{position:absolute;pointer-events:none;display:none;z-index:6;background:#fff;border:1px solid var(--line-2);
+        .iv-tip{position:absolute;pointer-events:none;display:none;z-index:6;background:var(--panel);border:1px solid var(--line-2);
           border-radius:9px;box-shadow:0 8px 24px rgba(16,24,40,.18);padding:8px 11px;font-size:12px;min-width:128px}
         .iv-tip .tp-d{font-weight:800;color:var(--ink);margin-bottom:6px}
         .iv-tip .tp-row{display:flex;justify-content:space-between;gap:16px;line-height:1.75}
@@ -115,7 +115,7 @@
         .fun-card{border:1px solid var(--line);border-radius:var(--r-lg);background:linear-gradient(180deg,#fff, #fbfcfe);box-shadow:var(--sh-sm);overflow:hidden}
         .fun-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:14.5px}
         .fun-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:14px 16px}
-        .fun{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:#fff}
+        .fun{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
         .fun .fe{font-size:22px;line-height:1;flex:none}
         .fun .fl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.03em;text-transform:uppercase}
         .fun .fv{font-size:15px;font-weight:800;color:var(--ink);margin-top:2px;line-height:1.2}

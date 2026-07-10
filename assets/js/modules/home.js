@@ -26,7 +26,7 @@
       const u=meU(), isAdmin=(typeof Auth!=='undefined'&&Auth.isAdmin&&Auth.isAdmin());
       root.innerHTML=`
       <style>
-        .nt-card{border:1px solid var(--line);border-radius:12px;background:#fff;padding:15px 18px;margin-bottom:11px;box-shadow:var(--sh-sm);position:relative}
+        .nt-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px 18px;margin-bottom:11px;box-shadow:var(--sh-sm);position:relative}
         .nt-card.unread{border-left:3px solid var(--red)}
         .nt-top{display:flex;align-items:center;gap:9px;margin-bottom:7px}
         .nt-title{font-size:15.5px;font-weight:800}
@@ -100,11 +100,11 @@
       root.innerHTML=`
       <style>
         .al-sec{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin:4px 2px 11px}
-        .al-card{border:1px solid var(--line);border-left:3px solid var(--red);border-radius:11px;background:#fff;padding:13px 16px;margin-bottom:10px;box-shadow:var(--sh-sm)}
+        .al-card{border:1px solid var(--line);border-left:3px solid var(--red);border-radius:11px;background:var(--panel);padding:13px 16px;margin-bottom:10px;box-shadow:var(--sh-sm)}
         .al-title{font-size:14.5px;font-weight:800}
         .al-body{font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--ink-2);margin-top:5px}
         .al-meta{font-size:12px;color:var(--muted);margin-top:9px;display:flex;gap:9px;align-items:center}
-        .al-link{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:12px 16px;margin-bottom:10px;cursor:pointer;box-shadow:var(--sh-sm);transition:.12s}
+        .al-link{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 16px;margin-bottom:10px;cursor:pointer;box-shadow:var(--sh-sm);transition:.12s}
         .al-link:hover{border-color:var(--red);transform:translateY(-1px)}
         .al-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--red-soft);color:var(--red)}
         .al-none{padding:44px;text-align:center;color:var(--muted)}
@@ -152,7 +152,7 @@
       const u=meU();
       root.innerHTML=`
       <style>
-        .mm-card{border:1px solid var(--line);border-radius:11px;background:#fff;padding:13px 16px;margin-bottom:10px;box-shadow:var(--sh-sm)}
+        .mm-card{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:13px 16px;margin-bottom:10px;box-shadow:var(--sh-sm)}
         .mm-card.done{opacity:.6;background:var(--panel-2)}
         .mm-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
         .mm-to{font-size:11.5px;font-weight:800;color:#5b3fc4;background:#eae4ff;border-radius:5px;padding:2px 8px}
@@ -224,7 +224,7 @@
       <style>
         .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start;margin-top:16px}
         @media(max-width:900px){.dash-2{grid-template-columns:1fr}}
-        .dcard{border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;overflow:hidden;box-shadow:var(--sh-sm)}
+        .dcard{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;box-shadow:var(--sh-sm)}
         .dcard-hd{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);
           font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--panel-2)}
         .dcard-hd .ic{font-size:14px;color:var(--faint)}
@@ -238,7 +238,7 @@
         .drow .pin{width:7px;height:7px;border-radius:50%;background:var(--danger);flex:none}
         .ql-row{display:flex;gap:8px;flex-wrap:wrap;padding:5px 8px 10px}
         .ql-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid var(--line-strong);border-radius:8px;
-          font-size:13px;font-weight:600;color:var(--ink-2);text-decoration:none;background:#fff}
+          font-size:13px;font-weight:600;color:var(--ink-2);text-decoration:none;background:var(--panel)}
         .ql-chip:hover{border-color:var(--red);color:var(--red);background:var(--red-soft)}
         .ql-chip .ic{color:var(--faint)}.ql-chip:hover .ic{color:var(--red)}
         .pp-dot2{width:8px;height:8px;border-radius:50%;background:#42c98a;box-shadow:0 0 0 3px rgba(66,201,138,.18);flex:none}
