@@ -26,11 +26,17 @@
       const u=meU(), isAdmin=(typeof Auth!=='undefined'&&Auth.isAdmin&&Auth.isAdmin());
       root.innerHTML=`
       <style>
-        .nt-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px 18px;margin-bottom:11px;box-shadow:var(--sh-sm);position:relative}
+        .nt-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px 18px;margin-bottom:11px;box-shadow:var(--sh-sm);position:relative;transition:opacity .15s,background .15s}
         .nt-card.unread{border-left:3px solid var(--red)}
+        /* 완료 처리 — 색을 살짝 연하게(마감된 업무 시각적 구분) */
+        .nt-card.done{background:var(--panel-2);opacity:.68;border-left:3px solid var(--ok)}
+        .nt-card.done .nt-title{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--faint)}
+        .nt-card.done .nt-body{color:var(--muted)}
         .nt-top{display:flex;align-items:center;gap:9px;margin-bottom:7px}
         .nt-title{font-size:15.5px;font-weight:800}
         .nt-new{font-size:10.5px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 6px}
+        .nt-done{font-size:10.5px;font-weight:800;color:#fff;background:var(--ok);border-radius:5px;padding:2px 7px;display:inline-flex;align-items:center;gap:3px}
+        .nt-donemeta{font-weight:700;color:var(--ok)}
         .nt-body{font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word;color:var(--ink-2)}
         .nt-meta{font-size:12px;color:var(--muted);margin-top:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
         .nt-tgt{font-weight:700;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
@@ -53,18 +59,27 @@
       }
       function card(n){
         const unread=!(n.readBy||[]).includes(u.loginId);
-        const c=el('div','nt-card'+(unread?' unread':''));
-        c.innerHTML=`<div class="nt-top">${unread?'<span class="nt-new">미확인</span>':''}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
+        const done=!!n.done;
+        const c=el('div','nt-card'+(unread&&!done?' unread':'')+(done?' done':''));
+        c.innerHTML=`<div class="nt-top">${done?'<span class="nt-done">'+icon('check')+'완료</span>':(unread?'<span class="nt-new">미확인</span>':'')}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
             ${isAdmin?'<button class="btn ghost sm" data-del style="margin-left:auto">'+icon('trash')+'</button>':''}</div>
           <div class="nt-body">${esc(n.body||'')}</div>
           <div class="nt-meta"><span class="nt-tgt">${esc(targetLabel(n.dept||'all',roster))}</span>
             <span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
+            ${done?`<span class="nt-donemeta">완료 · ${esc(dateShort(n.doneAt))}</span>`:''}
             <span style="margin-left:auto">읽음 ${ (n.readBy||[]).length }</span>
-            ${unread?`<button class="btn pri sm" data-read>${icon('check')}확인</button>`:'<span style="color:var(--ok);font-weight:700;font-size:12px">✓ 확인함</span>'}</div>`;
+            ${isAdmin?`<button class="btn ${done?'ghost':'ok'} sm" data-done>${done?'완료 취소':icon('check')+'완료 처리'}</button>`:''}
+            ${unread?`<button class="btn pri sm" data-read>${icon('check')}확인</button>`:(!done?'<span style="color:var(--ok);font-weight:700;font-size:12px">✓ 확인함</span>':'')}</div>`;
         const db=c.querySelector('[data-del]'); if(db) db.onclick=async()=>{ if(confirm('이 공지를 삭제할까요?')){ await collDel('notice',n.id); load(); } };
         const rb=c.querySelector('[data-read]'); if(rb) rb.onclick=async(e)=>{ e.currentTarget.disabled=true; await markRead([n]); load();
           if(window.refreshNavBadges) window.refreshNavBadges(); };
+        const dn=c.querySelector('[data-done]'); if(dn) dn.onclick=async(e)=>{ e.currentTarget.disabled=true; await markDone(n,!done); load(); };
         return c;
+      }
+      async function markDone(n, done){
+        n.done=done; n.doneAt=done?nowISO():''; n.doneBy=done?u.loginId:'';
+        try{ await collPush('notice', n); }catch{}
+        toast(done?'업무 완료로 표시했습니다':'완료 표시를 해제했습니다');
       }
       function composer(){
         const box=el('div','compose');
