@@ -145,7 +145,8 @@ function bootShell(){
       ]);
       let cbOpen=0, unreadN=0, myMemo=0;
       if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); }
-      if(nts){ unreadN=nts.filter(x=>noticeVisible(x.dept) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
+      const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===uid)||(m.t==='dept'&&m.v===myDept));
+      if(nts){ unreadN=nts.filter(x=>(noticeVisible(x.dept)||mentMe(x)) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
       if(mms){ myMemo=mms.filter(m=>!m.done && noticeVisible(m.to||'all') && m.author!==uid).length; }
       badgeAt=Date.now();
       // 알림 = 미확인 공지 + 나에게 온 메모 + (CS/관리자) 미처리 콜백

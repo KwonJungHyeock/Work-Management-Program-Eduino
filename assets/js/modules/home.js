@@ -41,6 +41,21 @@
         .nt-card.pinned{border-left:3px solid var(--warn);background:linear-gradient(90deg,color-mix(in srgb,var(--warn) 7%,var(--panel)),var(--panel) 60%)}
         .nt-pin{font-size:10.5px;font-weight:800;color:#fff;background:var(--warn);border-radius:5px;padding:2px 7px;display:inline-flex;align-items:center;gap:3px}
         .nt-pin svg{width:11px;height:11px}
+        /* 언급(멘션) */
+        .nt-card.mentioned:not(.pinned):not(.done){border-left:3px solid var(--info)}
+        .nt-ment{font-size:10.5px;font-weight:800;color:#fff;background:var(--info);border-radius:5px;padding:2px 7px;display:inline-flex;align-items:center;gap:3px}
+        .nt-ment svg{width:11px;height:11px}
+        .nt-ments{display:inline-flex;gap:5px;flex-wrap:wrap;align-items:center}
+        .nt-ments .mtag{font-size:11px;font-weight:700;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
+        .nt-ments .mtag.me{color:var(--info);background:var(--info-bg);border-color:color-mix(in srgb,var(--info) 30%,var(--line))}
+        .mention-pick{margin-top:12px}
+        .mp-cap{font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:7px}
+        .mp-cap span{font-weight:500;color:var(--muted);margin-left:6px}
+        .mp-chips{display:flex;gap:6px;flex-wrap:wrap}
+        .mp{font-size:12.5px;font-weight:600;color:var(--ink-2);background:var(--panel);border:1px solid var(--line-strong);border-radius:7px;padding:5px 11px;cursor:pointer;transition:.1s;line-height:1.2}
+        .mp:hover{border-color:var(--faint)}
+        .mp.dept{font-weight:700}
+        .mp.on{color:var(--info);background:var(--info-bg);border-color:var(--info);box-shadow:inset 0 0 0 1px var(--info)}
         .nt-done svg,.nt-new+.nt-title{vertical-align:middle}
         [data-pin],[data-del]{flex:none}
         .nt-body{font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word;color:var(--ink-2)}
@@ -53,25 +68,30 @@
         <div><div class="tt">공지사항</div><div class="ds">관리자가 올린 공지입니다. <b>[확인]</b>을 눌러야 읽음 처리되고 알림에서 사라집니다.</div></div></div></div>
       <div class="mbody" id="ntBody"></div>`;
       const body=root.querySelector('#ntBody'); let roster=[];
+      // 언급(멘션)된 대상인지 — 특정 직원(loginId) 또는 부서(dept)로 태그됨
+      function mentionedMe(n){ return (n.mentions||[]).some(m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept)); }
       async function load(){
         body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
         const raw=await collGet('notice');
         body.innerHTML='';
         if(isAdmin) body.appendChild(composer());
         if(raw===null){ body.insertAdjacentHTML('beforeend', empty('공용 저장소에 연결되지 않았습니다. (배포 환경에서 표시됩니다)','alert')); return; }
-        const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>
+        // 부서 대상에 포함되거나, 나를 개별 언급한 공지도 표시
+        const list=raw.filter(n=>visibleTo(n.dept||'all',u) || mentionedMe(n)).sort((a,b)=>
           (b.pinned?1:0)-(a.pinned?1:0) || String(b.createdAt).localeCompare(String(a.createdAt)));   // 고정 공지 최상단
         if(!list.length){ body.insertAdjacentHTML('beforeend', empty('아직 등록된 공지가 없습니다.','megaphone')); return; }
         list.forEach(n=>body.appendChild(card(n)));
       }
       function card(n){
         const unread=!(n.readBy||[]).includes(u.loginId);
-        const done=!!n.done, pinned=!!n.pinned;
-        const c=el('div','nt-card'+(unread&&!done?' unread':'')+(done?' done':'')+(pinned&&!done?' pinned':''));
-        c.innerHTML=`<div class="nt-top">${pinned&&!done?'<span class="nt-pin">'+icon('pin')+'필독</span>':''}${done?'<span class="nt-done">'+icon('check')+'완료</span>':(unread?'<span class="nt-new">미확인</span>':'')}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
+        const done=!!n.done, pinned=!!n.pinned, mentioned=mentionedMe(n);
+        const c=el('div','nt-card'+(unread&&!done?' unread':'')+(done?' done':'')+(pinned&&!done?' pinned':'')+(mentioned&&!done?' mentioned':''));
+        const isMe=m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept);
+        const mentTags=(n.mentions||[]).length?`<span class="nt-ments">${n.mentions.map(m=>`<span class="mtag${isMe(m)?' me':''}">${m.t==='dept'?'#':'@'}${esc(m.l||m.v)}</span>`).join('')}</span>`:'';
+        c.innerHTML=`<div class="nt-top">${pinned&&!done?'<span class="nt-pin">'+icon('pin')+'필독</span>':''}${mentioned&&!done?'<span class="nt-ment">'+icon('bell')+'나 언급</span>':''}${done?'<span class="nt-done">'+icon('check')+'완료</span>':(unread?'<span class="nt-new">미확인</span>':'')}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
             ${isAdmin?'<button class="btn ghost sm" data-pin title="'+(pinned?'고정 해제':'상단 고정(필독)')+'" style="margin-left:auto">'+(pinned?'📌':icon('pin'))+'</button><button class="btn ghost sm" data-del>'+icon('trash')+'</button>':''}</div>
           <div class="nt-body">${esc(n.body||'')}</div>
-          <div class="nt-meta"><span class="nt-tgt">${esc(targetLabel(n.dept||'all',roster))}</span>
+          <div class="nt-meta"><span class="nt-tgt">${esc(targetLabel(n.dept||'all',roster))}</span>${mentTags}
             <span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
             ${done?`<span class="nt-donemeta">완료 · ${esc(dateShort(n.doneAt))}</span>`:''}
             <span style="margin-left:auto">읽음 ${ (n.readBy||[]).length }</span>
@@ -98,16 +118,33 @@
         box.innerHTML=`<div style="font-weight:800;font-size:14px;margin-bottom:4px">${icon('megaphone')} 공지 작성</div>
           <input type="text" id="ntTitle" placeholder="제목" style="width:100%;margin-top:8px">
           <textarea id="ntBodyIn" rows="3" placeholder="공지 내용" style="width:100%;margin-top:10px"></textarea>
+          <div class="mention-pick">
+            <div class="mp-cap">언급 대상<span>부서·직원을 태그하면 카드에 강조 표시되고, 태그된 직원은 대상과 무관하게 공지를 받습니다</span></div>
+            <div class="mp-chips" id="mpChips"></div>
+          </div>
           <div class="row">
-            <label class="fld" style="margin:0">대상<select id="ntTgt">${Object.entries(DEPT_LABEL).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
+            <label class="fld" style="margin:0">공개 범위<select id="ntTgt">${Object.entries(DEPT_LABEL).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
             <button class="btn pri" id="ntPost" style="margin-left:auto">${icon('send')}게시</button>
             <span class="muted" id="ntStat" style="font-size:12.5px"></span></div>`;
+        // 언급 피커 (부서 + 개별 직원)
+        const mentionSel=new Map(); const tk=m=>m.t+':'+m.v;
+        function renderMps(){ const wrap=box.querySelector('#mpChips'); if(!wrap) return;
+          const items=[{t:'dept',v:'cs',l:'CS 전체'},{t:'dept',v:'md',l:'MD 전체'},
+            ...roster.filter(m=>m.dept==='cs'||m.dept==='md').map(m=>({t:'user',v:m.loginId,l:m.name}))];
+          wrap.innerHTML='';
+          if(!roster.length) wrap.innerHTML='<span class="muted" style="font-size:12px">직원 목록 불러오는 중…</span>';
+          items.forEach(it=>{ const on=mentionSel.has(tk(it)); const b2=el('button','mp'+(it.t==='dept'?' dept':'')+(on?' on':'')); b2.type='button';
+            b2.textContent=(it.t==='dept'?'#':'@')+it.l;
+            b2.onclick=()=>{ mentionSel.has(tk(it))?mentionSel.delete(tk(it)):mentionSel.set(tk(it),it); renderMps(); };
+            wrap.appendChild(b2); });
+        }
+        renderMps();
         box.querySelector('#ntPost').onclick=async()=>{
           const title=box.querySelector('#ntTitle').value.trim(), b=box.querySelector('#ntBodyIn').value.trim();
           if(!title&&!b){ box.querySelector('#ntStat').textContent='내용을 입력하세요'; return; }
           box.querySelector('#ntStat').textContent='게시 중…';
           await collPush('notice',{ id:uuid(), title, body:b, dept:box.querySelector('#ntTgt').value,
-            author:u.loginId, authorName:u.name, createdAt:nowISO(), readBy:[u.loginId] });
+            mentions:[...mentionSel.values()], author:u.loginId, authorName:u.name, createdAt:nowISO(), readBy:[u.loginId] });
           toast('공지를 게시했습니다'); load();
         };
         return box;
@@ -115,7 +152,7 @@
       async function markRead(unread){
         for(const n of unread){ n.readBy=[...(n.readBy||[]), u.loginId]; try{ await collPush('notice', n); }catch{} }
       }
-      rosterList().then(r=>{ roster=r; }); load();
+      rosterList().then(r=>{ roster=r; if(root.isConnected) load(); }); load();   // 로스터 도착 후 재렌더(언급 직원 칩)
     }
   };
 
@@ -145,7 +182,8 @@
       async function load(){
         const [notices,memos,cbs]=await Promise.all([collGet('notice'),collGet('memo'),collGet('callbacks')]);
         if(!root.isConnected||!root.querySelector('#alBody')) return;
-        const unread=(notices||[]).filter(n=>visibleTo(n.dept||'all',u) && !(n.readBy||[]).includes(u.loginId))
+        const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept));
+        const unread=(notices||[]).filter(n=>(visibleTo(n.dept||'all',u)||mentMe(n)) && !(n.readBy||[]).includes(u.loginId))
           .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
         unreadCache=unread;
         const myMemo=(memos||[]).filter(m=>!m.done && visibleTo(m.to||'all',u) && m.author!==u.loginId).length;
@@ -371,7 +409,8 @@
         const box=root.querySelector('#dNotice'); if(!box || !root.isConnected) return;
         if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0,0); }
         else {
-          const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+          const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept));
+          const list=raw.filter(n=>visibleTo(n.dept||'all',u)||mentMe(n)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
           const unread=list.filter(n=>!(n.readBy||[]).includes(u.loginId)).length;
           box.innerHTML = list.length ? list.slice(0,5).map(n=>{
             const ur=!(n.readBy||[]).includes(u.loginId);
