@@ -20,7 +20,7 @@ function bootShell(){
     <aside class="side">
       <button class="side-brand" id="brandBtn" title="홈으로 이동">
         <img class="brand-mark" src="assets/brand/eduino-mark.svg" alt="에듀이노">
-        <span class="nm"><b>에듀이노</b><small>통합 업무관리</small></span></button>
+        <span class="nm"><b class="wm">EDUINO</b><small>통합 업무관리</small></span></button>
       <nav class="side-nav sc" id="nav"></nav>
       <div class="side-foot">
         <button class="btn ghost block" id="btnLogout" style="justify-content:flex-start">${icon('logout')}<span class="txt">로그아웃</span></button>
