@@ -37,6 +37,12 @@
         .nt-new{font-size:10.5px;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:2px 6px}
         .nt-done{font-size:10.5px;font-weight:800;color:#fff;background:var(--ok);border-radius:5px;padding:2px 7px;display:inline-flex;align-items:center;gap:3px}
         .nt-donemeta{font-weight:700;color:var(--ok)}
+        /* 상단 고정(필독) */
+        .nt-card.pinned{border-left:3px solid var(--warn);background:linear-gradient(90deg,color-mix(in srgb,var(--warn) 7%,var(--panel)),var(--panel) 60%)}
+        .nt-pin{font-size:10.5px;font-weight:800;color:#fff;background:var(--warn);border-radius:5px;padding:2px 7px;display:inline-flex;align-items:center;gap:3px}
+        .nt-pin svg{width:11px;height:11px}
+        .nt-done svg,.nt-new+.nt-title{vertical-align:middle}
+        [data-pin],[data-del]{flex:none}
         .nt-body{font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word;color:var(--ink-2)}
         .nt-meta{font-size:12px;color:var(--muted);margin-top:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
         .nt-tgt{font-weight:700;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
@@ -53,16 +59,17 @@
         body.innerHTML='';
         if(isAdmin) body.appendChild(composer());
         if(raw===null){ body.insertAdjacentHTML('beforeend', empty('공용 저장소에 연결되지 않았습니다. (배포 환경에서 표시됩니다)','alert')); return; }
-        const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+        const list=raw.filter(n=>visibleTo(n.dept||'all',u)).sort((a,b)=>
+          (b.pinned?1:0)-(a.pinned?1:0) || String(b.createdAt).localeCompare(String(a.createdAt)));   // 고정 공지 최상단
         if(!list.length){ body.insertAdjacentHTML('beforeend', empty('아직 등록된 공지가 없습니다.','megaphone')); return; }
         list.forEach(n=>body.appendChild(card(n)));
       }
       function card(n){
         const unread=!(n.readBy||[]).includes(u.loginId);
-        const done=!!n.done;
-        const c=el('div','nt-card'+(unread&&!done?' unread':'')+(done?' done':''));
-        c.innerHTML=`<div class="nt-top">${done?'<span class="nt-done">'+icon('check')+'완료</span>':(unread?'<span class="nt-new">미확인</span>':'')}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
-            ${isAdmin?'<button class="btn ghost sm" data-del style="margin-left:auto">'+icon('trash')+'</button>':''}</div>
+        const done=!!n.done, pinned=!!n.pinned;
+        const c=el('div','nt-card'+(unread&&!done?' unread':'')+(done?' done':'')+(pinned&&!done?' pinned':''));
+        c.innerHTML=`<div class="nt-top">${pinned&&!done?'<span class="nt-pin">'+icon('pin')+'필독</span>':''}${done?'<span class="nt-done">'+icon('check')+'완료</span>':(unread?'<span class="nt-new">미확인</span>':'')}<span class="nt-title">${esc(n.title||'(제목 없음)')}</span>
+            ${isAdmin?'<button class="btn ghost sm" data-pin title="'+(pinned?'고정 해제':'상단 고정(필독)')+'" style="margin-left:auto">'+(pinned?'📌':icon('pin'))+'</button><button class="btn ghost sm" data-del>'+icon('trash')+'</button>':''}</div>
           <div class="nt-body">${esc(n.body||'')}</div>
           <div class="nt-meta"><span class="nt-tgt">${esc(targetLabel(n.dept||'all',roster))}</span>
             <span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
@@ -74,12 +81,17 @@
         const rb=c.querySelector('[data-read]'); if(rb) rb.onclick=async(e)=>{ e.currentTarget.disabled=true; await markRead([n]); load();
           if(window.refreshNavBadges) window.refreshNavBadges(); };
         const dn=c.querySelector('[data-done]'); if(dn) dn.onclick=async(e)=>{ e.currentTarget.disabled=true; await markDone(n,!done); load(); };
+        const pn=c.querySelector('[data-pin]'); if(pn) pn.onclick=async(e)=>{ e.currentTarget.disabled=true; await markPin(n,!pinned); load(); };
         return c;
       }
       async function markDone(n, done){
         n.done=done; n.doneAt=done?nowISO():''; n.doneBy=done?u.loginId:'';
         try{ await collPush('notice', n); }catch{}
         toast(done?'업무 완료로 표시했습니다':'완료 표시를 해제했습니다');
+      }
+      async function markPin(n, pinned){
+        n.pinned=pinned; try{ await collPush('notice', n); }catch{}
+        toast(pinned?'상단에 고정했습니다 (필독)':'고정을 해제했습니다');
       }
       function composer(){
         const box=el('div','compose');
@@ -251,6 +263,19 @@
         .drow .dt{font-weight:600;color:var(--ink)}
         .drow .dm{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
         .drow .pin{width:7px;height:7px;border-radius:50%;background:var(--danger);flex:none}
+        /* 개인 할 일(To-Do) */
+        .todo-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;font-size:13.5px}
+        .todo-row:hover{background:var(--hover)}
+        .todo-row:hover .todo-x{opacity:1}
+        .todo-ck{width:19px;height:19px;flex:none;border:1.5px solid var(--line-strong);border-radius:6px;background:var(--panel);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#fff}
+        .todo-ck svg{width:13px;height:13px}
+        .todo-row.done .todo-ck{background:var(--ok);border-color:var(--ok)}
+        .todo-tx{flex:1;color:var(--ink);word-break:break-word;line-height:1.4}
+        .todo-row.done .todo-tx{color:var(--faint);text-decoration:line-through}
+        .todo-x{flex:none;border:0;background:none;color:var(--faint);cursor:pointer;opacity:0;transition:opacity .12s;padding:3px;border-radius:5px}
+        .todo-x:hover{color:var(--danger);background:var(--danger-soft)} .todo-x svg{width:14px;height:14px}
+        .todo-add{display:flex;gap:7px;padding:8px;border-top:1px solid var(--line);margin-top:4px}
+        .todo-add input{flex:1;height:34px;font-size:13.5px}
         .ql-row{display:flex;gap:8px;flex-wrap:wrap;padding:5px 8px 10px}
         .ql-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid var(--line-strong);border-radius:8px;
           font-size:13px;font-weight:600;color:var(--ink-2);text-decoration:none;background:var(--panel)}
@@ -279,9 +304,35 @@
               <div class="dcard-bd" id="dPres"><div class="muted" style="padding:10px">…</div></div></div>
             <div class="dcard"><div class="dcard-hd">${icon('external')}바로가기</div>
               <div class="ql-row" id="dQuick"></div></div>
+            <div class="dcard"><div class="dcard-hd">${icon('check2')}개인 할 일<span class="more" style="cursor:default">나만 보기</span></div>
+              <div class="dcard-bd"><div id="todoList"></div>
+                <div class="todo-add"><input id="todoIn" placeholder="할 일 추가 후 Enter" maxlength="80" autocomplete="off"><button class="btn sm pri" id="todoAdd">${icon('plus')}</button></div></div></div>
           </div>
         </div>
       </div>`;
+      // 개인 할 일(To-Do) — 이 기기에만 저장(나만 보기)
+      (function(){
+        const KEY='eduino.todo.'+(u.loginId||'me');
+        const get=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||'[]')||[]; }catch(e){ return []; } };
+        const set=v=>localStorage.setItem(KEY,JSON.stringify(v));
+        const listEl=root.querySelector('#todoList'), inp=root.querySelector('#todoIn');
+        function draw(){ const items=get();
+          listEl.innerHTML = items.length ? items.map(t=>`
+            <div class="todo-row${t.done?' done':''}" data-id="${t.id}">
+              <button class="todo-ck" data-a="tg" title="완료 토글">${t.done?icon('check2'):''}</button>
+              <span class="todo-tx">${esc(t.text)}</span>
+              <button class="todo-x" data-a="rm" title="삭제">${icon('x')}</button></div>`).join('')
+            : `<div class="muted" style="padding:9px 8px;font-size:13px">할 일이 없습니다. 아래에서 추가하세요.</div>`;
+          listEl.querySelectorAll('.todo-row').forEach(row=>{ const id=row.dataset.id;
+            row.querySelector('[data-a=tg]').onclick=()=>{ const v=get().map(x=>x.id===id?{...x,done:!x.done}:x); set(v); draw(); };
+            row.querySelector('[data-a=rm]').onclick=()=>{ set(get().filter(x=>x.id!==id)); draw(); }; });
+        }
+        function add(){ const tx=(inp.value||'').trim(); if(!tx) return;
+          const v=get(); v.unshift({id:uuid(),text:tx,done:false}); set(v); inp.value=''; draw(); inp.focus(); }
+        root.querySelector('#todoAdd').onclick=add;
+        inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } });
+        draw();
+      })();
       // 콘솔 라이브 시계
       (function(){ const el2=root.querySelector('#ckClock');
         const tick=()=>{ if(!root.isConnected){ clearInterval(t); return; } if(el2){ const d=new Date();

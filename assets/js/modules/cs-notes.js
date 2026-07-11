@@ -165,6 +165,24 @@
         .q-hd .q-ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;
           background:var(--red-soft);color:var(--red);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 22%,transparent)}
         .q-hd .q-ic svg{width:15px;height:15px}
+        /* 오늘 처리량 위젯 */
+        .today-stat{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+        .ts{display:flex;align-items:center;gap:11px;padding:11px 16px;border:1px solid var(--line);border-radius:11px;background:var(--panel);box-shadow:var(--sh-sm);min-width:150px;flex:1 1 0}
+        .ts .ts-ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none;font-size:17px}
+        .ts.me .ts-ic{background:var(--red-soft);color:var(--red)} .ts.day .ts-ic{background:var(--info-bg);color:var(--info)} .ts.week .ts-ic{background:var(--ok-bg);color:var(--ok)}
+        .ts .ts-l{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.03em;text-transform:uppercase}
+        .ts .ts-v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.15}
+        .ts .ts-v small{font-size:12.5px;font-weight:600;color:var(--muted);margin-left:2px}
+        .today-stat.skel-load .ts{opacity:.5}
+        /* 고객 이력 (연락처 기준) */
+        .cust-hist{margin-top:8px;display:none}
+        .cust-hist.on{display:block}
+        .ch-hd{font-size:12px;font-weight:800;color:var(--info);display:flex;align-items:center;gap:5px;margin-bottom:6px}
+        .ch-hd svg{width:13px;height:13px}
+        .ch-item{font-size:12px;line-height:1.45;padding:7px 9px;border:1px solid var(--line);border-left:2px solid var(--info);border-radius:7px;background:var(--panel-2);margin-bottom:5px}
+        .ch-item .ch-m{color:var(--muted);font-weight:700;margin-bottom:2px}
+        .ch-item .ch-c{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ch-none{font-size:12px;color:var(--faint);padding:2px 0}
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
         .q-hd .kbd b{background:var(--panel);border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
@@ -263,8 +281,22 @@
         c.textContent=n||''; c.style.display=n?'':'none'; }
 
       /* ---------------- 상담 메모 탭 ---------------- */
+      let histCache=null;
+      function showCustHist(phone){
+        const el2=body.querySelector('#custHist'); if(!el2) return;
+        const key=String(phone||'').replace(/\D/g,'');
+        if(!histCache || key.length<9){ el2.className='cust-hist'; el2.innerHTML=''; return; }
+        const dayOf=r=>String(r.date||r.day||'').slice(0,10);
+        const matches=histCache.filter(r=>String(r.contact||'').replace(/\D/g,'')===key)
+          .sort((a,b)=>String(b.date||b.day||'').localeCompare(String(a.date||a.day||'')));
+        if(!matches.length){ el2.className='cust-hist on'; el2.innerHTML=`<div class="ch-none">이 번호의 이전 상담 기록이 없습니다.</div>`; return; }
+        el2.className='cust-hist on';
+        el2.innerHTML=`<div class="ch-hd">${icon('history')}이 고객 이전 문의 ${matches.length}건</div>`+
+          matches.slice(0,3).map(r=>`<div class="ch-item"><div class="ch-m">${esc(dayOf(r))} · ${esc(r.category||'-')}${r.name?' · '+esc(r.name):''}</div><div class="ch-c">${esc((r.content||'').slice(0,50)||'(내용 없음)')}</div></div>`).join('');
+      }
       function drawMemo(){
         body.innerHTML=`
+          <div class="today-stat" id="todayStat" style="display:none"></div>
           <div class="q-card">
             <div class="q-hd"><span class="q-ic">${icon('phone')}</span>빠른 입력
               <span class="kbd">저장 후 자동 초기화 · <b>Ctrl</b>+<b>Enter</b> 저장</span></div>
@@ -307,7 +339,8 @@
                       <div class="q-agents" id="agentGroup"></div>
                     </div>
                     <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
-                    <div><span class="cap">연락처 <em>선택</em></span><input type="tel" inputmode="numeric" id="fContact" placeholder="010-0000-0000" maxlength="13"></div>
+                    <div><span class="cap">연락처 <em>선택</em></span><input type="tel" inputmode="numeric" id="fContact" placeholder="010-0000-0000" maxlength="13">
+                      <div class="cust-hist" id="custHist"></div></div>
                     <div><span class="cap">이름/학교명/업체명 <em>선택</em></span><input type="text" id="fName" list="dlName" autocomplete="off" placeholder="예: 홍길동 / 에듀이노초"><datalist id="dlName"></datalist></div>
                     <div><span class="cap">상품코드 <em>선택</em></span><input type="text" id="fProdCode" list="dlCode" autocomplete="off" placeholder="예: A-100"><datalist id="dlCode"></datalist></div>
                     <label class="q-cb"><input type="checkbox" id="fCallback"> 후속조치(콜백) 필요</label>
@@ -372,11 +405,39 @@
         /* --- 입력 편의: 연락처 한국 전화 서식(서울 02 포함) + 최근값 자동완성 --- */
         (function(){
           const ct=body.querySelector('#fContact');
-          if(ct) ct.addEventListener('input',()=>{ ct.value=fmtPhone(ct.value); });
           const notes=getNotes(); const recent=(k)=>[...new Set(notes.map(r=>r[k]).filter(Boolean))].slice(-40).reverse();
           const nl=body.querySelector('#dlName'), cl=body.querySelector('#dlCode');
           if(nl) nl.innerHTML=recent('name').map(v=>`<option value="${esc(v)}">`).join('');
           if(cl) cl.innerHTML=recent('prodCode').map(v=>`<option value="${esc(v)}">`).join('');
+          if(ct) ct.addEventListener('input',()=>{ ct.value=fmtPhone(ct.value); showCustHist(ct.value); });
+        })();
+
+        /* --- 오늘 처리량 위젯 + 고객 이력(연락처) : 최근 기록 1회 프리페치 --- */
+        (function(){
+          const ymd=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+          const digits=s=>String(s||'').replace(/\D/g,'');
+          const dayOf=r=>String(r.date||r.day||'').slice(0,10);
+          const today=todayStr(); const ws=new Date(); ws.setDate(ws.getDate()-((ws.getDay()+6)%7)); const wkStart=ymd(ws);
+          const months=[...new Set([today.slice(0,7), wkStart.slice(0,7), ymd(new Date(new Date().setMonth(new Date().getMonth()-1))).slice(0,7)])];
+          histCache=null;
+          if(!window.Records) return;
+          Promise.all(months.map(m=>Records.month('cs','notes',m))).then(packs=>{
+            if(!body.isConnected) return;
+            histCache=packs.filter(Boolean).flat();
+            // 오늘 처리량 위젯
+            const box=body.querySelector('#todayStat'); if(box){
+              const myName=meName||((Auth.user&&Auth.user()||{}).name)||'';
+              const todayN=histCache.filter(r=>dayOf(r)===today).length;
+              const weekN=histCache.filter(r=>{ const d=dayOf(r); return d>=wkStart&&d<=today; }).length;
+              const mineN=histCache.filter(r=>dayOf(r)===today && (r.agent||r.whoName||'')===myName).length;
+              box.innerHTML=`
+                <div class="ts me"><span class="ts-ic">🙋</span><div><div class="ts-l">오늘 나</div><div class="ts-v">${mineN}<small>건</small></div></div></div>
+                <div class="ts day"><span class="ts-ic">📋</span><div><div class="ts-l">오늘 상담(팀)</div><div class="ts-v">${todayN}<small>건</small></div></div></div>
+                <div class="ts week"><span class="ts-ic">🗓️</span><div><div class="ts-l">이번 주(팀)</div><div class="ts-v">${weekN}<small>건</small></div></div></div>`;
+              box.style.display='flex';
+            }
+            const ct=body.querySelector('#fContact'); if(ct&&ct.value) showCustHist(ct.value);
+          }).catch(()=>{});
         })();
 
         /* --- 답변 템플릿 원클릭 삽입 (답변 템플릿 라이브러리와 연동) --- */

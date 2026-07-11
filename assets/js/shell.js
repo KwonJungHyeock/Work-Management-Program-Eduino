@@ -32,7 +32,8 @@ function bootShell(){
       <div class="sp"></div>
       <button class="topsearch" id="btnSearch" title="전역 검색 (Ctrl+K)">${icon('search')}<span>검색</span><kbd>Ctrl K</kbd></button>
       <button class="navtoggle" id="btnBell" title="브라우저 알림 켜기/끄기">${icon('bell')}</button>
-      <button class="navtoggle" id="btnTheme" title="라이트/다크 모드" style="font-size:15px">🌙</button>
+      <button class="navtoggle" id="btnSound" title="알림 소리 켜기/끄기" style="font-size:15px">🔔</button>
+      <button class="navtoggle" id="btnTheme" title="테마 · 라이트/다크/자동" style="font-size:15px">🌙</button>
       <div class="syncchip ok" id="syncChip" title="상담·발주는 서버에 저장됩니다. 구글시트 백업 미전송분은 90초마다 자동 재시도됩니다.">${icon('check')}<span>저장 정상</span></div>
       <div class="quicklinks" id="quicklinks"></div>
       <div class="presence" id="presence" title="실시간 접속자 현황은 공용 서버 연동(예정) 후 표시됩니다">
@@ -151,9 +152,11 @@ function bootShell(){
       const totalAlerts = unreadN + myMemo + cbOpen;
       setBadge('home.alerts', totalAlerts);
       // 브라우저 알림 — 확인필요 항목이 늘어나고 알림이 켜져 있으며 탭이 백그라운드일 때
-      if(window.__prevAlerts!=null && totalAlerts>window.__prevAlerts && localStorage.getItem('eduino.notify')==='1'
-        && ('Notification' in window) && Notification.permission==='granted' && document.visibilityState!=='visible'){
-        try{ new Notification('에듀이노 업무', { body:`확인이 필요한 항목이 ${totalAlerts}건 있습니다.`, tag:'eduino-alerts' }); }catch(e){}
+      if(window.__prevAlerts!=null && totalAlerts>window.__prevAlerts){
+        if(window.__playAlertSound) window.__playAlertSound();   // 알림 소리(켜져 있으면)
+        if(localStorage.getItem('eduino.notify')==='1' && ('Notification' in window) && Notification.permission==='granted' && document.visibilityState!=='visible'){
+          try{ new Notification('에듀이노 업무', { body:`확인이 필요한 항목이 ${totalAlerts}건 있습니다.`, tag:'eduino-alerts' }); }catch(e){}
+        }
       }
       window.__prevAlerts = totalAlerts;
     }catch(e){}
@@ -179,6 +182,15 @@ function bootShell(){
   window.addEventListener('focus', updateSyncChip);
   window.addEventListener('hashchange', ()=>setTimeout(updateSyncChip, 400));
 
+  // ---- 최근 본 화면 · 즐겨찾기 (커맨드 팔레트에서 노출) ----
+  function lsArr(k){ try{ return JSON.parse(localStorage.getItem(k)||'[]')||[]; }catch(e){ return []; } }
+  function getRecent(){ return lsArr('eduino.recent'); }
+  function pushRecent(key){ if(!key) return; let r=getRecent().filter(k=>k!==key); r.unshift(key); r=r.slice(0,8);
+    try{ localStorage.setItem('eduino.recent',JSON.stringify(r)); }catch(e){} }
+  function getFavs(){ return lsArr('eduino.favs'); }
+  function toggleFav(key){ let f=getFavs(); f=f.includes(key)?f.filter(k=>k!==key):[...f,key];
+    try{ localStorage.setItem('eduino.favs',JSON.stringify(f)); }catch(e){} return f.includes(key); }
+
   // ---- 전역 검색 / 커맨드 팔레트 (⌘K / Ctrl+K) ----
   (function(){
     const navItems=[];
@@ -193,17 +205,29 @@ function bootShell(){
     let rows=[], sel=0, seq=0, openFlag=false;
     const hl=(s,t)=>{ s=String(s||''); if(!t) return esc(s); const i=s.toLowerCase().indexOf(t.toLowerCase());
       return i<0?esc(s):esc(s.slice(0,i))+'<mark>'+esc(s.slice(i,i+t.length))+'</mark>'+esc(s.slice(i+t.length)); };
-    function paint(term){ listEl.innerHTML = rows.length? rows.map((r,i)=>r.type==='nav'
-        ? `<div class="pal-row${i===sel?' on':''}" data-i="${i}"><span class="pal-ic">${icon('chevron')}</span><span class="pal-nm">${hl(r.name,term)}</span><span class="pal-gp">${esc(r.group)}</span></div>`
-        : `<div class="pal-row${i===sel?' on':''}" data-i="${i}"><span class="pal-ic">${icon('box')}</span><span class="pal-nm"><b class="mono">${hl(r.code,term)}</b> · ${hl(r.name,term)}</span><span class="pal-gp">상품 · 코드복사</span></div>`
-      ).join('') : `<div class="pal-empty">일치하는 항목이 없습니다.</div>`;
+    function paint(term){ let prevSec=null; const favs=getFavs();
+      listEl.innerHTML = rows.length? rows.map((r,i)=>{
+        let head=''; if(r.sec && r.sec!==prevSec){ head=`<div class="pal-sec">${esc(r.sec)}</div>`; prevSec=r.sec; }
+        if(r.type==='nav'){ const isFav=favs.includes(r.key);
+          return head+`<div class="pal-row${i===sel?' on':''}" data-i="${i}"><span class="pal-ic">${icon('chevron')}</span><span class="pal-nm">${hl(r.name,term)}</span><span class="pal-gp">${esc(r.group)}</span><button class="pal-star${isFav?' on':''}" data-star="${i}" title="즐겨찾기 ${isFav?'해제':'추가'}">${icon('star')}</button></div>`; }
+        return head+`<div class="pal-row${i===sel?' on':''}" data-i="${i}"><span class="pal-ic">${icon('box')}</span><span class="pal-nm"><b class="mono">${hl(r.code,term)}</b> · ${hl(r.name,term)}</span><span class="pal-gp">상품 · 코드복사</span></div>`;
+      }).join('') : `<div class="pal-empty">${term?'일치하는 항목이 없습니다.':'이동할 메뉴가 없습니다.'}</div>`;
       listEl.querySelectorAll('.pal-row').forEach(el2=>{ el2.onmousemove=()=>{ sel=+el2.dataset.i; markSel(); };
         el2.onclick=()=>activate(+el2.dataset.i); });
+      listEl.querySelectorAll('[data-star]').forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); toggleFav(rows[+b.dataset.star].key); render(); }; });
     }
     function markSel(){ listEl.querySelectorAll('.pal-row').forEach((e,i)=>e.classList.toggle('on',i===sel));
       const on=listEl.querySelector('.pal-row.on'); if(on) on.scrollIntoView({block:'nearest'}); }
     async function render(){ const my=++seq; const term=qEl.value.trim();
-      const nav=term? navItems.filter(n=>n.name.toLowerCase().includes(term.toLowerCase())) : navItems.slice(0,7);
+      if(!term){
+        const favs=getFavs(), recent=getRecent(), byKey=k=>navItems.find(n=>n.key===k);
+        const favRows=favs.map(byKey).filter(Boolean).map(n=>({...n,sec:'⭐ 즐겨찾기'}));
+        const recRows=recent.filter(k=>!favs.includes(k)).map(byKey).filter(Boolean).slice(0,5).map(n=>({...n,sec:'최근 본 화면'}));
+        const used=new Set([...favs,...recent]);
+        const restRows=navItems.filter(n=>!used.has(n.key)).slice(0,Math.max(0,6-favRows.length-recRows.length)).map(n=>({...n,sec:'메뉴 이동'}));
+        rows=[...favRows,...recRows,...restRows]; sel=0; paint(''); return;
+      }
+      const nav=navItems.filter(n=>n.name.toLowerCase().includes(term.toLowerCase()));
       rows=nav.map(n=>({...n})); sel=0; paint(term);
       if(term.length>=2){ try{ const r=await fetch('/api/catalog?limit=6&q='+encodeURIComponent(term)); const d=await r.json();
         if(my!==seq||!openFlag) return; (d&&d.items||[]).forEach(p=>rows.push({type:'prod',code:p.selfCode,name:p.name})); paint(term); }catch(e){} }
@@ -224,13 +248,38 @@ function bootShell(){
   })();
 
   { const bs=$('btnSearch'); if(bs) bs.onclick=()=>window.__openPalette&&window.__openPalette(); }
-  // 라이트/다크 모드 토글
+  // 라이트/다크/자동 테마 토글 (라이트 → 다크 → 자동 순환)
   { const bt=$('btnTheme'); if(bt){ const de=document.documentElement;
-      const sync=()=>{ bt.textContent = de.getAttribute('data-theme')==='dark' ? '☀️' : '🌙'; };
-      bt.onclick=()=>{ const dark=de.getAttribute('data-theme')==='dark';
-        if(dark){ de.removeAttribute('data-theme'); localStorage.removeItem('eduino.theme'); }
-        else { de.setAttribute('data-theme','dark'); localStorage.setItem('eduino.theme','dark'); } sync(); };
-      sync(); } }
+      const autoDark=()=>{ const h=new Date().getHours(); return h>=19 || h<7; };   // 저녁 7시~아침 7시 다크
+      const mode=()=>localStorage.getItem('eduino.theme')||'light';
+      const ICON={ light:'🌙', dark:'☀️', auto:'🌗' };
+      window.__applyTheme=()=>{ const m=mode(); const dark = m==='dark' || (m==='auto' && autoDark());
+        if(dark) de.setAttribute('data-theme','dark'); else de.removeAttribute('data-theme');
+        bt.textContent=ICON[m]||'🌙'; bt.title='테마 · '+(m==='light'?'라이트':m==='dark'?'다크':'자동(시간대)'); };
+      bt.onclick=()=>{ const next={ light:'dark', dark:'auto', auto:'light' }[mode()];
+        if(next==='light') localStorage.removeItem('eduino.theme'); else localStorage.setItem('eduino.theme',next);
+        window.__applyTheme(); toast(next==='light'?'라이트 모드':next==='dark'?'다크 모드':'자동(시간대) 모드 — 저녁엔 다크로 전환됩니다'); };
+      window.__applyTheme();
+      setInterval(()=>{ if(mode()==='auto') window.__applyTheme(); }, 300000);   // 자동 모드면 5분마다 시간대 재확인
+  } }
+  // 알림 소리 토글 (새 공지·콜백 도착 시 짧은 비프음)
+  { const bsd=$('btnSound'); if(bsd){
+      const on=()=>localStorage.getItem('eduino.sound')==='1';
+      const sync=()=>{ bsd.textContent=on()?'🔔':'🔕'; bsd.style.color=on()?'var(--red)':''; };
+      window.__playAlertSound=()=>{ if(!on()) return; try{ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+        const ac=new AC(); const o=ac.createOscillator(), g=ac.createGain();
+        o.type='sine'; o.frequency.value=880; g.gain.value=0.0001; o.connect(g); g.connect(ac.destination); const t=ac.currentTime;
+        g.gain.exponentialRampToValueAtTime(0.18,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28);
+        o.start(t); o.stop(t+0.3); o.onended=()=>ac.close(); }catch(e){} };
+      bsd.onclick=()=>{ if(on()){ localStorage.removeItem('eduino.sound'); toast('알림 소리를 껐습니다'); } else { localStorage.setItem('eduino.sound','1'); toast('알림 소리 켬'); window.__playAlertSound(); } sync(); };
+      sync();
+  } }
+  // 세션 자동 로그아웃 — 장시간(120분) 미사용 시 보안상 자동 로그아웃(공용 PC 대비)
+  (function(){ const IDLE_MS=120*60000; let last=Date.now();
+    const bump=()=>{ last=Date.now(); };
+    ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(ev=>window.addEventListener(ev,bump,{passive:true}));
+    setInterval(()=>{ if(Date.now()-last>=IDLE_MS){ try{ Auth.logout(); }catch(e){} location.href='index.html?timeout=1'; } }, 60000);
+  })();
   // 최초 1회 온보딩 팁
   if(!localStorage.getItem('eduino.tip.k')){ setTimeout(()=>{ try{ toast('팁: Ctrl+K 로 메뉴·상품을 어디서든 검색하세요'); }catch(e){} localStorage.setItem('eduino.tip.k','1'); }, 2600); }
   // 브라우저 알림 토글
@@ -273,6 +322,7 @@ function bootShell(){
     const main = $('main');
     if(!mod){ main.className='main sc'; main.innerHTML=`<div class="view"><div class="empty">${icon('info')}<div>준비 중인 기능입니다.</div></div></div>`; setCrumb(key); return; }
     setCrumb(key, mod);
+    pushRecent(key);            // 최근 본 화면 기록(커맨드 팔레트에서 노출)
     main.className = 'main sc'+(mod.flush?' flush':'');
     main.style.position = mod.flush?'relative':'';
     main.style.overflow = '';   // 모듈이 자체 스크롤을 쓰면 render 안에서 재설정

@@ -93,6 +93,14 @@
 
       root.innerHTML=`
       <style>
+        /* 오늘 처리량 위젯 */
+        .today-stat{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+        .ts{display:flex;align-items:center;gap:11px;padding:11px 16px;border:1px solid var(--line);border-radius:11px;background:var(--panel);box-shadow:var(--sh-sm);min-width:150px;flex:1 1 0}
+        .ts .ts-ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none;font-size:17px}
+        .ts.me .ts-ic{background:var(--red-soft);color:var(--red)} .ts.day .ts-ic{background:var(--info-bg);color:var(--info)} .ts.week .ts-ic{background:var(--ok-bg);color:var(--ok)}
+        .ts .ts-l{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.03em;text-transform:uppercase}
+        .ts .ts-v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.15}
+        .ts .ts-v small{font-size:12.5px;font-weight:600;color:var(--muted);margin-left:2px}
         /* 빠른 발주 히어로 카드 */
         .card.qk{border-radius:14px;box-shadow:var(--sh);overflow:hidden}
         .card.qk .card-hd{background:linear-gradient(180deg,var(--panel-2),var(--panel));border-bottom:1px solid var(--line);font-weight:800}
@@ -165,6 +173,7 @@
       }
       function drawEntry(){
         body.innerHTML=`
+          <div class="today-stat" id="todayStat" style="display:none"></div>
           <div class="card qk" style="margin-bottom:18px">
             <div class="card-hd"><span class="qk-ic">${icon('search')}</span><b>상품코드로 빠른 발주</b>
               <span class="muted" style="margin-left:auto;font-size:12.5px">코드 입력 후 <b>Enter</b> → 목록에 추가</span></div>
@@ -248,6 +257,28 @@
         $f('#fShipInfo').oninput=e=>form.shipInfo=e.target.value;
         $f('#fHandler').onchange=e=>form.handler=e.target.value;
         fillHandler($f('#fHandler'));
+
+        /* 오늘 처리량 위젯 (발주 기록 기준) */
+        (function(){
+          if(!window.Records) return;
+          const ymd=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+          const dayOf=r=>String(r.date||r.day||'').slice(0,10);
+          const today=todayStr(); const ws=new Date(); ws.setDate(ws.getDate()-((ws.getDay()+6)%7)); const wkStart=ymd(ws);
+          const months=[...new Set([today.slice(0,7), wkStart.slice(0,7), ymd(new Date(new Date().setMonth(new Date().getMonth()-1))).slice(0,7)])];
+          Promise.all(months.map(m=>Records.month('md','orders',m))).then(packs=>{
+            const box=body.querySelector('#todayStat'); if(!box||!body.isConnected) return;
+            const recs=packs.filter(Boolean).flat();
+            const myName=((Auth.user&&Auth.user()||{}).name)||'';
+            const todayN=recs.filter(r=>dayOf(r)===today).length;
+            const weekN=recs.filter(r=>{ const d=dayOf(r); return d>=wkStart&&d<=today; }).length;
+            const mineN=recs.filter(r=>dayOf(r)===today && (r.handler||r.who||r.whoName||'')===myName).length;
+            box.innerHTML=`
+              <div class="ts me"><span class="ts-ic">🙋</span><div><div class="ts-l">오늘 나</div><div class="ts-v">${mineN}<small>건</small></div></div></div>
+              <div class="ts day"><span class="ts-ic">🚚</span><div><div class="ts-l">오늘 발주(팀)</div><div class="ts-v">${todayN}<small>건</small></div></div></div>
+              <div class="ts week"><span class="ts-ic">🗓️</span><div><div class="ts-l">이번 주(팀)</div><div class="ts-v">${weekN}<small>건</small></div></div></div>`;
+            box.style.display='flex';
+          }).catch(()=>{});
+        })();
         async function addOrder(){
           const code=codeEl.value.trim();
           let p=resolveLocal(code);

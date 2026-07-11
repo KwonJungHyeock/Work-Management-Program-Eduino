@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
 <link rel="stylesheet" href="assets/css/login.css">
-<script>try{if(localStorage.getItem('eduino.theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
+<script>try{var m=localStorage.getItem('eduino.theme'),h=new Date().getHours();if(m==='dark'||(m==='auto'&&(h>=19||h<7)))document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
 </head>
 <body>
 <div id="intro" class="intro">
@@ -59,6 +59,7 @@
   })();
 
   if(Auth.current() && Auth.user()) location.href='app.html';
+  try{ if(/[?&]timeout=1/.test(location.search)){ const e=$('err1'); if(e) e.textContent='장시간 미사용으로 자동 로그아웃되었습니다. 다시 로그인해 주세요.'; } }catch(e){}
 
   $('loginForm').addEventListener('submit',async e=>{
     e.preventDefault();

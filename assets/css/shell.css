@@ -125,8 +125,14 @@
 .pal-in input:focus{box-shadow:none;outline:none}
 .pal-in kbd{font-size:11px;font-weight:700;color:var(--faint);border:1px solid var(--line-strong);border-radius:5px;padding:2px 6px;font-family:var(--mono)}
 .pal-list{max-height:52vh;overflow:auto;padding:6px}
+.pal-sec{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:9px 11px 4px}
 .pal-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;cursor:pointer;font-size:14px}
 .pal-row.on{background:var(--active-bg)}
+.pal-star{flex:none;margin-left:2px;border:0;background:none;color:var(--line-strong);cursor:pointer;padding:3px;border-radius:5px;opacity:0;transition:.12s}
+.pal-row:hover .pal-star,.pal-row.on .pal-star,.pal-star.on{opacity:1}
+.pal-star svg{width:15px;height:15px;fill:none}
+.pal-star.on{color:var(--warn)} .pal-star.on svg{fill:var(--warn)}
+.pal-star:hover{color:var(--warn)}
 .pal-row .pal-ic{color:var(--muted);font-size:15px;display:inline-flex}
 .pal-row .pal-nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
 .pal-row .pal-gp{font-size:11.5px;color:var(--faint);font-weight:600;white-space:nowrap}
