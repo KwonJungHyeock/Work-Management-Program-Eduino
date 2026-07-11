@@ -33,14 +33,22 @@
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
         .q-hd .kbd b{background:var(--panel);border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
-        .cn-hero{display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:start}
-        @media(max-width:940px){.cn-hero{grid-template-columns:1fr}}
-        .cn-scen{display:flex;flex-direction:column;gap:10px}
-        .scen{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-left:3px solid var(--info);border-radius:11px;background:var(--panel);padding:13px 15px;box-shadow:var(--sh-sm)}
-        .scen.loss{border-left-color:var(--danger)}
-        .scen .sn{flex:none;width:26px;height:26px;border-radius:7px;background:var(--info-bg);color:var(--info);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
-        .scen.loss .sn{background:var(--danger-soft);color:var(--danger)}
-        .scen b{font-size:13.5px;color:var(--ink)} .scen span{font-size:12.5px;color:var(--muted);line-height:1.5}
+        /* 왼쪽 폼을 크게, 오른쪽은 컴팩트 용어 카드 */
+        .cn-hero{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(228px,.85fr);gap:20px;align-items:start}
+        @media(max-width:900px){.cn-hero{grid-template-columns:1fr}}
+        .cn-row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        @media(max-width:560px){.cn-row2{grid-template-columns:1fr}}
+        /* 용어 안내 카드(5줄) */
+        .cn-def{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start}
+        .cn-def-hd{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--ink-2);padding:11px 13px 9px}
+        .cn-def-hd svg{width:14px;height:14px;color:var(--muted)}
+        .cn-def-row{display:flex;gap:10px;align-items:flex-start;padding:9px 13px;border-top:1px solid var(--line)}
+        .cn-def-row p{margin:0;font-size:12px;line-height:1.5;color:var(--muted)}
+        .cn-def-row.loss{background:var(--warn-bg)}
+        .cn-def-t{flex:none;width:60px;font-size:11px;font-weight:800;border-radius:5px;padding:3px 6px;text-align:center;line-height:1.3}
+        .cn-def-t.iq{background:var(--warn-bg);color:var(--warn)} .cn-def-t.ok{background:var(--ok-bg);color:var(--ok)}
+        .cn-def-t.info{background:var(--info-bg);color:var(--info)}
+        .cn-def-t.warn{background:var(--danger-soft);color:var(--danger);width:auto;white-space:nowrap}
         .cn-fld{display:flex;flex-direction:column;gap:6px;margin-bottom:13px}
         .cn-fld>.cap{font-size:12px;font-weight:700;color:var(--ink-2)}
         .cn-fld .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px}
@@ -90,20 +98,24 @@
                 <div class="cn-fld"><span class="cap">상품코드 <em>필수</em></span>
                   <input type="text" id="cCode" class="cn-code" placeholder="예: P-DA39" autocomplete="off">
                   <div class="cn-look" id="cLook">상품코드를 입력하면 품명이 자동 조회됩니다.</div></div>
-                <div class="cn-fld"><span class="cap">문의유형</span>
-                  <div class="cn-chips" id="cInq"></div></div>
-                <div class="cn-fld"><span class="cap">발주요청</span>
-                  <div class="cn-chips" id="cReq"></div></div>
+                <div class="cn-row2">
+                  <div class="cn-fld"><span class="cap">문의유형</span><div class="cn-chips" id="cInq"></div></div>
+                  <div class="cn-fld"><span class="cap">발주요청</span><div class="cn-chips" id="cReq"></div></div>
+                </div>
                 <div class="cn-fld"><span class="cap">고객명 <em>선택</em></span>
                   <input type="text" id="cCust" placeholder="예: 홍길동 / 에듀이노초"></div>
                 <div class="cn-fld"><span class="cap">내용 <em>선택</em></span>
                   <textarea id="cContent" rows="3" placeholder="재고 상황 · 수량 · 요청사항 등"></textarea></div>
                 <button type="submit" class="btn pri lg" id="cSave">${icon('save')}발주요청 등록</button>
               </form>
-              <div class="cn-scen">
-                <div class="scen"><span class="sn">1</span><div><b>주문완료 · 입고대기</b><br><span>고객이 결제까지 완료했으나 자사 재고가 없어 중국 입고를 기다리는 상황</span></div></div>
-                <div class="scen loss"><span class="sn">2</span><div><b>견적문의 · 입고요청</b><br><span>재고가 부족해 상담만 하고 결제로 이어지지 않은 상황 — 발주로 <b>Loss 방지</b></span></div></div>
-              </div>
+              <aside class="cn-def">
+                <div class="cn-def-hd">${icon('info')}용어 안내</div>
+                <div class="cn-def-row"><span class="cn-def-t iq">견적문의</span><p>아직 고객이 재고 문의만 하고 결제는 이뤄지지 않은 경우</p></div>
+                <div class="cn-def-row"><span class="cn-def-t ok">주문완료</span><p>고객이 결제까지 끝난 경우</p></div>
+                <div class="cn-def-row"><span class="cn-def-t info">입고대기</span><p>다음 입고예정일이 잡혀 있는 경우</p></div>
+                <div class="cn-def-row"><span class="cn-def-t info">입고요청</span><p>입고예정이 없는 경우</p></div>
+                <div class="cn-def-row loss"><span class="cn-def-t warn">견적문의·입고요청</span><p>재고를 문의했으나 현 재고가 모자라 발주·결제까지 이뤄지지 않은 경우 — <b>재고확보 필요</b></p></div>
+              </aside>
             </div>
           </div>
         </div>
@@ -123,7 +135,7 @@
       function chips(sel, arr, key){
         const box=$(sel); box.innerHTML='';
         arr.forEach(v=>{ const b=el('button','cn-chip'+(form[key]===v?' on':'')); b.type='button'; b.textContent=v;
-          b.onclick=()=>{ form[key]=v; if(key==='inquiry'){ form.req=REQ_OF[v]||form.req; chips('#cReq',REQ,'req'); } chips(sel,arr,key); };
+          b.onclick=()=>{ form[key]=v; chips(sel,arr,key); };   // 문의유형·발주요청 각각 독립 선택
           box.appendChild(b); });
       }
       chips('#cInq', INQUIRY, 'inquiry');

@@ -54,9 +54,11 @@
         .seg button{border:0;background:var(--panel);padding:7px 14px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
         .seg button:first-child{border-left:0}
         .seg button.on{background:var(--active-bg);color:var(--red)}
-        .iv-dates{display:none;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
-        .iv-dates.on{display:inline-flex}
-        .iv-dates input{height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font-size:13px}
+        /* 기간 지정 입력은 별도 줄로 — 클릭 시 상단 탭이 밀리지 않도록 */
+        .iv-dates{display:none;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin:0 0 8px;
+          background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;width:fit-content}
+        .iv-dates.on{display:flex}
+        .iv-dates input{height:32px;border:1px solid var(--line-strong);border-radius:8px;padding:0 9px;font-size:13px;background:var(--panel)}
         .iv-sp{flex:1}
         .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0 20px}
         .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);padding:15px 16px 15px 18px;box-shadow:var(--sh-sm)}
@@ -132,38 +134,48 @@
         /* 이상 탐지 하이라이트 강조 */
         .hl.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:var(--warn-bg)}
         .hl.warn .hi{background:color-mix(in srgb,var(--warn) 22%,transparent)}
+        /* 중국 발주요청 분석 탭 */
+        .cn-tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px;box-shadow:var(--sh-sm)}
+        .cn-tbl{min-width:760px} .cn-tbl th{white-space:nowrap}
+        .cn2{display:inline-block;font-size:11px;font-weight:800;border-radius:5px;padding:2px 7px;letter-spacing:.02em}
+        .cn2.iq0{background:var(--ok-bg);color:var(--ok)} .cn2.iq1{background:var(--warn-bg);color:var(--warn)}
+        .cn2.rq{background:var(--info-bg);color:var(--info)}
+        .cn2.st-open{background:var(--danger-soft);color:var(--danger)} .cn2.st-done{background:var(--ok-bg);color:var(--ok)}
       </style>
       <div class="mhead pad">
         <div class="tt">업무 현황 · 인사이트</div>
-        <div class="ds"><b>종합 / CS / MD</b> 탭으로 나눠 KPI·추이·직원별 실적과 <b>분포 분석</b>(문의유형·고객유형·구매처·주문경로)·<b>데이터 기반 추측과 재미 포인트</b>를 보여줍니다. 실제 저장 기록 기준(삭제 시 즉시 반영).</div>
+        <div class="ds"><b>종합 / CS / MD / 중국발주</b> 탭으로 나눠 KPI·추이·직원별 실적과 <b>분포 분석</b>·<b>데이터 기반 추측</b>, 그리고 <b>중국 발주요청 현황·재고확보 필요</b>를 보여줍니다. 실제 저장 기록 기준(삭제 시 즉시 반영).</div>
       </div>
       <div class="mbody">
         <div class="iv-ctrl">
           <span class="seg" id="segRange">
             <button data-r="today">오늘</button><button data-r="7" class="on">7일</button>
             <button data-r="30">30일</button><button data-r="custom">지정</button></span>
-          <span class="iv-dates" id="dates">
-            <input type="date" id="dFrom"> ~ <input type="date" id="dTo"></span>
           <span class="seg" id="segDept">
-            <button data-d="all" class="on">종합</button><button data-d="cs">CS</button><button data-d="md">MD</button></span>
+            <button data-d="all" class="on">종합</button><button data-d="cs">CS</button><button data-d="md">MD</button><button data-d="china">중국발주</button></span>
           <span class="iv-sp"></span>
           <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
           <button class="btn ghost sm" id="btnPng">${icon('image')}차트 PNG</button>
           <button class="btn ghost sm" id="btnPrint">${icon('sheet')}인쇄</button>
           <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
         </div>
-        <div class="kpis" id="kpis"></div>
-        <div class="hl-row" id="hl"></div>
-        <div class="iv-grid">
-          <div class="card"><div class="card-hd">${icon('chart')}<b>일자별 처리 추이</b>
-            <span id="trendLgd" style="margin-left:auto"></span></div>
-            <div class="card-bd" id="trend"></div></div>
-          <div class="card"><div class="card-hd">${icon('users')}<b>직원별 업무량</b>
-            <span class="muted" id="empCnt" style="margin-left:auto;font-size:12px"></span></div>
-            <div class="card-bd" style="padding:0"><div id="emp"></div></div></div>
+        <div class="iv-dates" id="dates"><span style="font-size:12px;font-weight:700">기간 지정</span>
+          <input type="date" id="dFrom"> ~ <input type="date" id="dTo"></div>
+        <div id="ivNormal">
+          <div class="kpis" id="kpis"></div>
+          <div class="hl-row" id="hl"></div>
+          <div class="iv-grid">
+            <div class="card"><div class="card-hd">${icon('chart')}<b>일자별 처리 추이</b>
+              <span id="trendLgd" style="margin-left:auto"></span></div>
+              <div class="card-bd" id="trend"></div></div>
+            <div class="card"><div class="card-hd">${icon('users')}<b>직원별 업무량</b>
+              <span class="muted" id="empCnt" style="margin-left:auto;font-size:12px"></span></div>
+              <div class="card-bd" style="padding:0"><div id="emp"></div></div></div>
+          </div>
+          <div id="detail"></div>
+          <p class="iv-note">※ CS는 선택된 상담사, MD는 로그인 계정 기준으로 집계됩니다. 계정 미매칭 이름은 ID가 빈칸으로 표시됩니다. 분포·재미 포인트는 실제 기록 필드 기반입니다.</p>
         </div>
-        <div id="detail"></div>
-        <p class="iv-note">※ CS는 선택된 상담사, MD는 로그인 계정 기준으로 집계됩니다. 계정 미매칭 이름은 ID가 빈칸으로 표시됩니다. 분포·재미 포인트는 실제 기록 필드 기반입니다.</p>
+        <div id="ivChina" style="display:none"></div>
       </div>`;
 
       const $=s=>root.querySelector(s);
@@ -194,6 +206,12 @@
 
       function paint(){
         if(!root.isConnected || !$('#kpis')) return;   // 다른 화면으로 이동한 뒤의 지연 렌더 방지
+        const isChina = dept==='china';
+        $('#ivNormal').style.display = isChina?'none':'';
+        $('#ivChina').style.display = isChina?'':'none';
+        $('#segRange').style.visibility = isChina?'hidden':'';   // 중국발주 탭은 기간 무관(전체 누적)
+        if($('#dates')) $('#dates').classList.toggle('on', !isChina && preset==='custom');
+        if(isChina){ paintChina(); return; }
         const {from,to}=curRange();
         const days=listDays(from,to);
         const A=aggregate(from,to);
@@ -463,6 +481,44 @@
         svg.onmouseleave=()=>{ tip.style.display='none'; guide.style.display='none'; focus.innerHTML=''; };
         svg.ontouchstart=svg.ontouchmove=e=>{ if(e.touches&&e.touches[0]){ at(e.touches[0].clientX); e.preventDefault(); } };
       }
+      /* ---- 중국 발주요청 분석 탭 ---- */
+      let chinaCache=null;
+      async function fetchChina(){ if(chinaCache) return chinaCache;
+        try{ const r=await fetch('/api/store?type=coll&coll=chinaorders'); if(!r.ok) throw 0; const d=await r.json(); chinaCache=(d&&d.items)||[]; }catch{ chinaCache=[]; } return chinaCache; }
+      const cnFmt=iso=>{ try{ const d=new Date(iso); return (d.getMonth()+1)+'/'+d.getDate(); }catch{ return ''; } };
+      async function paintChina(){
+        const box=$('#ivChina'); if(!box) return;
+        box.innerHTML=`<div class="muted" style="padding:16px">불러오는 중…</div>`;
+        const items=await fetchChina(); if(!root.isConnected || dept!=='china') return;
+        const open=items.filter(i=>!i.done), done=items.filter(i=>i.done);
+        const loss=items.filter(i=>i.inquiry==='견적문의' && i.req==='입고요청' && !i.done);
+        const withStatus=items.map(i=>({...i, status:i.done?'완료':'처리 대기'}));
+        const kpis=`<div class="kpis">
+          <div class="kpi" style="--kc:var(--danger)"><div class="kl">처리 대기</div><div class="kv">${open.length}<small>건</small></div><div class="kd flat">발주·입고 대기 중</div></div>
+          <div class="kpi" style="--kc:var(--ok)"><div class="kl">완료</div><div class="kv">${done.length}<small>건</small></div><div class="kd flat">발주·입고 처리됨</div></div>
+          <div class="kpi" style="--kc:var(--d3)"><div class="kl">재고확보 필요</div><div class="kv">${loss.length}<small>건</small></div><div class="kd flat">견적문의·입고요청(Loss 위험)</div></div>
+          <div class="kpi" style="--kc:var(--d1)"><div class="kl">전체 등록</div><div class="kv">${items.length}<small>건</small></div><div class="kd flat">누적</div></div></div>`;
+        const hl = loss.length
+          ? `<div class="hl-row"><div class="hl warn"><div class="hi">📦</div><div class="ht">재고확보가 필요한 <b>견적문의·입고요청</b> 건이 <b>${loss.length}건</b> 있어요 — 발주 검토가 필요합니다</div></div>${done.length&&items.length?`<div class="hl flat"><div class="hi">✅</div><div class="ht">처리율 <b>${Math.round(done.length/items.length*100)}%</b> (완료 ${done.length}/${items.length}건)</div></div>`:''}</div>`
+          : (items.length?`<div class="hl-row"><div class="hl flat"><div class="hi">✅</div><div class="ht">현재 재고확보 필요(견적문의·입고요청) 건이 없습니다. 처리율 <b>${Math.round(done.length/items.length*100)}%</b></div></div></div>`:'');
+        const dist=`<div class="iv-secttl">중국 발주요청 분포</div><div class="dist-grid">
+          ${distCard('문의유형별', distByField(items,'inquiry',9),'chat')}
+          ${distCard('발주요청별', distByField(items,'req',9),'box')}
+          ${distCard('상태별', distByField(withStatus,'status',9),'grid')}
+          ${distCard('상품 TOP', distByField(items,'code',8),'box')}</div>`;
+        const sorted=[...open,...done].sort((a,b)=>(a.done?1:0)-(b.done?1:0)||String(b.createdAt).localeCompare(String(a.createdAt)));
+        const iqCls=i=>i.inquiry==='견적문의'?'iq1':'iq0';
+        const rows=sorted.map(it=>`<tr>
+            <td><b class="mono">${esc(it.code)}</b></td><td>${esc(it.name||'-')}</td>
+            <td><span class="cn2 ${iqCls(it)}">${esc(it.inquiry||'-')}</span></td>
+            <td><span class="cn2 rq">${esc(it.req||'-')}</span></td>
+            <td><span class="cn2 ${it.done?'st-done':'st-open'}">${it.done?'완료':'대기'}</span></td>
+            <td>${esc(it.customer||'-')}</td><td>${esc(it.authorName||it.author||'-')}</td><td class="num">${cnFmt(it.createdAt)}</td></tr>`).join('');
+        const table=`<div class="iv-secttl">전체 목록 <span style="font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0">· ${items.length}건 (기간 무관 누적)</span></div>
+          <div class="cn-tblwrap"><table class="cmp-tbl cn-tbl"><thead><tr><th>상품코드</th><th>품명</th><th>문의유형</th><th>발주요청</th><th>상태</th><th>고객</th><th>작성자</th><th class="num">등록</th></tr></thead>
+          <tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">등록된 발주요청이 없습니다.</td></tr>'}</tbody></table></div>`;
+        box.innerHTML=kpis+hl+dist+table;
+      }
       /* 데이터에서 사람이 읽는 인사이트 문장 자동 생성 */
       function buildHighlights(days, perDay, A, P, people, allMode){
         const out=[]; const len=days.length; if(!len) return out;
@@ -558,7 +614,7 @@
       $('#btnCsv').onclick=exportCsv;
       $('#btnPng').onclick=exportPng;
       $('#btnPrint').onclick=()=>window.print();
-      $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); loadErr=false; load(); };
+      $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); chinaCache=null; loadErr=false; if(dept==='china') paintChina(); else load(); };
 
       async function load(){
         if($('#kpis')) $('#kpis').innerHTML=Array.from({length:4}).map(()=>`<div class="kpi" style="--kc:var(--line-strong)"><div class="skel skel-line" style="width:54%"></div><div class="skel skel-line" style="width:40%;height:24px;margin-top:10px"></div></div>`).join('');
