@@ -39,16 +39,17 @@
         .cn-row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
         @media(max-width:560px){.cn-row2{grid-template-columns:1fr}}
         /* 용어 안내 카드(5줄) */
-        .cn-def{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start}
-        .cn-def-hd{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--ink-2);padding:11px 13px 9px}
-        .cn-def-hd svg{width:14px;height:14px;color:var(--muted)}
-        .cn-def-row{display:flex;gap:10px;align-items:flex-start;padding:9px 13px;border-top:1px solid var(--line)}
-        .cn-def-row p{margin:0;font-size:12px;line-height:1.5;color:var(--muted)}
-        .cn-def-row.loss{background:var(--warn-bg)}
-        .cn-def-t{flex:none;width:60px;font-size:11px;font-weight:800;border-radius:5px;padding:3px 6px;text-align:center;line-height:1.3}
+        .cn-def{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start;box-shadow:var(--sh-sm)}
+        .cn-def-hd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:var(--ink);padding:12px 14px 10px;background:var(--panel-2);border-bottom:1px solid var(--line)}
+        .cn-def-hd svg{width:15px;height:15px;color:var(--muted)}
+        .cn-def-row{display:flex;gap:12px;align-items:center;padding:11px 14px;border-top:1px solid var(--line-2)}
+        .cn-def-row:first-of-type{border-top:0}
+        .cn-def-row p{margin:0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+        /* 태그 박스 영역 통일(고정 폭) — 배경 강조 없이 시트 배지와 동일 톤 */
+        .cn-def-t{flex:none;width:82px;font-size:11.5px;font-weight:800;border-radius:6px;padding:5px 6px;text-align:center;line-height:1.35;word-break:keep-all}
         .cn-def-t.iq{background:var(--warn-bg);color:var(--warn)} .cn-def-t.ok{background:var(--ok-bg);color:var(--ok)}
         .cn-def-t.info{background:var(--info-bg);color:var(--info)}
-        .cn-def-t.warn{background:var(--danger-soft);color:var(--danger);width:auto;white-space:nowrap}
+        .cn-def-t.warn{background:var(--danger-soft);color:var(--danger)}
         .cn-fld{display:flex;flex-direction:column;gap:6px;margin-bottom:13px}
         .cn-fld>.cap{font-size:12px;font-weight:700;color:var(--ink-2)}
         .cn-fld .cap em{font-style:normal;font-weight:500;color:var(--faint);margin-left:5px}
@@ -60,10 +61,11 @@
         .cn-look{font-size:12.5px;min-height:20px;color:var(--muted)}
         .cn-look b{color:var(--ink)} .cn-look.ok{color:var(--ok)} .cn-look.bad{color:var(--danger)}
         /* 목록 */
-        .cn-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:22px 0 12px}
+        .cn-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:22px 0 8px}
         .cn-bar h3{font-size:16px;margin:0}
-        .cn-fbtns{display:flex;gap:5px;margin-left:auto;flex-wrap:wrap}
-        .cn-fbtns select{height:32px;font-size:12.5px;padding:0 8px}
+        /* 필터를 제목 옆에 가로로 나란히(세로 적층 방지) */
+        .cn-fbtns{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+        .cn-fbtns select{width:auto;min-width:116px;height:32px;font-size:12.5px;padding:0 26px 0 9px}
         .cn-item{display:grid;grid-template-columns:1fr auto;gap:10px 14px;align-items:start;border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:13px 15px;margin-bottom:9px;box-shadow:var(--sh-sm)}
         .cn-item.done{opacity:.6;background:var(--panel-2)}
         .cn-tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}

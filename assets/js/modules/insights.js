@@ -60,13 +60,15 @@
         .iv-dates.on{display:flex}
         .iv-dates input{height:32px;border:1px solid var(--line-strong);border-radius:8px;padding:0 9px;font-size:13px;background:var(--panel)}
         .iv-sp{flex:1}
-        .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0 20px}
-        .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);padding:15px 16px 15px 18px;box-shadow:var(--sh-sm)}
-        .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kc,var(--d1))}
-        .kpi .kl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
-        .kpi .kv{font-size:29px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:5px;color:var(--ink)}
-        .kpi .kv small{font-size:13.5px;font-weight:600;color:var(--muted);margin-left:3px}
-        .kpi .kd{font-size:12px;font-weight:700;margin-top:4px}
+        .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:14px;margin:16px 0 22px}
+        /* 요약 KPI — 좌측 바 클리셰 제거, 큰 숫자 + 강조 색 + 은은한 컬러 워시로 임팩트 강화 */
+        .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;
+          background:linear-gradient(150deg,color-mix(in srgb,var(--kc,var(--d1)) 11%,var(--panel)),var(--panel) 56%);
+          padding:18px 20px 17px;box-shadow:var(--sh)}
+        .kpi .kl{font-size:12px;color:var(--muted);font-weight:800;letter-spacing:.01em}
+        .kpi .kv{font-size:41px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.02;letter-spacing:-.035em;margin-top:11px;color:var(--ink)}
+        .kpi .kv small{font-size:15px;font-weight:700;color:var(--muted);margin-left:4px;letter-spacing:0}
+        .kpi .kd{font-size:12.5px;font-weight:700;margin-top:9px}
         .up{color:var(--ok)} .down{color:var(--danger)} .flat{color:var(--muted)}
         .iv-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}
         @media(max-width:1000px){.iv-grid{grid-template-columns:1fr}}
