@@ -60,7 +60,9 @@
         .iv-dates.on{display:flex}
         .iv-dates input{height:32px;border:1px solid var(--line-strong);border-radius:8px;padding:0 9px;font-size:13px;background:var(--panel)}
         .iv-sp{flex:1}
-        .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:14px;margin:16px 0 22px}
+        .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:16px 0 22px}
+        .kpi .kl svg{width:13px;height:13px;vertical-align:-2px;opacity:.65;margin-left:2px}
+        .kpi.kpi-china:hover{border-color:color-mix(in srgb,var(--danger) 45%,var(--line));box-shadow:var(--sh-lg)}
         /* 요약 KPI — 좌측 바 클리셰 제거, 큰 숫자 + 강조 색 + 은은한 컬러 워시로 임팩트 강화 */
         .kpi{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;
           background:linear-gradient(150deg,color-mix(in srgb,var(--kc,var(--d1)) 11%,var(--panel)),var(--panel) 56%);
@@ -182,6 +184,7 @@
 
       const $=s=>root.querySelector(s);
       let records=[], roster=[], preset='7', dept=leadOnly?leadDept:'all', custom={from:todayStr(), to:todayStr()};
+      let chinaStat={ open:0, total:0 };   // 중국 발주요청 처리대기/전체 (종합 KPI용)
       // 파트장은 자기 부서만 — 부서 전환 세그먼트 숨김 + 제목 조정
       if(leadOnly){ const sd=$('#segDept'); if(sd) sd.style.display='none';
         const tt=root.querySelector('.mhead .tt'); if(tt) tt.textContent=`우리 파트 현황 · ${DLABEL[leadDept]||''}`;
@@ -241,7 +244,12 @@
             <div class="kpi" style="--kc:var(--d4)"><div class="kl">최다 담당자 · 직무별</div>
               <div class="kd" style="margin-top:9px;font-size:13.5px;line-height:2">
                 <span class="dbadge" style="background:${CHART.cs}">CS</span> ${ct?esc(ct.name)+' <b style="color:var(--ink)">'+ct.count+'</b>건':'—'}<br>
-                <span class="dbadge" style="background:${CHART.md}">MD</span> ${mt?esc(mt.name)+' <b style="color:var(--ink)">'+mt.count+'</b>건':'—'}</div></div>`;
+                <span class="dbadge" style="background:${CHART.md}">MD</span> ${mt?esc(mt.name)+' <b style="color:var(--ink)">'+mt.count+'</b>건':'—'}</div></div>
+            <div class="kpi kpi-china" style="--kc:var(--danger);cursor:pointer" title="중국 발주요청 탭 열기">
+              <div class="kl">중국발주 대기 ${icon('box')}</div><div class="kv">${chinaStat.open}<small>건</small></div>
+              <div class="kd flat">전체 ${chinaStat.total}건 · 클릭 시 상세</div></div>`;
+          const kc=$('#kpis').querySelector('.kpi-china');
+          if(kc) kc.onclick=()=>{ dept='china'; $('#segDept').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.d==='china')); paint(); };
         } else {
           const top=people[0];
           $('#kpis').innerHTML=`
@@ -619,8 +627,9 @@
       $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); chinaCache=null; loadErr=false; if(dept==='china') paintChina(); else load(); };
 
       async function load(){
-        if($('#kpis')) $('#kpis').innerHTML=Array.from({length:4}).map(()=>`<div class="kpi" style="--kc:var(--line-strong)"><div class="skel skel-line" style="width:54%"></div><div class="skel skel-line" style="width:40%;height:24px;margin-top:10px"></div></div>`).join('');
+        if($('#kpis')) $('#kpis').innerHTML=Array.from({length:5}).map(()=>`<div class="kpi" style="--kc:var(--line-strong)"><div class="skel skel-line" style="width:54%"></div><div class="skel skel-line" style="width:40%;height:24px;margin-top:10px"></div></div>`).join('');
         roster=await fetchRoster();
+        try{ const cn=await fetchChina(); chinaStat={ open:cn.filter(i=>!i.done).length, total:cn.length }; }catch(e){}
         if(!root.isConnected) return;
         await refresh();
       }
