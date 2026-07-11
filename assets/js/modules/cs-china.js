@@ -151,7 +151,7 @@
         look.className='cn-look'; look.textContent='조회 중…';
         clearTimeout(lookT); lookT=setTimeout(async()=>{
           try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); const d=await r.json();
-            const p=(d&&d.item)||(d&&d.items&&d.items[0]);
+            const p=(d&&d.product)||(d&&d.item)||(d&&d.items&&d.items[0]);   // 카탈로그 API는 { product } 반환
             if(p&&(p.name||p.selfCode)){ form.name=p.name||''; look.className='cn-look ok'; look.innerHTML=`✓ <b>${esc(p.name||'(품명 없음)')}</b>${p.vendor?' · '+esc(p.vendor):''}`; }
             else { look.className='cn-look bad'; look.textContent='이카운트에 없는 코드입니다. (그대로 등록 가능)'; }
           }catch{ look.className='cn-look'; look.textContent=''; }
