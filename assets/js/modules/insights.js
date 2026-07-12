@@ -523,10 +523,11 @@
             <td><span class="cn2 ${iqCls(it)}">${esc(it.inquiry||'-')}</span></td>
             <td><span class="cn2 rq">${esc(it.req||'-')}</span></td>
             <td><span class="cn2 ${it.done?'st-done':'st-open'}">${it.done?'완료':'대기'}</span></td>
+            <td class="num">${it.qty?esc(String(it.qty))+'개':'-'}</td>
             <td>${esc(it.customer||'-')}</td><td>${esc(it.authorName||it.author||'-')}</td><td class="num">${cnFmt(it.createdAt)}</td></tr>`).join('');
         const table=`<div class="iv-secttl">전체 목록 <span style="font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0">· ${items.length}건 (기간 무관 누적)</span></div>
-          <div class="cn-tblwrap"><table class="cmp-tbl cn-tbl"><thead><tr><th>상품코드</th><th>품명</th><th>문의유형</th><th>발주요청</th><th>상태</th><th>고객</th><th>작성자</th><th class="num">등록</th></tr></thead>
-          <tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">등록된 발주요청이 없습니다.</td></tr>'}</tbody></table></div>`;
+          <div class="cn-tblwrap"><table class="cmp-tbl cn-tbl"><thead><tr><th>상품코드</th><th>품명</th><th>문의유형</th><th>발주요청</th><th>상태</th><th class="num">수량</th><th>고객</th><th>작성자</th><th class="num">등록</th></tr></thead>
+          <tbody>${rows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:22px">등록된 발주요청이 없습니다.</td></tr>'}</tbody></table></div>`;
         box.innerHTML=kpis+hl+dist+table;
       }
       /* 데이터에서 사람이 읽는 인사이트 문장 자동 생성 */

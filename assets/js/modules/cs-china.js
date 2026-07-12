@@ -21,7 +21,7 @@
     title:'중국 발주요청', icon:'box',
     render(root){
       const u=meU(); const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
-      const form={ code:'', name:'', inquiry:'주문완료', req:'입고대기', customer:'', content:'' };
+      const form={ code:'', name:'', inquiry:'주문완료', req:'입고대기', customer:'', qty:'', content:'' };
       let items=[], filt={ inquiry:'', req:'', status:'open' };
 
       root.innerHTML=`
@@ -73,6 +73,7 @@
         .cn-b.iq0{background:var(--ok-bg);color:var(--ok)}        /* 주문완료 */
         .cn-b.iq1{background:var(--warn-bg);color:var(--warn)}    /* 견적문의 */
         .cn-b.rq{background:var(--info-bg);color:var(--info)}
+        .cn-b.qty{background:var(--panel-2);color:var(--ink);border:1px solid var(--line-strong);font-variant-numeric:tabular-nums}
         .cn-b.code{font-family:var(--mono);background:var(--panel-2);color:var(--ink);border:1px solid var(--line)}
         .cn-b.st-open{background:var(--red-soft);color:var(--red)}
         .cn-b.st-done{background:var(--ok-bg);color:var(--ok)}
@@ -104,10 +105,14 @@
                   <div class="cn-fld"><span class="cap">문의유형</span><div class="cn-chips" id="cInq"></div></div>
                   <div class="cn-fld"><span class="cap">발주요청</span><div class="cn-chips" id="cReq"></div></div>
                 </div>
-                <div class="cn-fld"><span class="cap">고객명 <em>선택</em></span>
-                  <input type="text" id="cCust" placeholder="예: 홍길동 / 에듀이노초"></div>
+                <div class="cn-row2">
+                  <div class="cn-fld"><span class="cap">고객명 <em>선택</em></span>
+                    <input type="text" id="cCust" placeholder="예: 홍길동 / 에듀이노초"></div>
+                  <div class="cn-fld"><span class="cap">발주 수량 <em>선택</em></span>
+                    <input type="number" id="cQty" min="1" placeholder="예: 5" value="${form.qty||''}"></div>
+                </div>
                 <div class="cn-fld"><span class="cap">내용 <em>선택</em></span>
-                  <textarea id="cContent" rows="3" placeholder="재고 상황 · 수량 · 요청사항 등"></textarea></div>
+                  <textarea id="cContent" rows="3" placeholder="재고 상황 · 요청사항 등"></textarea></div>
                 <button type="submit" class="btn pri lg" id="cSave">${icon('save')}발주요청 등록</button>
               </form>
               <aside class="cn-def">
@@ -158,18 +163,19 @@
         }, 350);
       });
       $('#cCust').oninput=e=>form.customer=e.target.value;
+      { const q=$('#cQty'); if(q) q.oninput=e=>form.qty=e.target.value; }
       $('#cContent').oninput=e=>form.content=e.target.value;
 
       async function save(){
         if(!form.code.trim()){ toast('상품코드를 입력하세요'); $('#cCode').focus(); return; }
         const btn=$('#cSave'); btn.disabled=true;
         const item={ id:uuid(), code:form.code.trim(), name:form.name||'', inquiry:form.inquiry, req:form.req,
-          customer:form.customer.trim(), content:form.content.trim(),
+          customer:form.customer.trim(), qty:Number(form.qty)>0?Number(form.qty):null, content:form.content.trim(),
           author:u.loginId, authorName:u.name, dept:u.dept, createdAt:nowISO(), done:false };
         await api.push(item);
         toast('발주요청을 등록했습니다');
-        form.code=''; form.name=''; form.customer=''; form.content='';
-        $('#cCode').value=''; $('#cCust').value=''; $('#cContent').value='';
+        form.code=''; form.name=''; form.customer=''; form.qty=''; form.content='';
+        $('#cCode').value=''; $('#cCust').value=''; $('#cContent').value=''; { const q=$('#cQty'); if(q) q.value=''; }
         $('#cLook').className='cn-look'; $('#cLook').textContent='상품코드를 입력하면 품명이 자동 조회됩니다.';
         btn.disabled=false;
         await load(); $('#cCode').focus();
@@ -203,6 +209,7 @@
                 <span class="cn-b code">${esc(it.code)}</span>
                 <span class="cn-b ${iqCls}">${esc(it.inquiry)}</span>
                 <span class="cn-b rq">${esc(it.req)}</span>
+                ${it.qty?`<span class="cn-b qty">${it.qty}개</span>`:''}
                 <span class="cn-b ${it.done?'st-done':'st-open'}">${it.done?'✓ 완료':'처리 대기'}</span>
               </div>
               ${it.name?`<div class="cn-nm">${esc(it.name)}</div>`:''}

@@ -40,6 +40,20 @@ async function snapshotMonth(m) {
   await redis(['HSET', 'eduino:backup:meta', 'lastAt', at, 'lastMonth', m]);
   return { month: m, cs: cs.length, md: md.length };
 }
+// 월 단위가 아닌 공용 컬렉션(중국발주요청·공지·메모·콜백)의 현재 상태를 통째로 백업
+async function collAll(name) {
+  const arr = await redis(['HGETALL', 'eduino:coll:' + name]); const out = [];
+  if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { out.push(JSON.parse(arr[i + 1])); } catch (e) {} }
+  return out;
+}
+async function snapshotCollections() {
+  const names = ['chinaorders', 'notice', 'memo', 'callbacks'];
+  const data = {}, counts = {};
+  for (const n of names) { const items = await collAll(n); data[n] = items; counts[n] = items.length; }
+  const at = new Date().toISOString();
+  await redis(['SET', 'eduino:backup:coll', JSON.stringify({ at, data, counts })]);
+  return counts;
+}
 
 module.exports = async function handler(req, res) {
   try {
@@ -61,7 +75,8 @@ module.exports = async function handler(req, res) {
     const prev = monthStr(new Date(now.getFullYear(), now.getMonth() - 1, 1));
     const done = [];
     for (const m of [prev, cur]) { try { done.push(await snapshotMonth(m)); } catch (e) { done.push({ month: m, error: String(e && e.message || e) }); } }
-    return res.status(200).json({ ok: true, at: new Date().toISOString(), done });
+    let coll = null; try { coll = await snapshotCollections(); } catch (e) { coll = { error: String(e && e.message || e) }; }
+    return res.status(200).json({ ok: true, at: new Date().toISOString(), done, coll });
   } catch (err) {
     if (err && err.kv) return res.status(503).json({ ok: false, error: 'KV 미연결' });
     return res.status(500).json({ ok: false, error: String(err && err.message || err) });
