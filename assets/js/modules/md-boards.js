@@ -119,8 +119,15 @@
           const wrap=el('div','bd-f'+((f.type==='textarea')?' wide':''));
           const lab=`<label>${esc(f.label)}${f.req?'<span class="req">*</span>':''}</label>`;
           if(f.type==='agent' || (f.type==='select' && f.k===cfg.whoField)){
-            wrap.innerHTML=lab+`<div class="bd-chips" data-agentchips></div>`;
-            grid.appendChild(wrap); renderAgentChips(wrap.querySelector('[data-agentchips]'), f);
+            // 담당자/처리자 — 드롭다운(공간 효율) · 관리자는 목록에서 직접 추가 가능
+            const buildOpts=(cur)=>`<option value="">(담당자 선택)</option>${getAgents().map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 담당자 추가…</option>':''}`;
+            wrap.innerHTML=lab+`<select data-k="${esc(f.k)}" data-agent="1">${buildOpts(form[f.k])}</select>`;
+            grid.appendChild(wrap);
+            const sel=wrap.querySelector('select');
+            sel.onchange=()=>{ if(sel.value==='__add'){ const v=(prompt('추가할 담당자 이름','')||'').trim();
+                if(v){ const cur=getAgents(); if(!cur.includes(v)){ cur.push(v); setAgents(cur); } form[f.k]=v; sel.innerHTML=buildOpts(v); }
+                else { sel.value=form[f.k]||''; } return; }
+              form[f.k]=sel.value; };
           } else if(f.type==='select'){
             wrap.innerHTML=lab+`<select data-k="${esc(f.k)}"><option value="">(선택)</option>${(f.options||[]).map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;
             grid.appendChild(wrap);
@@ -148,18 +155,6 @@
           }
         });
 
-        function renderAgentChips(box, f){
-          const list=getAgents();
-          box.innerHTML='';
-          list.forEach(a=>{ const b=el('button','bd-chip'+(form[f.k]===a?' on':'')); b.type='button'; b.textContent=a;
-            b.onclick=()=>{ form[f.k]=(form[f.k]===a?'':a); renderAgentChips(box,f); };
-            box.appendChild(b); });
-          if(isAdmin){ const add=el('button','bd-chip'); add.type='button'; add.textContent='＋'; add.title='담당자 추가';
-            add.style.cssText='color:var(--muted);border-style:dashed';
-            add.onclick=()=>{ const v=(prompt('추가할 담당자 이름','')||'').trim(); if(!v) return;
-              const cur=getAgents(); if(!cur.includes(v)){ cur.push(v); setAgents(cur); } form[f.k]=v; renderAgentChips(box,f); };
-            box.appendChild(add); }
-        }
         function wireCodeLookup(inp, hint){
           const nameField = cfg.nameField;
           let seq=0, tmr=null;
@@ -197,12 +192,12 @@
         function resetInputs(){
           grid.querySelectorAll('[data-k]').forEach(inp=>{ const k=inp.dataset.k; const f=cfg.fields.find(x=>x.k===k);
             if(!f) return;
+            if(k===cfg.whoField){ inp.value=form[k]||''; return; }   // 담당자는 다음 입력에도 유지
             if(f.type==='toggle'){ inp.checked=false; }
             else if(f.type==='date'){ inp.value=form[k]; }
             else { inp.value=''; inp.dataset.auto=''; }
           });
           grid.querySelectorAll('[data-codehint]').forEach(h=>h.textContent='');
-          grid.querySelectorAll('[data-agentchips]').forEach((box)=>{ const f=cfg.fields.find(x=>x.k===cfg.whoField); if(f) renderAgentChips(box,f); });
         }
 
         /* ---- 표(조회) ---- */

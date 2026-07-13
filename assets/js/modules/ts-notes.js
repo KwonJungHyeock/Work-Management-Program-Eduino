@@ -244,8 +244,7 @@
 
                   <aside class="q-side">
                     <div>
-                      <div class="side-cap-row"><span class="cap" style="margin:0">담당자</span>
-                        ${isAdmin?'<button type="button" class="sec-edit" id="agentEdit">편집</button>':''}</div>
+                      <div class="side-cap-row"><span class="cap" style="margin:0">담당자</span></div>
                       <div class="q-agents" id="agentGroup"></div>
                     </div>
                     <div><span class="cap">날짜</span><input type="date" id="fDate" value="${esc(form.date)}"></div>
@@ -353,40 +352,25 @@
           }).catch(()=>{});
         })();
 
-        /* --- 담당자 칩 (편집 가능 · 단일선택 · 마지막값 기억) --- */
+        /* --- 담당자 드롭다운 (공간 효율 · 관리자는 목록에서 직접 추가) --- */
         function renderAgents(){
           const g=body.querySelector('#agentGroup'); g.innerHTML='';
           const agents=getAgents();
           if(!isAdmin && meName && agents.includes(meName)){   // 담당자 본인이면 고정
             form.agent=meName;
-            g.innerHTML=`<div class="chip on" style="cursor:default"><span>${esc(form.agent)}</span></div>
+            g.innerHTML=`<select disabled style="width:100%;height:40px"><option>${esc(form.agent)}</option></select>
               <div class="muted" style="font-size:11.5px;margin-top:4px">본인 계정으로 자동 기록됩니다</div>`;
             return;
           }
-          if(!agents.includes(form.agent)) form.agent = agents.includes(lastAgent)?lastAgent:agents[0];
-          agents.forEach(a=>{ const b=el('button','chip'+(form.agent===a?' on':'')); b.type='button';
-            b.innerHTML=`<span>${esc(a)}</span>${agentEdit&&agents.length>1?`<span class="q-del" title="삭제">✕</span>`:''}`;
-            b.onclick=(e)=>{
-              if(e.target.classList.contains('q-del')){ const na=agents.filter(x=>x!==a); setAgents(na); if(form.agent===a)form.agent=na[0]; renderAgents(); return; }
-              if(agentEdit) return;
-              form.agent=a; store(STORE.tsAgent).set(a); lastAgent=a; renderAgents();
-            };
-            g.appendChild(b);
-          });
-          if(agentEdit){ const add=el('div','chip-add');
-            add.innerHTML=`<input type="text" id="newAgent" placeholder="담당자 이름" maxlength="12">
-              <button type="button" class="btn pri sm" id="addAgentBtn">${icon('plus')}추가</button>`;
-            const doAdd=()=>{ const v=add.querySelector('#newAgent').value.trim();
-              if(!v) return; const cur=getAgents(); if(cur.includes(v)){ toast('이미 있는 담당자입니다'); return; }
-              cur.push(v); setAgents(cur); renderAgents();
-              const ni=g.querySelector('#newAgent'); if(ni) ni.focus(); };
-            add.querySelector('#addAgentBtn').onclick=doAdd;
-            add.querySelector('#newAgent').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
-            g.appendChild(add);
-          }
+          if(!agents.includes(form.agent)) form.agent = agents.includes(lastAgent)?lastAgent:(agents[0]||'');
+          const buildOpts=cur=>`<option value="">(담당자 선택)</option>${getAgents().map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 담당자 추가…</option>':''}`;
+          g.innerHTML=`<select id="agentSel" style="width:100%;height:40px;font-size:14.5px">${buildOpts(form.agent)}</select>`;
+          const sel=g.querySelector('#agentSel');
+          sel.onchange=()=>{ if(sel.value==='__add'){ const v=(prompt('추가할 담당자 이름','')||'').trim();
+              if(v){ const cur=getAgents(); if(!cur.includes(v)){ cur.push(v); setAgents(cur); } form.agent=v; store(STORE.tsAgent).set(v); lastAgent=v; sel.innerHTML=buildOpts(v); }
+              else { sel.value=form.agent||''; } return; }
+            form.agent=sel.value; if(sel.value){ store(STORE.tsAgent).set(sel.value); lastAgent=sel.value; } };
         }
-        { const ae=body.querySelector('#agentEdit'); if(ae) ae.onclick=(e)=>{ agentEdit=!agentEdit;
-          e.currentTarget.classList.toggle('on',agentEdit); e.currentTarget.textContent=agentEdit?'완료':'편집'; renderAgents(); }; }
         renderAgents();
 
         // 저장
