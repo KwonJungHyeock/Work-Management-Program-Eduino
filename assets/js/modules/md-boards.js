@@ -340,7 +340,9 @@
           panel.querySelector('#syncCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 사용'); } };
           panel.querySelector('#syncSave').onclick=()=>{ setSyncCfg({ sheetUrl:panel.querySelector('#syncUrl').value.trim(), backup:panel.querySelector('#syncBackup').checked }); panel.querySelector('#syncStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('연동 설정 저장'); };
           panel.querySelector('#syncTest').onclick=async()=>{ const url=panel.querySelector('#syncUrl').value.trim(), st=panel.querySelector('#syncStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
-            try{ const res=await fetch(url); let d=null; try{d=await res.json();}catch(e){} st.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`:`<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`; }catch(e){ st.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(e.message)}</span>`; } };
+            // 이 모듈이 실제로 기록하는 탭(tabName)을 함께 조회 — 표시도 그 탭으로
+            try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent(tabName)); let d=null; try{d=await res.json();}catch(e){}
+              st.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공 · 이 모듈 저장 탭 <b>"${esc(tabName)}"</b>${d&&typeof d.rows==='number'?` (${d.rows}행)`:''}</span>`:`<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`; }catch(e){ st.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(e.message)}</span>`; } };
           panel.querySelector('#syncAll').onclick=async()=>{ const st=panel.querySelector('#syncStat'); if(!getSyncCfg().sheetUrl){ st.textContent='먼저 URL을 저장하세요'; return; } st.textContent=`전송 중… (${all.length}건)`;
             const r=await sendSheet(all); st.innerHTML=r.ok?`<span style="color:var(--ok)">${all.length}건 전송${r.unconfirmed?' (응답 확인 불가 · 재전송 안전)':''}</span>`:`<span style="color:var(--danger)">전송 실패: ${esc(r.error||'')}</span>`; };
         }

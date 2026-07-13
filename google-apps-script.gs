@@ -88,10 +88,11 @@ function appendRows_(sh, cols, rows) {
   return json_({ ok: true, added: out.length });
 }
 
-function doGet() {
+function doGet(e) {
   try {
-    var sh = getSheet_();
-    return json_({ ok: true, sheet: SHEET_NAME || sh.getName(), rows: Math.max(0, sh.getLastRow() - 1) });
+    var name = (e && e.parameter && e.parameter.sheet) || '';   // ?sheet=탭이름 이면 그 탭의 상태를 반환
+    var sh = getSheet_(name);
+    return json_({ ok: true, sheet: sh.getName(), rows: Math.max(0, sh.getLastRow() - 1) });
   } catch (err) { return json_({ ok: false, error: String(err) }); }
 }
 
