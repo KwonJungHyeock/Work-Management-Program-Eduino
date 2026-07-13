@@ -38,7 +38,7 @@
     const cell=v=>esc(v==null?'':String(v));
     return `<div style="overflow-x:auto"><table class="st-dtl"><thead><tr>
       <th>구분</th><th>거래처명</th><th>이름</th><th>금액</th><th>출고일</th><th>할인율</th><th>내용</th><th>담당자</th></tr></thead><tbody>
-      ${recs.map(r=>`<tr><td><span class="st-dt-badge">${cell(r.gubun)}</span></td><td>${cell(r.vendor)}</td><td>${cell(r.name)}</td>
+      ${recs.map(r=>`<tr><td>${r.gubun?tagBadge(r.gubun,'st-dt-badge'):''}</td><td>${cell(r.vendor)}</td><td>${cell(r.name)}</td>
         <td class="stnum">${cell(r.amount)}</td><td>${cell(r.shipdate)}</td><td>${cell(r.discount)}</td>
         <td class="st-dt-wrap">${cell(r.content)}${r.memo?`<div class="muted" style="font-size:11.5px;margin-top:2px">메모: ${cell(r.memo)}</div>`:''}</td>
         <td>${cell(r.whoName||r.who)}</td></tr>`).join('')}

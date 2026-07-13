@@ -102,6 +102,9 @@
           // 담당자 컬러 배지(상담사별 색 구분)
           if(c.color && v){ const col=colorForName(v);
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:800;color:${col};background:${col}1a;border-radius:6px;padding:2px 9px">${esc(v)}</span></td>`; }
+          // 구분/분류/상태 값별 색상 배지
+          if(c.tag && v && typeof tagBadge==='function'){ const cl=tagColor(v);
+            return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;background:${cl.bg};color:${cl.fg}">${esc(v)}</span></td>`; }
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
           return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||180}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
@@ -239,7 +242,7 @@
       if(window.Records) await Records.pushCS(rec);                 // 내부 상담 기록 갱신(중복 없이 덮어씀)
       if(window.CSSheet && CSSheet.configured()) CSSheet.send([rec]); // 구글시트 갱신(id 기준 upsert)
     },
-    cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'상담사',w:80,color:true}, {k:'category',h:'분류',w:78},
+    cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'상담사',w:80,color:true}, {k:'category',h:'분류',w:78,tag:true},
       {k:'route',h:'주문경로',w:78}, {k:'customerType',h:'고객유형',w:78}, {k:'name',h:'이름/학교/업체',w:150}, {k:'contact',h:'연락처',w:120},
       {k:'prodCategory',h:'상품분류',w:90}, {k:'prodCode',h:'상품코드',w:84},
       {k:'content',h:'내용',w:260,wrap:true}, {k:'answer',h:'답변',w:200,wrap:true} ] });
@@ -269,7 +272,7 @@
       row:r=>({ id:r.id, '일자':r.date||r.day||'', '구분':r.gubun||'', '주문경로':r.route||'', '주문자명':r.orderer||'', '입점사명':r.vendor||'',
         '정산구분':r.settle||'', '자체상품코드':r.selfCode||r.code||'', '품명':r.name||'', '수량':(r.qty!=null?r.qty:''),
         '출고송장/입고':`배송비 ${(Number(r.ship)||0).toLocaleString()}원`, '발주':'O', '배송정보/비고':r.shipInfo||'' }) },
-    cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80}, {k:'gubun',h:'구분',w:70},
+    cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80}, {k:'gubun',h:'구분',w:70,tag:true},
       {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
       {k:'settle',h:'정산구분',w:78}, {k:'selfCode',h:'자체상품코드',w:104},
       {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},

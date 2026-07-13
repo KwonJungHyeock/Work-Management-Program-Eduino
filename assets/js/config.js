@@ -5,6 +5,49 @@
 /* 로그인은 서버(api/auth.js) + 관리자 발급 계정으로 처리합니다.
    (초기 관리자: 아이디 admin / 접속코드는 Vercel 환경변수 ADMIN_CODE, 미설정 시 robodyne12) */
 
+/* 구분/상태 값 색상 태그 — 후불/발주·교환/반품·처리상태·분류 등 선택 항목을 값별로 색 구분
+   · 의미 있는 값(완료=초록, 반품/품절=빨강 등)은 고정, 나머지는 값 해시로 안정적 배정
+   · 앱 전반(결재함 상세·현황판 목록·기록 뷰)에서 window.tagColor(값)로 공유 사용 */
+const TAG_PALETTE = [
+  { bg:'#e8f0fe', fg:'#1f6feb' }, // 0 blue
+  { bg:'#fdeef0', fg:'#e0313b' }, // 1 red
+  { bg:'#e6f6ee', fg:'#0b8a4b' }, // 2 green
+  { bg:'#fef1e0', fg:'#b26a00' }, // 3 amber
+  { bg:'#f0eafe', fg:'#7b3ff2' }, // 4 purple
+  { bg:'#e4f6f8', fg:'#0e8a9c' }, // 5 teal
+  { bg:'#fdeaf4', fg:'#c02a83' }, // 6 pink
+  { bg:'#eef1f6', fg:'#5b6675' }, // 7 gray
+  { bg:'#eaf3e0', fg:'#5c8a1b' }, // 8 olive
+  { bg:'#e8ecfb', fg:'#3f51b5' }, // 9 indigo
+];
+/* 같은 칸(구분/분류/상태)에 함께 나오는 값들이 서로 다른 색이 되도록 배정 */
+const TAG_SEMANTIC = {
+  // 완료/정상 = 초록
+  '완료':2,'승인':2,'판매':2,'정상':2,'지급완료':2,
+  // 부정/위험 = 빨강
+  '반품':1,'품절':1,'취소':1,'긴급':1,
+  // 진행/주의 = 앰버
+  '환불':3,'가격':3,'처리중':3,'진행':3,'진행중':3,'대기':3,'프로모션':3,'프로모션 현황':3,
+  // 중립 = 회색
+  '보류':7,'기타':7,'아카이브':7,'단종':7,'-':7,
+  // 후불/발주·상품관리 구분값(같은 칸 내 구분)
+  '발주':0,'신규상품':0,'신규':0,'신규입점':0,'접수':0,
+  '견적':9,
+  '후불':4,'상세페이지':4,
+  '결제요청':6,'주문/배송':6,'썸네일':6,'누락':6,
+  '대량견적':5,'교환':5,
+  '상품/재고':8,'사고':8,
+};
+function tagColor(val){ const v=String(val==null?'':val).trim(); if(!v) return null;
+  let idx = TAG_SEMANTIC[v];
+  if(idx==null){ let h=0; for(let i=0;i<v.length;i++) h=(h*31+v.charCodeAt(i))>>>0; idx=h%TAG_PALETTE.length; }
+  return TAG_PALETTE[idx]; }
+/* HTML 배지(span) 생성 — extraClass 로 기존 클래스 유지 가능 */
+function tagBadge(val, cls){ const v=String(val==null?'':val).trim(); if(!v) return '';
+  const c=tagColor(v); const esc2=(typeof esc==='function')?esc:(x=>x);
+  return `<span class="${cls||''}" style="background:${c.bg};color:${c.fg}">${esc2(v)}</span>`; }
+if(typeof window!=='undefined'){ window.tagColor=tagColor; window.tagBadge=tagBadge; }
+
 /* 지원 이미지 포맷 (브라우저 Canvas 로 인코딩 가능한 것) */
 const FORMATS = {
   jpg:  { label:'JPG',  mime:'image/jpeg', ext:'jpg',  quality:true,  desc:'범용·저용량 (쇼핑몰 표준)' },

@@ -250,7 +250,7 @@
         function fmtCell(r,c){
           let v=r[c.k]; v = v==null?'':String(v);
           if(c.k===cfg.whoField && v){ const col=colorForName(v); return `<td style="white-space:nowrap"><span class="bd-badge" style="color:${col};background:${col}1a">${esc(v)}</span></td>`; }
-          if(c.type==='select' && v){ return `<td style="white-space:nowrap"><span class="bd-badge">${esc(v)}</span></td>`; }
+          if(c.type==='select' && v){ return `<td style="white-space:nowrap">${(typeof tagBadge==='function')?tagBadge(v,'bd-badge'):`<span class="bd-badge">${esc(v)}</span>`}</td>`; }
           if(c.type==='toggle'){ return `<td style="white-space:nowrap">${v?`<span class="bd-badge" style="color:var(--ok);background:var(--ok-bg)">${esc(v)}</span>`:'<span class="muted">-</span>'}</td>`; }
           const cls=(c.type==='textarea'?'wrap ':'');
           return `<td class="${cls.trim()}" ${c.type==='textarea'?'':'style="white-space:nowrap"'}>${esc(v)}</td>`;
