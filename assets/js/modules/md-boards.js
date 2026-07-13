@@ -84,9 +84,10 @@
           .bd-meta{font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600}
           .bd-wrap{border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100vh - 430px);min-height:160px;background:var(--panel);box-shadow:var(--sh-sm)}
           table.bd{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
-          table.bd th{position:sticky;top:0;z-index:2;background:#f4f6f9;color:var(--ink-2);font-size:11.5px;font-weight:800;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+          table.bd th{position:sticky;top:0;z-index:2;background:var(--th-bg,#f4f6f9);color:var(--ink-2);font-size:11.5px;font-weight:800;letter-spacing:.02em;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
           table.bd td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
           table.bd tr:nth-child(even) td{background:var(--zebra)}
+          table.bd tbody tr:hover td{background:var(--hover)}
           table.bd td.wrap{white-space:pre-wrap;word-break:break-word;line-height:1.45;min-width:180px}
           table.bd td.who{font-weight:700}
           .bd-badge{display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;font-size:12px;background:var(--line-2);color:var(--muted)}

@@ -40,6 +40,7 @@
             letter-spacing:.02em;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
           table.sv td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
           table.sv tr:nth-child(even) td{background:var(--zebra)}
+          table.sv tbody tr:hover td{background:var(--hover)}
           table.sv td.num{text-align:right;font-variant-numeric:tabular-nums}
           table.sv td.wrap{white-space:pre-wrap;word-break:break-word;line-height:1.45}
           table.sv td.who{font-weight:700;color:var(--ink)}
