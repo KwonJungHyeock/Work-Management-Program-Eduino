@@ -31,6 +31,35 @@ function getSheet_(name) {
   if (target) return ss.getSheetByName(target) || ss.insertSheet(target);
   return ss.getSheets()[0];
 }
+
+/**
+ * ★ 한 번 실행하면(편집기에서 함수 선택 → 실행) 이 스프레드시트에 CS·MD 전체 탭을
+ *   헤더까지 자동 생성합니다. (프로그램 모듈이 보내는 탭 이름·헤더와 동일)
+ *   이미 있는 탭은 헤더만 채우고 데이터는 건드리지 않습니다.
+ */
+var TABS_ = {
+  'CS상담메모': ['날짜','분류','주문경로','연락처','고객유형','주문자/학교/업체명','상품분류','상품코드','내용','답변','상담사','id'],
+  '후불·발주': ['접수일자','구분','거래처명','이름','연락처','이메일','금액','출고일','할인율','내용','배송주소','메모','등록자','id'],
+  '교환·반품': ['접수일자','구분','거래처명','이름','연락처','이메일','주문경로','금액','출고일','처리상태','내용','메모','등록자','id'],
+  '입점사 신규·변동사항': ['타이틀(업무 내용)','진행상태','프로젝트 구분','담당자','시작일','종료(예정)일','진행율(%)','설명/비고','등록자','id'],
+  '품절관리 현황': ['날짜','분류','자사/입점사','입점사명','자체코드','상품관리(제품명)','처리자','처리내용','상태','날짜(기록용)','특이사항','등록자','id'],
+  '제품검수 현황': ['검수(제목)','입고일자','검수일자','담당자','상품코드','제품명','동작 기능','외관 및 구성품','상세페이지 수정','특이사항','등록자','id'],
+  '상품관리 현황': ['상품관리(제품명)','날짜','처리자','분류','자체코드','처리내용','상태','날짜(기록용)','특이사항','등록자','id'],
+  'TS상담메모': ['날짜','문의플랫폼','담당자','상품코드','상품구분','제품명','고객정보','문의사항','답변요약','답변원본','비고','id']
+};
+function setupTabs() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  Object.keys(TABS_).forEach(function (name) {
+    var sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    var header = TABS_[name];
+    var cur = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    var hasHeader = cur.some(function (h) { return String(h).trim() !== ''; });
+    if (!hasHeader) { sh.getRange(1, 1, 1, header.length).setValues([header]); sh.setFrozenRows(1); sh.getRange(1, 1, 1, header.length).setFontWeight('bold'); }
+  });
+  // 기본 '시트1'(빈 탭)이 있으면 정리(내용 없을 때만)
+  var s1 = ss.getSheetByName('시트1') || ss.getSheetByName('Sheet1');
+  if (s1 && ss.getSheets().length > 1 && s1.getLastRow() === 0) ss.deleteSheet(s1);
+}
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
