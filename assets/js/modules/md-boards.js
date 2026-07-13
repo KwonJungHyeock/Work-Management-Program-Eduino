@@ -116,7 +116,6 @@
             <span class="bd-sp"></span>
             ${isAdmin?`<button class="btn ghost sm" id="btnSync">${icon('cloud')}시트 연동</button>`:''}
             ${isAdmin?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>`:''}
-            <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
           </div>
           <p class="bd-meta" id="meta"></p>
           <div class="bd-wrap"><table class="bd" id="tbl"></table></div>
@@ -259,7 +258,7 @@
           if(!root.isConnected || !$('#tbl')) return;
           const {rows,from,to}=filtered();
           $('#meta').textContent=`${from} ~ ${to} · 총 ${rows.length.toLocaleString()}건`;
-          const hasAct=isAdmin;
+          const hasAct=true;   // 수정은 전 담당자 가능(삭제는 관리자만)
           const head=`<thead><tr>${showCols.map(c=>`<th>${esc(c.label)}</th>`).join('')}${hasAct?'<th></th>':''}</tr></thead>`;
           if(!rows.length){ $('#tbl').innerHTML=head+`<tbody><tr><td class="bd-empty" colspan="${showCols.length+1}">해당 기간의 기록이 없습니다.</td></tr></tbody>`; return; }
           const CAP=1500; const show=rows.slice(0,CAP);
@@ -269,7 +268,7 @@
         }
         function actionCell(r){ return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
           <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
-          <button class="bd-del" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button></span></td>`; }
+          ${isAdmin?`<button class="bd-del" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button>`:''}</span></td>`; }
         function editRow(r,hasAct){
           const cells=showCols.map(c=>{
             const v=r[c.k]==null?'':String(r[c.k]);
@@ -321,7 +320,6 @@
         $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; load(); };
         if($('#fWho')) $('#fWho').onchange=()=>{ who=$('#fWho').value; paint(); };
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
-        $('#btnReload').onclick=load;
         if($('#btnSync')) $('#btnSync').onclick=renderSyncPanel;
         function renderSyncPanel(){
           const panel=$('#syncPanel'); if(!panel) return;
