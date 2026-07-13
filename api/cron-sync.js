@@ -107,7 +107,10 @@ async function fetchEcount() {
       selfCode: x[M('CODE', 'PROD_CD')],
       code: '',
       name: x[M('NAME', 'PROD_DES')],
-      option: M('OPTION', '') ? x[M('OPTION', '')] : (x['SIZE_DES'] || x['OPT_DES'] || ''),  // 옵션값(화이트 등) · 기본 SIZE_DES
+      // 옵션값(화이트/오렌지 등) — 환경변수 매핑 우선, 없으면 이카운트 흔한 옵션 필드명들을 순차 탐색
+      option: M('OPTION', '') ? x[M('OPTION', '')]
+        : (x['SIZE_DES'] || x['OPT_DES'] || x['OPTION_DES'] || x['SIZE1_DES'] || x['SIZE2_DES']
+           || x['PROD_SIZE_DES'] || x['PROD_SIZE'] || x['SIZE_DES1'] || x['OPT1_DES'] || x['OPTION_NAME'] || x['OPTION'] || ''),
       vendor: vname,
       category: cls.map[ccode] || (M('CATEGORY', '') ? x[M('CATEGORY', '')] : ''),
       inPrice: Number(x[M('INPRICE', 'IN_PRICE')]) || 0,
