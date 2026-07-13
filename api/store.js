@@ -128,7 +128,11 @@ async function getWorkRaw(dept, month) {
 }
 
 // 프로그램 내 "시트" — 전 직원 업무 기록을 서버에 누적 (구글시트는 백업)
-const SHEET_ALLOW = { cs: ['notes'], md: ['orders'] };   // 나중에 시트 종류 추가 가능
+// 부서별 허용 시트(레코드 버킷) — 현황판/신설 페이지가 추가될 때마다 등록해야 서버에 저장됨
+const SHEET_ALLOW = {
+  cs: ['notes', 'postpay', 'exchange'],
+  md: ['orders', 'tsnotes', 'vendorchg', 'stockmgmt', 'inspect', 'prodmgmt'],
+};
 function sheetOk(dept, sheet) { return SHEET_ALLOW[dept] && SHEET_ALLOW[dept].indexOf(sheet) >= 0; }
 function sheetBucket(dept, sheet, ym) { return 'eduino:sheet:' + dept + ':' + sheet + ':' + ym; }
 async function recPush(dept, sheet, record) {
