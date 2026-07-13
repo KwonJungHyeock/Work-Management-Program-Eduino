@@ -112,6 +112,7 @@
               <button data-r="custom">지정</button></span>
             <span class="bd-dates" id="dates"><input type="date" id="dFrom"> ~ <input type="date" id="dTo"></span>
             ${cfg.whoField?`<select class="bd-in" id="fWho"><option value="">${esc((whoCfg&&whoCfg.label)||'담당자')} 전체</option></select>`:''}
+            ${(cfg.filterFields||[]).map(f=>`<select class="bd-in" data-ff="${esc(f.k)}"><option value="">${esc(f.label)} 전체</option>${((cfg.fields.find(x=>x.k===f.k)||{}).options||[]).map(o=>`<option>${esc(o)}</option>`).join('')}</select>`).join('')}
             <input class="bd-in" id="fQ" type="text" placeholder="검색어…">
             <span class="bd-sp"></span>
             ${isAdmin?`<button class="btn ghost sm" id="btnSync">${icon('cloud')}시트 연동</button>`:''}
@@ -231,6 +232,7 @@
 
         /* ---- 표(조회) ---- */
         let preset='month', custom={from:todayStr(),to:todayStr()}, who='', q='', editId=null;
+        const ffVals={};   // 필드값 필터(예: 처리상태)
         function range(){ const to=todayStr();
           if(preset==='today') return {from:to,to};
           if(preset==='7') return {from:addDays(to,-6),to};
@@ -242,6 +244,7 @@
         function filtered(){ const {from,to}=range();
           let rows=all.filter(r=>{ const d=r.day||r[cfg.dateField]||''; return d>=from&&d<=to; });
           if(cfg.whoField && who) rows=rows.filter(r=>(r.whoName||r[cfg.whoField]||'')===who);
+          (cfg.filterFields||[]).forEach(f=>{ const v=ffVals[f.k]; if(v) rows=rows.filter(r=>String(r[f.k]??'').trim()===v); });
           if(q){ const s=q.toLowerCase(); rows=rows.filter(r=>showCols.some(c=>String(r[c.k]??'').toLowerCase().includes(s))); }
           rows.sort((a,b)=>String(b.day||'').localeCompare(String(a.day||'')) || String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
           return {rows,from,to};
@@ -319,6 +322,7 @@
         $('#dFrom').onchange=()=>{ custom.from=$('#dFrom').value||custom.from; load(); };
         $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; load(); };
         if($('#fWho')) $('#fWho').onchange=()=>{ who=$('#fWho').value; paint(); };
+        root.querySelectorAll('[data-ff]').forEach(sel=>sel.onchange=()=>{ ffVals[sel.dataset.ff]=sel.value; paint(); });
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
         if($('#btnSync')) $('#btnSync').onclick=renderSyncPanel;
         function renderSyncPanel(){
