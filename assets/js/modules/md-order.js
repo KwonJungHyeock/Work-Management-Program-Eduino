@@ -89,7 +89,10 @@
       // 자체상품코드(selfCode)가 기준 · 카페24 상품코드(code)로도 찾히게 보조 매핑(정규화 키)
       const prodMap=()=>{ const m={}; products.forEach(p=>{ const s=normCode(p.selfCode), c=normCode(p.code);
         if(s) m[s]=p; if(c && !m[c]) m[c]=p; }); return m; };
-      const vendorObj=n=>vendors.find(x=>x.name===n)||null;
+      // 회사명 정규화 — (주)·㈜·주식회사·유한회사 등 접두/접미어와 공백 제거 후 비교(입점사 정보 매칭 견고화)
+      const normCo=s=>String(s||'').replace(/\(주\)|㈜|\(유\)|주식회사|유한회사|\(재\)|재단법인/g,'').replace(/\s/g,'').toLowerCase();
+      const vendorObj=n=>{ if(!n) return null; const exact=vendors.find(x=>x.name===n); if(exact) return exact;
+        const k=normCo(n); return k? (vendors.find(x=>normCo(x.name)===k)||null) : null; };
       const vendorShip=n=>{ const v=vendorObj(n); return v?Number(v.ship)||0:0; };
       // A~E 로 시작하는 자체상품코드 = 자사 상품 → 입점사명 '자사'
       const isJasa=c=>/^[A-E]-/i.test(String(c||'').trim());
@@ -453,13 +456,13 @@
         const m=s.replace(/,/g,'').match(/(\d+)\s*원/); return m?Number(m[1]):null; }
       function drawVendors(){
         body.innerHTML=`
-          <input type="file" id="venFile" accept=".csv,text/csv" class="hidden">
+          <input type="file" id="venFile" accept=".xlsx,.csv,.tsv,.txt,text/csv" class="hidden">
           <div class="card">
             <div class="card-hd">${icon('truck')}<b>입점사 정보</b> <span class="muted" style="font-size:12.5px">· 배송비(vat포함)·무료배송조건·담당자</span>
               <span class="badge soon" id="vDirty" style="display:${dirtyVendor?'':'none'}">● 저장 안 됨</span>
               <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn sm" id="addVen">${icon('plus')}행 추가</button>
-                <button class="btn sm" id="impVenFile">${icon('upload')}CSV 불러오기</button>
+                <button class="btn sm" id="impVenFile">${icon('upload')}파일 불러오기<span style="font-weight:500;color:var(--muted);font-size:11px">·xlsx/csv</span></button>
                 <button class="btn sm" id="impVenPaste">${icon('clipboard')}붙여넣기</button>
                 <button class="btn sm" id="expVen">${icon('download')}CSV 내보내기</button>
                 <button class="btn sm pri" id="saveVen">${icon('save')}저장</button></span></div>
@@ -477,7 +480,12 @@
           downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`입점사정보_${todayStr()}.csv`); toast('CSV 저장'); };
         const vf=body.querySelector('#venFile');
         body.querySelector('#impVenFile').onclick=()=>vf.click();
-        vf.onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; const rd=new FileReader(); rd.onload=()=>importVendors(parseTable(rd.result)); rd.readAsText(f,'utf-8'); };
+        vf.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return;
+          // .xlsx(ZIP 바이너리)는 텍스트로 읽으면 깨지므로 XlsxLite 로 파싱 · csv/tsv 도 함께 지원
+          if(/\.(xlsx|xls)$/i.test(f.name) && window.XlsxLite){
+            try{ const { rows }=await XlsxLite.parseFile(f); importVendors(rows); }
+            catch(err){ toast('엑셀을 읽지 못했습니다: '+(err&&err.message||err)); }
+          } else { const rd=new FileReader(); rd.onload=()=>importVendors(parseTable(rd.result)); rd.readAsText(f,'utf-8'); } };
         body.querySelector('#impVenPaste').onclick=()=>{
           const box=body.querySelector('#venPasteBox'); box.classList.remove('hidden');
           box.innerHTML=`<div class="card"><div class="card-hd"><b>붙여넣기로 불러오기</b></div><div class="card-bd">
@@ -492,19 +500,40 @@
       function importVendors(rows){
         if(!rows.length){ toast('불러올 데이터가 없습니다'); return; }
         const norm=s=>String(s||'').replace(/\s/g,'').toLowerCase();
-        const idxOf=(names)=>{ const h=rows[0].map(norm); for(const n of names){ const i=h.indexOf(norm(n)); if(i>=0) return i; } return -1; };
-        const ci={ name:idxOf(['입점사명','입점사','업체명','거래처','거래처명']),
-          settle:idxOf(['정산구분','정산']), ship:idxOf(['배송비']),
-          policy:idxOf(['무료배송조건','배송조건','배송비정책','무료배송기준']),
-          manager:idxOf(['담당자','담당자명','담당']), contact:idxOf(['연락처','전화','전화번호','연락처1']),
-          email:idxOf(['발주메일','발주 메일','이메일','메일','발주이메일']), note:idxOf(['특이사항','비고','메모']) };
-        const hasHeader = ci.name>=0 || ci.ship>=0 || ci.policy>=0;
-        const dataRows = hasHeader ? rows.slice(1) : rows;
+        const HEAD={ name:['입점사명','입점사','업체명','거래처','거래처명','상호','상호명'],
+          settle:['정산구분','정산'], ship:['배송비','배송비(vat포함)','배송비vat포함'],
+          policy:['무료배송조건','배송조건','배송비정책','무료배송기준','배송조건/무료배송조건'],
+          manager:['담당자','담당자명','담당'], contact:['연락처','전화','전화번호','연락처1'],
+          email:['발주메일','발주 메일','이메일','메일','발주이메일'], note:['특이사항','비고','메모'] };
+        // 헤더 행 자동 탐색 — 실제 시트는 상단에 안내/빈 행이 섞여 있어 첫 8행 중 헤더가 가장 많이 잡히는 행을 헤더로 인정
+        let headerRow=0, best=0;
+        for(let i=0;i<Math.min(rows.length,8);i++){ const h=(rows[i]||[]).map(norm); let sc=0;
+          for(const key in HEAD){ if(HEAD[key].some(n=>h.includes(norm(n)))) sc++; }
+          if(sc>best){ best=sc; headerRow=i; } }
+        const hasHeader = best>=2;
+        const h = hasHeader ? rows[headerRow].map(norm) : [];
+        const idxOf=(key)=>{ for(const n of HEAD[key]){ const i=h.indexOf(norm(n)); if(i>=0) return i; } return -1; };
+        const ci={}; for(const key in HEAD) ci[key]=idxOf(key);
+        const dataRows = hasHeader ? rows.slice(headerRow+1) : rows;
+        const used=new Set(Object.values(ci).filter(i=>i>=0));
+        // 업체명 열이 헤더로 안 잡히면(빈 헤더 등) 데이터에서 '회사명 같은' 열을 추정 — 이메일/전화/숫자 제외, 한글·영문 텍스트 최다 열
+        if(ci.name<0){
+          const cols=Math.max(0,...dataRows.map(r=>r.length)); let bestCol=-1, bestScore=-1;
+          for(let c=0;c<cols;c++){ if(used.has(c)) continue; let sc=0;
+            for(const r of dataRows){ const v=String((r&&r[c])||'').trim(); if(!v) continue;
+              if(/@|https?:/.test(v)){ sc-=2; continue; }
+              if(/^[\d\s\-().+]+$/.test(v)){ sc-=1; continue; }
+              if(/[가-힣A-Za-z]/.test(v)) sc++; }
+            if(sc>bestScore){ bestScore=sc; bestCol=c; } }
+          ci.name=bestCol;
+        }
         const g=(r,i)=> i>=0&&i<r.length ? String(r[i]).trim() : '';
         const nameIdx = ci.name>=0 ? ci.name : 0;
+        const isHeadWord=v=>HEAD.name.some(n=>norm(n)===norm(v));
         let added=0, updated=0;
-        dataRows.forEach(r=>{ if(!r.join('').trim()) return;
-          const name=g(r,nameIdx); if(!name) return;
+        dataRows.forEach(r=>{ if(!r || !r.join('').trim()) return;
+          const name=g(r,nameIdx).split(/\r?\n/)[0].trim();   // 다중행 셀은 첫 줄을 업체명으로
+          if(!name || isHeadWord(name)) return;
           const policy=g(r,ci.policy);
           let ship=g(r,ci.ship).replace(/[^\d]/g,'');
           ship = ship!=='' ? Number(ship) : (parseShipFromPolicy(policy) ?? 0);
@@ -513,7 +542,7 @@
           const ex=vendors.find(v=>v.name===name);
           if(ex){ Object.assign(ex,rec); updated++; } else { vendors.push(rec); added++; } });
         markVendorDirty(); renderVen();
-        toast(`불러오기 완료 · 신규 ${added} / 갱신 ${updated}건 · [저장]을 눌러 반영`);
+        toast(`불러오기 완료 · 신규 ${added} / 갱신 ${updated}건${!hasHeader?' · 헤더 자동인식 실패(순서대로 매핑)':''} · [저장]을 눌러 반영`);
       }
       function renderVen(){
         const t=body.querySelector('#venTable'); if(!t) return;
