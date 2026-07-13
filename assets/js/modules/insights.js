@@ -90,13 +90,14 @@
         .kpi .kl .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
         .emp-tbl tr.grp td{background:var(--panel-2);padding-top:11px;padding-bottom:7px;border-bottom:1px solid var(--line-2)}
         .emp-tbl .gsum{color:var(--muted);font-size:12px;font-weight:700;margin-left:7px}
-        /* 자동 인사이트 하이라이트 */
-        .hl-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:0 0 20px}
-        .hl{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 14px;box-shadow:var(--sh-sm)}
-        .hl .hi{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto}
-        .hl .ht{font-size:13px;line-height:1.5;color:var(--ink-2)}
+        /* 자동 분석 스트립 — 한 줄 요약(영역 축소, 메인 업무현황 가독성 우선) */
+        .hl-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:2px 0 16px;padding:9px 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2)}
+        .hl-lbl{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:5px;margin-right:2px}
+        .hl-lbl .ic svg{width:13px;height:13px}
+        .hl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;line-height:1.4;color:var(--ink-2);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 10px}
+        .hl .hi{font-size:13px;flex:none}
+        .hl .ht{font-size:12.5px}
         .hl .ht b{color:var(--ink);font-weight:800}
-        .hl.up .hi{background:var(--ok-bg,#e8f6ee)} .hl.down .hi{background:#fdecee} .hl.flat .hi{background:var(--panel-2)}
         /* 차트 hover 툴팁 */
         #trend{position:relative}
         .iv-tip{position:absolute;pointer-events:none;display:none;z-index:6;background:var(--panel);border:1px solid var(--line-2);
@@ -135,9 +136,8 @@
         .cmp-tbl tbody tr:last-child td{border-bottom:0}
         .cmp-tbl tr.tot td{background:var(--panel-2);font-weight:800}
         .cmp-tbl .up{color:var(--ok)} .cmp-tbl .down{color:var(--danger)} .cmp-tbl .flat{color:var(--muted)}
-        /* 이상 탐지 하이라이트 강조 */
-        .hl.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:var(--warn-bg)}
-        .hl.warn .hi{background:color-mix(in srgb,var(--warn) 22%,transparent)}
+        /* 이상 탐지 강조 */
+        .hl.warn{border-color:color-mix(in srgb,var(--warn) 50%,var(--line));background:var(--warn-bg);color:var(--ink-2)}
         /* 중국 발주요청 분석 탭 */
         .cn-tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px;box-shadow:var(--sh-sm)}
         .cn-tbl{min-width:760px} .cn-tbl th{white-space:nowrap}
@@ -265,10 +265,10 @@
 
         // --- 자동 인사이트 하이라이트 (이상 탐지 우선 노출) ---
         const anomalies=detectAnomalies(A, P, dept);
-        const hs=[...anomalies, ...buildHighlights(days, A.perDay, A, P, Object.values(A.perPerson), allMode)].slice(0,5);
-        $('#hl').innerHTML = hs.length
-          ? hs.map(h=>`<div class="hl ${h.tone}"><div class="hi">${h.icon}</div><div class="ht">${h.text}</div></div>`).join('')
-          : `<div class="hl flat"><div class="hi">💡</div><div class="ht">데이터가 더 쌓이면 자동 인사이트가 여기에 표시됩니다.</div></div>`;
+        const hs=[...anomalies, ...buildHighlights(days, A.perDay, A, P, Object.values(A.perPerson), allMode)].slice(0,3);
+        $('#hl').innerHTML = `<span class="hl-lbl">${icon('chart')}자동 분석</span>` + (hs.length
+          ? hs.map(h=>`<span class="hl ${h.tone}"><span class="hi">${h.icon}</span><span class="ht">${h.text}</span></span>`).join('')
+          : `<span class="hl flat"><span class="ht">데이터가 쌓이면 분석이 표시됩니다.</span></span>`);
 
         // --- 추이 (선 그래프 · 전체는 CS/MD 2선) + hover 툴팁 ---
         const depts = allMode?['cs','md']:[dept];
@@ -428,9 +428,8 @@
         // 심화: 기간 비교(전 탭 공통)
         const compare=`<div class="iv-secttl">기간 비교</div>${compareCard(A, P, len, deptSel)}`;
         const facts=funFacts(A, days, deptSel);
-        const fun = facts.length? `<div class="iv-secttl">재미 포인트</div>
-          <div class="fun-card"><div class="fun-hd">🎉 데이터 재미 포인트 <span class="muted" style="margin-left:auto;font-weight:600;font-size:12px">기록 기반 자동 분석</span></div>
-            <div class="fun-grid">${facts.map(f=>`<div class="fun"><span class="fe">${f.e}</span><div><div class="fl">${esc(f.l)}</div><div class="fv">${esc(f.v)}</div></div></div>`).join('')}</div></div>` : '';
+        const fun = facts.length? `<div class="iv-secttl">요약 지표</div>
+          <div class="fun-card"><div class="fun-grid">${facts.map(f=>`<div class="fun"><span class="fe">${f.e}</span><div><div class="fl">${esc(f.l)}</div><div class="fv">${esc(f.v)}</div></div></div>`).join('')}</div></div>` : '';
         box.innerHTML = dist + compare + fun;
       }
 
@@ -542,8 +541,8 @@
         // 2) 오늘 vs 일평균 (오늘이 기간에 포함되고 3일 이상)
         const today=todayStr();
         if(len>=3 && days.includes(today) && avg>0){ const tt=totalOf(today); const r=tt/avg;
-          if(tt>0 && r>=1.3) out.push({icon:'🔥', tone:'up', text:`오늘 벌써 <b>${tt}건</b> — 평소(일평균 ${avg.toFixed(1)}건)보다 <b>${Math.round((r-1)*100)}%</b> 많아요!`});
-          else if(r<=0.5) out.push({icon:'🌤️', tone:'down', text:`오늘은 <b>${tt}건</b>으로 평소(일평균 ${avg.toFixed(1)}건)보다 한산해요`}); }
+          if(tt>0 && r>=1.3) out.push({icon:'📈', tone:'up', text:`오늘 <b>${tt}건</b> · 일평균(${avg.toFixed(1)}건) 대비 <b>+${Math.round((r-1)*100)}%</b>`});
+          else if(r<=0.5) out.push({icon:'📉', tone:'down', text:`오늘 <b>${tt}건</b> · 일평균(${avg.toFixed(1)}건) 대비 <b>${Math.round((r-1)*100)}%</b>`}); }
         // 3) 가장 바쁜 날
         let peak=null; days.forEach(d=>{ const t=totalOf(d); if(!peak||t>peak.t) peak={d,t}; });
         if(peak && peak.t>0 && len>=3) out.push({icon:'🏆', tone:'flat', text:`가장 바쁜 날은 <b>${mdLabel(peak.d)}(${wdOf(peak.d)})</b> · ${peak.t}건`});
