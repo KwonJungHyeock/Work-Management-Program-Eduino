@@ -38,13 +38,16 @@ window.Records = (function(){
     const record={ ...rec, who: m?m.loginId:('@'+(rec.agent||'?')), whoName: rec.agent||'?', day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
     return pushRaw('md','tsnotes',record);
   }
-  /* MD 발주 레코드 → 서버 시트 'orders' (담당=로그인 계정) */
-  function pushMD(rec){
+  /* MD 발주 레코드 → 서버 시트 'orders' (담당=발주 담당자 · 없으면 로그인 계정)
+     · pushCS와 동일하게 항상 누적(로그인 미완이어도 발주 기록에 반영) */
+  async function pushMD(rec){
+    const R=await roster();
     const u=(window.Auth&&Auth.user&&Auth.user())||{};
-    const dev=(window.Auth&&Auth.device&&Auth.device())||'';   // 로그인 시 저장된 표시 이름(폴백)
-    if(!u.loginId && !dev) return;                              // 로그인 안 된 상태면 서버 귀속 생략(유령 'MD' 방지)
-    const name = u.name || dev || u.loginId;
-    const record={ ...rec, who: u.loginId||('@'+name), whoName: name, day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
+    const dev=(window.Auth&&Auth.device&&Auth.device())||'';
+    const who = (rec.handler&&String(rec.handler).trim()) || u.name || dev || u.loginId || '?';
+    const m = R.find(p=>p.dept==='md' && p.name===who) || R.find(p=>p.name===who);
+    const record={ ...rec, who: m?m.loginId:(u.loginId||('@'+who)), whoName: who,
+      day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
     return pushRaw('md','orders',record);
   }
   function del(dept, sheet, id, month, who, day){

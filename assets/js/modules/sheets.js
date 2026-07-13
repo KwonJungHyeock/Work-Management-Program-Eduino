@@ -195,9 +195,10 @@
           if(!url){ toast(`먼저 ‘${cfg.title}’ 연동 설정에서 시트 URL을 저장하세요`); return; }
           const {rows,from,to}=filtered();
           if(!rows.length){ toast('전송할 기록이 없습니다 (기간을 넓혀보세요)'); return; }
-          if(!confirm(`${from}~${to} · ${rows.length.toLocaleString()}건을 시트 "${sp.tab}" 탭으로 전송할까요?\n(id 기준으로 중복 없이 갱신됩니다)`)) return;
+          const dupNote = sp.cols ? '\n※ 발주표는 추가(append) 방식이라 여러 번 누르면 중복될 수 있습니다 — 한 번만 실행하세요.' : '\n(id 기준으로 중복 없이 갱신됩니다)';
+          if(!confirm(`${from}~${to} · ${rows.length.toLocaleString()}건을 시트 "${sp.tab}" 탭으로 전송할까요?${dupNote}`)) return;
           pushBtn.disabled=true; const org=pushBtn.innerHTML; pushBtn.innerHTML=`${icon('cloud')}전송 중…`;
-          const payload={ sheet:sp.tab, records: rows.map(sp.row) };
+          const payload = sp.cols ? { sheet:sp.tab, cols:sp.cols, rows: rows.map(sp.row) } : { sheet:sp.tab, records: rows.map(sp.row) };
           const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) };
           let ok=false, unconf=false, errMsg='';
           try{ const res=await fetch(url,opts); if(!res.ok) throw new Error('HTTP '+res.status); let d=null; try{d=await res.json();}catch(e){} if(d&&d.ok===false) throw new Error(d.error||'시트 처리 실패'); ok=true; }
@@ -262,6 +263,10 @@
 
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
+    // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · 발주표는 추가(append) 방식
+    sheetPush:{ tab:'입점사발주', urlKey:STORE.mdOrderCfg,
+      cols:['일자','구분','주문경로','주문자명','입점사명','정산구분','자체상품코드','품명','수량','출고송장/입고','발주','배송정보/비고'],
+      row:r=>[ r.date||r.day||'', r.gubun||'', r.route||'', r.orderer||'', r.vendor||'', r.settle||'', r.selfCode||r.code||'', r.name||'', (r.qty!=null?r.qty:''), `배송비 ${(Number(r.ship)||0).toLocaleString()}원`, 'O', r.shipInfo||'' ] },
     cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80}, {k:'gubun',h:'구분',w:70},
       {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
       {k:'settle',h:'정산구분',w:78}, {k:'selfCode',h:'자체상품코드',w:104},
