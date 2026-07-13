@@ -310,15 +310,18 @@
                       <div class="chips" id="catGroup"></div>
                     </div>
                     <div>
-                      <div class="q-sec-cap">고객유형 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="q-sec-cap">고객유형 <span class="opt">선택 · 다시 누르면 해제</span>
+                        ${isAdmin?'<button type="button" class="sec-edit" data-oe="cust">편집</button>':''}</div>
                       <div class="chips" id="custGroup"></div>
                     </div>
                     <div>
-                      <div class="q-sec-cap">상품분류 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="q-sec-cap">상품분류 <span class="opt">선택 · 다시 누르면 해제</span>
+                        ${isAdmin?'<button type="button" class="sec-edit" data-oe="prod">편집</button>':''}</div>
                       <div class="chips" id="prodGroup"></div>
                     </div>
                     <div>
-                      <div class="q-sec-cap">주문경로 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="q-sec-cap">주문경로 <span class="opt">선택 · 다시 누르면 해제</span>
+                        ${isAdmin?'<button type="button" class="sec-edit" data-oe="route">편집</button>':''}</div>
                       <div class="chips" id="routeGroup"></div>
                     </div>
                     <div>
@@ -390,16 +393,37 @@
           renderCat(); }; }
         renderCat();
 
-        /* --- 고객유형 / 상품분류 칩 (단일선택 · 다시 누르면 해제) --- */
-        function renderChoice(sel, options, key){
-          const g=body.querySelector(sel); g.innerHTML='';
-          options.forEach(o=>{ const b=el('button','chip'+(form[key]===o?' on':'')); b.type='button'; b.textContent=o;
-            b.onclick=()=>{ form[key] = (form[key]===o?'':o); renderChoice(sel,options,key); };
+        /* --- 고객유형 / 상품분류 / 주문경로 칩 (단일선택 · 관리자는 ＋추가/×삭제 → 팀 자동 공유) --- */
+        const OPT_GROUPS = {
+          cust:  { sel:'#custGroup', setKey:'cs.notes.customerType', defaults:CS_CUSTOMER_TYPES,     key:'customerType', ph:'새 고객유형' },
+          prod:  { sel:'#prodGroup', setKey:'cs.notes.prodCategory', defaults:CS_PRODUCT_CATEGORIES,  key:'prodCategory', ph:'새 상품분류' },
+          route: { sel:'#routeGroup',setKey:'cs.notes.route',        defaults:CS_ORDER_ROUTES,        key:'route',        ph:'새 주문경로' },
+        };
+        const optEdit={ cust:false, prod:false, route:false };
+        function renderChoice(name){
+          const cfg=OPT_GROUPS[name]; const g=body.querySelector(cfg.sel); if(!g) return;
+          const options=OptionSets.get(cfg.setKey, cfg.defaults); const edit=isAdmin && optEdit[name];
+          if(form[cfg.key] && !options.includes(form[cfg.key])) form[cfg.key]='';
+          g.innerHTML='';
+          options.forEach(o=>{ const b=el('button','chip'+(form[cfg.key]===o?' on':'')); b.type='button';
+            b.innerHTML=`<span>${esc(o)}</span>${edit&&options.length>1?'<span class="q-del" title="삭제">✕</span>':''}`;
+            b.onclick=(e)=>{ if(e.target.classList.contains('q-del')){ OptionSets.remove(cfg.setKey,cfg.defaults,o); if(form[cfg.key]===o)form[cfg.key]=''; renderChoice(name); return; }
+              if(edit) return; form[cfg.key]=(form[cfg.key]===o?'':o); renderChoice(name); };
             g.appendChild(b); });
+          if(edit){ const add=el('div','chip-add');
+            add.innerHTML=`<input type="text" class="optNew" placeholder="${cfg.ph}" maxlength="14">
+              <button type="button" class="btn pri sm optAdd">${icon('plus')}추가</button>`;
+            const doAdd=()=>{ const inp=add.querySelector('.optNew'); const r=OptionSets.add(cfg.setKey,cfg.defaults,inp.value);
+              if(!r.ok){ if(inp.value.trim()) toast('이미 있는 항목입니다'); return; } renderChoice(name);
+              const ni=g.querySelector('.optNew'); if(ni) ni.focus(); };
+            add.querySelector('.optAdd').onclick=doAdd;
+            add.querySelector('.optNew').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
+            g.appendChild(add);
+          }
         }
-        renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
-        renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
-        renderChoice('#routeGroup', CS_ORDER_ROUTES, 'route');
+        Object.keys(OPT_GROUPS).forEach(renderChoice);
+        body.querySelectorAll('[data-oe]').forEach(btn=>btn.onclick=(e)=>{ const n=btn.dataset.oe; optEdit[n]=!optEdit[n];
+          e.currentTarget.classList.toggle('on',optEdit[n]); e.currentTarget.textContent=optEdit[n]?'완료':'편집'; renderChoice(n); });
 
         /* --- 입력 편의: 연락처 한국 전화 서식(서울 02 포함) + 최근값 자동완성 --- */
         (function(){

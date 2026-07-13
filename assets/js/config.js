@@ -175,6 +175,20 @@ const STORE = {
   syncCfg:  'eduino.sync.cfg',       // 공용 저장소(구글) 연동 { url, autoPull }
   shareMap: 'eduino.share.map',      // 공유 범위 오버라이드 { settingKey: 'all'|'cs'|'md' } (전사 공유)
   catMap:   'eduino.md.catmap',      // 이카운트 코드→이름표 { vendor:{코드:구매처명}, category:{코드:분류명} }
+  optSets:  'eduino.optsets',        // 시트별 옵션칩 오버라이드 { '<setKey>':[...] } — 관리자 편집·팀 공유
+};
+
+/* 옵션칩 레지스트리 — 시트별 선택 버튼(고객유형·상품분류·주문경로 등)을 관리자가 편집하면
+   팀 전체에 자동 반영(SHARED_SETTING_KEYS 로 공용 저장소 동기화). 오버라이드가 없으면 코드 기본값 사용. */
+window.OptionSets = {
+  all(){ try{ return store(STORE.optSets).get({}) || {}; }catch(e){ return {}; } },
+  /* setKey 예: 'cs.notes.customerType' · defaults=코드 기본 배열 */
+  get(setKey, defaults){ const m=this.all(); const v=m[setKey];
+    return (Array.isArray(v) && v.length) ? v.slice() : (defaults||[]).slice(); },
+  set(setKey, arr){ const m=this.all(); m[setKey]=(arr||[]).slice(); store(STORE.optSets).set(m); return m[setKey]; },
+  add(setKey, defaults, val){ const cur=this.get(setKey, defaults); const v=String(val||'').trim();
+    if(!v || cur.includes(v)) return { ok:false, list:cur }; cur.push(v); this.set(setKey, cur); return { ok:true, list:cur }; },
+  remove(setKey, defaults, val){ const cur=this.get(setKey, defaults).filter(x=>x!==val); this.set(setKey, cur); return cur; },
 };
 
 /* 공유 범위 — 설정마다 "누가 공유받는가"를 지정 (①부서 단위)
@@ -194,6 +208,7 @@ const SHARE_DEFAULT = {
   'eduino.board.exchange.cfg':'cs', 'eduino.board.postpay.cfg':'cs',
   'eduino.board.vendorchg.cfg':'md', 'eduino.board.stockmgmt.cfg':'md', 'eduino.board.inspect.cfg':'md', 'eduino.board.prodmgmt.cfg':'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
+  [STORE.optSets]:'all',             // 옵션칩 오버라이드 = 전사 공유(모두 같은 버튼을 봄)
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
 function shareScopeOf(key){
@@ -214,7 +229,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
-  STORE.shareMap, STORE.catMap,
+  STORE.shareMap, STORE.catMap, STORE.optSets,
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
