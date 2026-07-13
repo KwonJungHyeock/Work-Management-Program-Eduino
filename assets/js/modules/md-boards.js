@@ -355,7 +355,7 @@
       { k:'title', label:'검수(제목)', type:'text', req:true, ph:'예: OO 입고 검수' },
       { k:'idate', label:'입고일자', type:'date' },
       { k:'cdate', label:'검수일자', type:'date' },
-      { k:'assignee', label:'담당자', type:'agent', options:['권정혁','여미림','박주희','김성우','이진환'] },
+      { k:'assignee', label:'담당자', type:'agent', options:['여미림','이진환'] },
       { k:'code', label:'상품코드', type:'code', ph:'예: C-19' },
       { k:'name', label:'제품명', type:'text', ph:'상품코드 입력 시 자동' },
       { k:'func', label:'동작 기능', type:'select', options:['O','-','🔺'] },
