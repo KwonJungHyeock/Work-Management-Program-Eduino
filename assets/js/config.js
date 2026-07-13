@@ -124,6 +124,7 @@ const NAV = [
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
+      { key:'cs.settle',    name:'일일결산',    icon:'check2' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
       { key:'md.order',     name:'입점사 발주',        icon:'truck' },
@@ -134,9 +135,11 @@ const NAV = [
       { key:'md.prodmgmt',  name:'상품관리 현황',      icon:'grid' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
       { key:'md.tsrecords', name:'TS상담 기록',        icon:'sheet' },
+      { key:'md.settle',    name:'일일결산',           icon:'check2' },
       { key:'md.extra',     name:'부가기능',           icon:'grid' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
+      { key:'admin.approvals', name:'결재함', icon:'inbox' },
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
       { key:'admin.users', name:'팀원 계정', icon:'users' },
       { key:'admin.share', name:'공유 범위', icon:'share' },
@@ -147,8 +150,8 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'cs.exchange', 'cs.postpay', 'md.records', 'md.tsrecords',
-  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt'];
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.tsrecords',
+  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.settle'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }
@@ -176,6 +179,7 @@ const STORE = {
   shareMap: 'eduino.share.map',      // 공유 범위 오버라이드 { settingKey: 'all'|'cs'|'md' } (전사 공유)
   catMap:   'eduino.md.catmap',      // 이카운트 코드→이름표 { vendor:{코드:구매처명}, category:{코드:분류명} }
   optSets:  'eduino.optsets',        // 시트별 옵션칩 오버라이드 { '<setKey>':[...] } — 관리자 편집·팀 공유
+  settleCfg:'eduino.settle.cfg',     // 일일결산 구글시트 연동 { sheetUrl } — 팀 공유
 };
 
 /* 옵션칩 레지스트리 — 시트별 선택 버튼(고객유형·상품분류·주문경로 등)을 관리자가 편집하면
@@ -209,6 +213,7 @@ const SHARE_DEFAULT = {
   'eduino.board.vendorchg.cfg':'md', 'eduino.board.stockmgmt.cfg':'md', 'eduino.board.inspect.cfg':'md', 'eduino.board.prodmgmt.cfg':'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
   [STORE.optSets]:'all',             // 옵션칩 오버라이드 = 전사 공유(모두 같은 버튼을 봄)
+  [STORE.settleCfg]:'all',           // 일일결산 시트 URL = 전사 공유
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
 function shareScopeOf(key){
@@ -229,7 +234,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
-  STORE.shareMap, STORE.catMap, STORE.optSets,
+  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg,
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
