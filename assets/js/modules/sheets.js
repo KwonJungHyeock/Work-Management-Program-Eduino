@@ -20,6 +20,7 @@
       title:cfg.title, icon:cfg.icon||'sheet',
       render(root){
         const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
+        const canDel=isAdmin || (Auth.user&&Auth.user()||{}).role==='lead';   // 기록 삭제 = 파트장급(파트장·관리자)
         root.innerHTML=`
         <style>
           .sv-ctrl{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:14px}
@@ -75,7 +76,6 @@
         let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null;
         const fvals={};   // 컬럼 필터 값 { 컬럼키: 선택값 }
         const myDept=(Auth.user&&Auth.user()||{}).dept;
-        const canDel=isAdmin || (Auth.user&&Auth.user()||{}).role==='lead';   // 기록 삭제 = 파트장급(파트장·관리자)
         const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
         const hasActions=canDel||canEdit;
 

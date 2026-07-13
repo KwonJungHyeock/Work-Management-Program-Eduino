@@ -99,7 +99,8 @@
       // 구매처명: 제품 자체 vendor > 이카운트 코드→이름표(구매처) > 자사
       const vendorName=p=>{ const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
         return v||(isJasa(p&&p.selfCode)?'자사':''); };
-      const shipFor=p=>{ const o=Number(p&&p.ship); return o>0?o:vendorShip(vendorName(p)); };
+      // 배송비 = 입점사 정보(배송정보 리스트) 우선 · 없으면 이카운트 상품 배송비 (리스트는 화면에서 수정 가능)
+      const shipFor=p=>{ const vs=vendorShip(vendorName(p)); return vs>0?vs:(Number(p&&p.ship)||0); };
 
       root.innerHTML=`
       <style>
