@@ -31,6 +31,7 @@
       render(root){
         const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
         const me=(Auth.user&&Auth.user())||{};
+        const canDel=isAdmin || me.role==='lead';   // 기록 삭제 = 파트장급(파트장·관리자)만
         // 담당자 목록 (사용자 편집 · 로컬 저장) — whoField 가 select/agent 인 경우
         const whoCfg = cfg.fields.find(f=>f.k===cfg.whoField);
         const agentsKey = 'eduino.md.board.'+cfg.sheet+'.agents';
@@ -97,7 +98,8 @@
         <div class="mbody wide">
           <div id="syncPanel" class="hidden" style="margin-bottom:20px"></div>
           <div class="bd-card">
-            <div class="bd-hd"><span class="bd-ic">${icon('plus')}</span>새 기록 입력</div>
+            <div class="bd-hd"><span class="bd-ic">${icon('plus')}</span>새 기록 입력
+              ${isAdmin && (cfg.fields||[]).some(f=>f.type==='select')?`<button type="button" class="btn ghost sm" id="bOptEdit" style="margin-left:auto">${icon('settings')}선택 항목 편집</button>`:''}</div>
             <div class="bd-bd"><form id="bForm"><div class="bd-grid" id="fGrid"></div>
               <div class="bd-actions">
                 <button type="submit" class="btn pri lg">${icon('save')}저장</button>
@@ -120,7 +122,7 @@
           </div>
           <p class="bd-meta" id="meta"></p>
           <div class="bd-wrap"><table class="bd" id="tbl"></table></div>
-          <p class="bd-meta" style="margin-top:10px;color:var(--faint)">팀 공유 기록입니다 · 저장 시 서버에 누적되어 모든 담당자에게 보입니다.${isAdmin?' 관리자는 행을 삭제할 수 있습니다.':''}</p>
+          <p class="bd-meta" style="margin-top:10px;color:var(--faint)">팀 공유 기록입니다 · 저장 시 서버에 누적되어 모든 담당자에게 보입니다.${canDel?' 파트장·관리자는 기록을 삭제할 수 있습니다.':''}</p>
         </div>`;
 
         const $=s=>root.querySelector(s);
@@ -144,21 +146,17 @@
                 else { sel.value=form[f.k]||''; } return; }
               form[f.k]=sel.value; };
           } else if(f.type==='select'){
-            // 선택 항목 = 공용 옵션 레지스트리(OptionSets) · 관리자만 ＋추가/✕삭제 → 팀 자동 공유
+            // 선택 항목 = 공용 옵션 레지스트리(OptionSets) · 관리자는 드롭다운에서 ＋추가, 삭제는 [선택 항목 편집]에서
             const setKey=cfg.key+'.'+f.k;
             const buildSel=(cur)=>{ const opts=OptionSets.get(setKey, f.options||[]);
               return `<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 항목 추가…</option>':''}`; };
-            wrap.innerHTML=lab+`<div style="display:flex;gap:6px;align-items:center"><select data-k="${esc(f.k)}" style="flex:1">${buildSel(form[f.k])}</select>${isAdmin?'<button type="button" class="btn ghost sm optDel" title="선택한 항목 삭제(팀 공유)" style="flex:none;height:40px;padding:0 10px">✕</button>':''}</div>`;
+            wrap.innerHTML=lab+`<select data-k="${esc(f.k)}">${buildSel(form[f.k])}</select>`;
             grid.appendChild(wrap);
             const sel=wrap.querySelector('select');
             sel.onchange=()=>{ if(sel.value==='__add'){ const v=(prompt('추가할 “'+f.label+'” 항목','')||'').trim();
                 if(v){ const r=OptionSets.add(setKey, f.options||[], v); if(r.ok){ form[f.k]=v; toast('추가됨 · 팀 공유'); } else { toast('이미 있는 항목입니다'); form[f.k]=v; } }
                 sel.innerHTML=buildSel(form[f.k]); return; }
               form[f.k]=sel.value; };
-            const del=wrap.querySelector('.optDel'); if(del) del.onclick=()=>{ const v=form[f.k];
-              if(!v){ toast('삭제할 항목을 먼저 선택하세요'); return; }
-              if(!confirm(`“${v}” 항목을 삭제할까요? (팀 전체 반영)`)) return;
-              OptionSets.remove(setKey, f.options||[], v); form[f.k]=''; sel.innerHTML=buildSel(''); toast('삭제됨 · 팀 공유'); };
           } else if(f.type==='toggle'){
             wrap.innerHTML=lab+`<label style="display:flex;align-items:center;gap:8px;height:40px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" data-k="${esc(f.k)}" style="width:18px;height:18px"> ${esc(f.onLabel||'완료')}</label>`;
             grid.appendChild(wrap);
@@ -271,7 +269,7 @@
         }
         function actionCell(r){ return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
           <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
-          ${isAdmin?`<button class="bd-del" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button>`:''}</span></td>`; }
+          ${canDel?`<button class="bd-del" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button>`:''}</span></td>`; }
         function editRow(r,hasAct){
           const cells=showCols.map(c=>{
             const v=r[c.k]==null?'':String(r[c.k]);
@@ -302,7 +300,7 @@
             backupOne(rec);   // 시트 백업도 갱신(id upsert)
             toast('수정했습니다');
           });
-          if(isAdmin) $('#tbl').querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
+          if(canDel) $('#tbl').querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
             if(!confirm('이 기록을 서버에서 삭제할까요? (되돌릴 수 없음)')) return;
             const r=all.find(x=>x.id===b.dataset.id); if(!r) return;
             await Records.del(cfg.dept||'md',cfg.sheet,r.id,(r.day||'').slice(0,7),r.who,r.day);
@@ -324,6 +322,35 @@
         if($('#fWho')) $('#fWho').onchange=()=>{ who=$('#fWho').value; paint(); };
         root.querySelectorAll('[data-ff]').forEach(sel=>sel.onchange=()=>{ ffVals[sel.dataset.ff]=sel.value; paint(); });
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
+        // 선택 항목 편집(관리자) — 드롭다운 옵션 추가/삭제를 한곳에서 · 팀 자동 공유
+        function refreshSelect(fk){ const sel=grid.querySelector(`select[data-k="${fk}"]`); if(!sel) return;
+          const f=cfg.fields.find(x=>x.k===fk); const opts=OptionSets.get(cfg.key+'.'+fk, f.options||[]); const cur=form[fk];
+          sel.innerHTML=`<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 항목 추가…</option>':''}`;
+          if(cur && !opts.includes(cur)) form[fk]=''; }
+        if($('#bOptEdit')) $('#bOptEdit').onclick=()=>{
+          const selects=cfg.fields.filter(f=>f.type==='select');
+          const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+          const inner=el('div',''); inner.style.cssText='background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:600px;width:100%;max-height:86vh;overflow:auto;padding:22px 24px;box-shadow:var(--sh-lg)';
+          function draw(){ inner.innerHTML=`<div style="font-size:16px;font-weight:800;margin-bottom:4px">${icon('settings')} 선택 항목 편집</div>
+            <div class="muted" style="font-size:12.5px;margin-bottom:16px">관리자 전용 · 저장 즉시 <b>팀 전체에 반영</b>됩니다. 항목의 <b>✕</b>로 삭제, 아래 칸으로 추가하세요.</div>
+            ${selects.map(f=>{ const opts=OptionSets.get(cfg.key+'.'+f.k, f.options||[]);
+              return `<div style="margin-bottom:16px"><div style="font-weight:700;font-size:13px;margin-bottom:7px">${esc(f.label)}</div>
+                <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+                  ${opts.map(o=>`<span style="display:inline-flex;align-items:center;gap:7px;padding:6px 8px 6px 12px;border:1px solid var(--line-strong);border-radius:8px;font-size:13px;font-weight:600">${esc(o)}<button type="button" class="oe-del" data-fk="${esc(f.k)}" data-v="${esc(o)}" title="삭제" style="border:0;background:none;color:var(--faint);cursor:pointer;font-size:13px;padding:0 2px">✕</button></span>`).join('')}
+                  <span style="display:inline-flex;gap:5px;align-items:center"><input type="text" class="oe-new" data-fk="${esc(f.k)}" placeholder="추가할 항목" maxlength="18" style="width:130px;height:34px;font-size:13px;border:1px solid var(--line-strong);border-radius:8px;padding:0 10px"><button type="button" class="btn pri sm oe-add" data-fk="${esc(f.k)}">${icon('plus')}추가</button></span>
+                </div></div>`; }).join('')}
+            <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn pri" id="oeClose">${icon('check')}완료</button></div>`;
+            inner.querySelectorAll('.oe-del').forEach(b=>b.onclick=()=>{ const fk=b.dataset.fk;
+              if(!confirm(`“${b.dataset.v}” 항목을 삭제할까요? (팀 전체 반영)`)) return;
+              OptionSets.remove(cfg.key+'.'+fk, (cfg.fields.find(x=>x.k===fk)||{}).options||[], b.dataset.v); refreshSelect(fk); draw(); toast('삭제됨 · 팀 공유'); });
+            inner.querySelectorAll('.oe-add').forEach(b=>b.onclick=()=>{ const fk=b.dataset.fk; const inp=inner.querySelector(`.oe-new[data-fk="${fk}"]`);
+              const r=OptionSets.add(cfg.key+'.'+fk, (cfg.fields.find(x=>x.k===fk)||{}).options||[], inp.value);
+              if(!r.ok){ if(inp.value.trim()) toast('이미 있는 항목입니다'); return; } refreshSelect(fk); draw(); toast('추가됨 · 팀 공유'); });
+            inner.querySelectorAll('.oe-new').forEach(inp=>inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inner.querySelector(`.oe-add[data-fk="${inp.dataset.fk}"]`).click(); } });
+            inner.querySelector('#oeClose').onclick=()=>ov.remove();
+          }
+          draw(); ov.appendChild(inner); ov.onclick=e=>{ if(e.target===ov) ov.remove(); }; document.body.appendChild(ov);
+        };
         if($('#btnSync')) $('#btnSync').onclick=renderSyncPanel;
         function renderSyncPanel(){
           const panel=$('#syncPanel'); if(!panel) return;

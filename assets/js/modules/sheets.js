@@ -68,15 +68,16 @@
           </div>
           <p class="sv-meta" id="meta"></p>
           <div class="sv-wrap"><table class="sv" id="tbl"></table></div>
-          <p class="sv-note">구글시트는 백업으로 병행됩니다. 이 표가 프로그램 내 기본 기록(전 담당자 공유)입니다.${cfg.editable?' · 행의 <b>[수정]</b>으로 고치면 내부 기록과 구글시트에 함께 반영됩니다.':''}${isAdmin?' 관리자는 삭제할 수 있습니다.':''}</p>
+          <p class="sv-note">구글시트는 백업으로 병행됩니다. 이 표가 프로그램 내 기본 기록(전 담당자 공유)입니다.${cfg.editable?' · 행의 <b>[수정]</b>으로 고치면 내부 기록과 구글시트에 함께 반영됩니다.':''}${canDel?' 파트장·관리자는 기록을 삭제할 수 있습니다.':''}</p>
         </div>`;
 
         const $=s=>root.querySelector(s);
         let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null;
         const fvals={};   // 컬럼 필터 값 { 컬럼키: 선택값 }
         const myDept=(Auth.user&&Auth.user()||{}).dept;
+        const canDel=isAdmin || (Auth.user&&Auth.user()||{}).role==='lead';   // 기록 삭제 = 파트장급(파트장·관리자)
         const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
-        const hasActions=isAdmin||canEdit;
+        const hasActions=canDel||canEdit;
 
         function range(){ const to=todayStr();
           if(preset==='today') return {from:to,to};
@@ -120,7 +121,7 @@
           }
           return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
             ${canEdit?`<button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>`:''}
-            ${isAdmin?`<button class="sv-del" data-id="${esc(r.id)}" data-day="${esc(r.day||r.date||'')}" data-who="${esc(r.who||'')}" title="삭제">${icon('trash')}</button>`:''}
+            ${canDel?`<button class="sv-del" data-id="${esc(r.id)}" data-day="${esc(r.day||r.date||'')}" data-who="${esc(r.who||'')}" title="삭제">${icon('trash')}</button>`:''}
           </span></td>`;
         }
         function paint(){
@@ -147,7 +148,7 @@
             try{ await cfg.onSave(rec, old); Object.assign(old, rec); editId=null; paintWho(); paint(); toast('수정했습니다'); }
             catch(err){ toast(err.message||'수정 실패'); e.currentTarget.disabled=false; }
           });
-          if(isAdmin) $('#tbl').querySelectorAll('.sv-del').forEach(b=>b.onclick=async()=>{
+          if(canDel) $('#tbl').querySelectorAll('.sv-del').forEach(b=>b.onclick=async()=>{
             if(!confirm('이 기록을 서버에서 삭제할까요? (되돌릴 수 없음)')) return;
             const day=b.dataset.day; await Records.del(cfg.dept,cfg.sheet,b.dataset.id,(day||'').slice(0,7),b.dataset.who,day);
             all=all.filter(x=>x.id!==b.dataset.id); paintWho(); paint(); toast('삭제했습니다');
