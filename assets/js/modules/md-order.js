@@ -134,6 +134,9 @@
         .lk-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .lk-vn{font-weight:800;font-size:18px;color:var(--ink);white-space:nowrap;letter-spacing:-.01em}
         .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
+        .lk-amt{font-size:13.5px;font-weight:700;color:var(--ink);margin:2px 0 1px}
+        .lk-amt b{color:var(--red);font-variant-numeric:tabular-nums;font-size:15px}
+        .lk-amt .muted{font-weight:500;font-size:12px}
         .lookup .pill{white-space:nowrap;background:var(--panel);font-weight:600;border-color:#b7dcc6}
         .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
         /* 옵션 상품 선택 리스트 (P-D10 → P-D10-1~3) */
@@ -250,6 +253,7 @@
           </div>`;
 
         const $f=id=>body.querySelector(id);
+        let curProd=null;   // 현재 자동조회된 상품(수량 변경 시 총주문금액 재계산용)
         const codeEl=$f('#fCode');
         const catCache={};   // 셀메이트 카탈로그 조회 캐시 (code → product)
         // 정확 일치 상품 + 옵션 후보(P-D10 → P-D10-1~3) 함께 반환
@@ -264,6 +268,7 @@
           else if(wasAuto){ el.value=''; el.dataset.auto=''; form.name=''; }   // 새 코드에 품명 없음/미등록 → 이전 자동값 제거
         }
         function refreshLookup(){
+          curProd=null;
           const code=codeEl.value.trim(); const box=$f('#lookup');
           if(!code){ box.className='lookup'; box.textContent='상품코드를 입력하세요.'; return null; }
           const p=resolveLocal(code);
@@ -285,17 +290,22 @@
           syncName(p);
           const sh=shipFor(p); const ven=vendorObj(vendorName(p));
           const policy=(ven&&ven.policy||'').trim();
+          const settle=(ven&&ven.settle)||p.settle||'-';        // 배송정보 리스트(월말정산/선결제) 우선
+          const unit=Number(p.inPrice)||0, qty=Number(form.qty)||1;   // 이카운트 금액합계 = 입고단가 × 수량
           box.className='lookup ok';
           box.innerHTML=`<div class="lk">
             <div class="lk-top"><span class="lk-vn">${esc(vendorName(p)||'입점사 미지정')}</span>
-              <span class="pill">정산 <b>${esc(p.settle||'-')}</b></span>
+              <span class="pill">정산 <b>${esc(settle)}</b></span>
               <span class="pill">배송비 <b>${fmtNum(sh)}원</b></span>${policy?`<span class="pill pol">${icon('truck')}<b>${esc(policy)}</b></span>`:''}</div>
+            <div class="lk-amt" id="lkAmt">총주문금액 <b>${fmtNum(unit*qty)}원</b> <span class="muted">= 입고단가 ${fmtNum(unit)}원 × ${qty}${unit?'':' · 단가 미등록'}</span></div>
             <div class="lk-name">${p.name?esc(p.name):'<span class="muted">품명 미등록 — 직접 입력하세요</span>'}</div></div>`;
-          return p;
+          curProd=p; return p;
         }
         codeEl.oninput=()=>{ form.code=codeEl.value; refreshLookup(); };
         if(nameEl()) nameEl().oninput=e=>{ form.name=e.target.value; e.target.dataset.auto=''; };  // 수동 편집 시 자동채움 잠금 해제
-        ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value; });
+        ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value;
+          if(id==='fQty' && curProd){ const amt=$f('#lkAmt'); if(amt){ const u=Number(curProd.inPrice)||0, q=Number(form.qty)||1;
+            amt.innerHTML=`총주문금액 <b>${fmtNum(u*q)}원</b> <span class="muted">= 입고단가 ${fmtNum(u)}원 × ${q}${u?'':' · 단가 미등록'}</span>`; } } });
         $f('#fShipInfo').oninput=e=>form.shipInfo=e.target.value;
         $f('#fHandler').onchange=e=>form.handler=e.target.value;
         fillHandler($f('#fHandler'));
@@ -482,10 +492,13 @@
         const vf=body.querySelector('#venFile');
         body.querySelector('#impVenFile').onclick=()=>vf.click();
         vf.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return;
-          // .xlsx(ZIP 바이너리)는 텍스트로 읽으면 깨지므로 XlsxLite 로 파싱 · csv/tsv 도 함께 지원
+          // .xlsx(ZIP 바이너리)는 텍스트로 읽으면 깨지므로 XlsxLite 로 파싱 · 월말정산/선결제 등 여러 시트를 모두 반영
           if(/\.(xlsx|xls)$/i.test(f.name) && window.XlsxLite){
-            try{ const { rows }=await XlsxLite.parseFile(f); importVendors(rows); }
-            catch(err){ toast('엑셀을 읽지 못했습니다: '+(err&&err.message||err)); }
+            try{ const sheets=await XlsxLite.parseSheets(f); let A=0,U=0;
+              sheets.forEach(s=>{ const tag=/월말정산|선결제|선결|후불|정산/.test(s.name)?s.name.trim():''; const r=importVendors(s.rows, tag, true); A+=r.added; U+=r.updated; });
+              markVendorDirty(); renderVen();
+              toast(`불러오기 완료 · 신규 ${A} / 갱신 ${U}건 · 시트 ${sheets.length}개(${sheets.map(s=>s.name).join('·')}) · [저장]을 눌러 반영`);
+            }catch(err){ toast('엑셀을 읽지 못했습니다: '+(err&&err.message||err)); }
           } else { const rd=new FileReader(); rd.onload=()=>importVendors(parseTable(rd.result)); rd.readAsText(f,'utf-8'); } };
         body.querySelector('#impVenPaste').onclick=()=>{
           const box=body.querySelector('#venPasteBox'); box.classList.remove('hidden');
@@ -498,8 +511,8 @@
           box.querySelector('#venPasteGo').onclick=()=>{ importVendors(parseTable(box.querySelector('#venPasteArea').value)); box.classList.add('hidden'); box.innerHTML=''; };
         };
       }
-      function importVendors(rows){
-        if(!rows.length){ toast('불러올 데이터가 없습니다'); return; }
+      function importVendors(rows, defaultSettle, silent){
+        if(!rows.length){ if(!silent) toast('불러올 데이터가 없습니다'); return {added:0,updated:0}; }
         const norm=s=>String(s||'').replace(/\s/g,'').toLowerCase();
         const HEAD={ name:['입점사명','입점사','업체명','거래처','거래처명','상호','상호명'],
           settle:['정산구분','정산'], ship:['배송비','배송비(vat포함)','배송비vat포함'],
@@ -538,12 +551,13 @@
           const policy=g(r,ci.policy);
           let ship=g(r,ci.ship).replace(/[^\d]/g,'');
           ship = ship!=='' ? Number(ship) : (parseShipFromPolicy(policy) ?? 0);
-          const rec={ name, settle:normSettle(g(r,ci.settle)), ship, policy,
+          const rec={ name, settle:normSettle(g(r,ci.settle))||defaultSettle||'', ship, policy,
             manager:g(r,ci.manager), contact:g(r,ci.contact), email:g(r,ci.email), note:g(r,ci.note) };
           const ex=vendors.find(v=>v.name===name);
           if(ex){ Object.assign(ex,rec); updated++; } else { vendors.push(rec); added++; } });
-        markVendorDirty(); renderVen();
-        toast(`불러오기 완료 · 신규 ${added} / 갱신 ${updated}건${!hasHeader?' · 헤더 자동인식 실패(순서대로 매핑)':''} · [저장]을 눌러 반영`);
+        if(!silent){ markVendorDirty(); renderVen();
+          toast(`불러오기 완료 · 신규 ${added} / 갱신 ${updated}건${!hasHeader?' · 헤더 자동인식 실패(순서대로 매핑)':''} · [저장]을 눌러 반영`); }
+        return {added,updated};
       }
       function renderVen(){
         const t=body.querySelector('#venTable'); if(!t) return;

@@ -54,20 +54,8 @@
 
   function colToIdx(ref){ const m=ref.match(/^([A-Z]+)/); if(!m) return 0; let c=0; for(const ch of m[1]) c=c*26+(ch.charCodeAt(0)-64); return c-1; }
 
-  async function parseXlsx(u8){
-    const files = await unzip(u8, n=> n==='xl/sharedStrings.xml' || /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
-    // sharedStrings
-    const ss=[];
-    if(files['xl/sharedStrings.xml']){
-      const xml = dec.decode(files['xl/sharedStrings.xml']);
-      const reSi=/<si\b[^>]*>([\s\S]*?)<\/si>/g; let m;
-      while((m=reSi.exec(xml))){ let t=''; const reT=/<t\b[^>]*>([\s\S]*?)<\/t>/g; let mt; while((mt=reT.exec(m[1]))) t+=mt[1]; ss.push(decodeEntities(t)); }
-    }
-    // 첫 워크시트
-    const sheetKey = Object.keys(files).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k))
-      .sort((a,b)=> (+a.match(/sheet(\d+)/)[1]) - (+b.match(/sheet(\d+)/)[1]))[0];
-    if(!sheetKey) throw new Error('워크시트를 찾을 수 없습니다.');
-    const sx = dec.decode(files[sheetKey]);
+  // 워크시트 XML → 행 배열
+  function sheetToRows(sx, ss){
     const rows=[];
     const reRow=/<row\b[^>]*>([\s\S]*?)<\/row>/g; let mr;
     while((mr=reRow.exec(sx))){
@@ -87,8 +75,44 @@
       for(let i=0;i<=maxi;i++) if(cells[i]==null) cells[i]='';
       rows.push(cells);
     }
-    return { rows, sheetName: sheetKey.replace(/^.*\//,'').replace(/\.xml$/,'') };
+    return rows;
   }
+  // 모든 시트를 실제 탭 이름과 함께 반환: [{ name, rows }]
+  async function parseAllSheets(u8){
+    const files = await unzip(u8, n=> n==='xl/sharedStrings.xml' || n==='xl/workbook.xml'
+      || n==='xl/_rels/workbook.xml.rels' || /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+    const ss=[];
+    if(files['xl/sharedStrings.xml']){
+      const xml = dec.decode(files['xl/sharedStrings.xml']);
+      const reSi=/<si\b[^>]*>([\s\S]*?)<\/si>/g; let m;
+      while((m=reSi.exec(xml))){ let t=''; const reT=/<t\b[^>]*>([\s\S]*?)<\/t>/g; let mt; while((mt=reT.exec(m[1]))) t+=mt[1]; ss.push(decodeEntities(t)); }
+    }
+    // rId → worksheets/sheetN.xml
+    const relMap={};
+    if(files['xl/_rels/workbook.xml.rels']){ const rx=dec.decode(files['xl/_rels/workbook.xml.rels']);
+      const reR=/<Relationship\b[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"[^>]*>/g; let m;
+      while((m=reR.exec(rx))) relMap[m[1]]=m[2].replace(/^\/?xl\//,'').replace(/^worksheets\//,'worksheets/'); }
+    // workbook.xml: <sheet name r:id> (순서 보존)
+    const order=[];
+    if(files['xl/workbook.xml']){ const wx=dec.decode(files['xl/workbook.xml']);
+      const reS=/<sheet\b[^>]*name="([^"]*)"[^>]*r:id="([^"]+)"[^>]*\/?>/g; let m;
+      while((m=reS.exec(wx))){ const tgt=relMap[m[2]]||''; const key='xl/'+tgt.replace(/^xl\//,'');
+        order.push({ name:decodeEntities(m[1]), key: key.replace('xl/worksheets','xl/worksheets') }); } }
+    const out=[];
+    if(order.length){
+      for(const o of order){ const fk = Object.keys(files).find(k=>k===o.key || k.endsWith('/'+o.key.replace(/^xl\//,'')) || k==='xl/'+o.key.replace(/^xl\//,''));
+        const key = files[o.key]?o.key:(fk||('xl/'+o.key.replace(/^xl\//,'')));
+        if(files[key]) out.push({ name:o.name, rows: sheetToRows(dec.decode(files[key]), ss) }); }
+    }
+    if(!out.length){ // 폴백: 파일명 순서
+      Object.keys(files).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k))
+        .sort((a,b)=>(+a.match(/sheet(\d+)/)[1])-(+b.match(/sheet(\d+)/)[1]))
+        .forEach(k=>out.push({ name:k.replace(/^.*\//,'').replace(/\.xml$/,''), rows: sheetToRows(dec.decode(files[k]), ss) }));
+    }
+    if(!out.length) throw new Error('워크시트를 찾을 수 없습니다.');
+    return out;
+  }
+  async function parseXlsx(u8){ const sheets=await parseAllSheets(u8); return { rows: sheets[0].rows, sheetName: sheets[0].name, sheets }; }
 
   function parseCsv(text){
     const rows=[]; let row=[], cur='', q=false;
@@ -104,7 +128,7 @@
     return { rows: rows.map(r=>r.map(c=>c.trim())), sheetName:'csv' };
   }
 
-  // File 또는 ArrayBuffer 를 받아 { rows, sheetName } 반환
+  // File 또는 ArrayBuffer 를 받아 { rows, sheetName, sheets? } 반환 (첫 시트 rows + 전체 sheets)
   async function parseFile(file){
     const name = (file && file.name || '').toLowerCase();
     const buf = await file.arrayBuffer();
@@ -115,6 +139,13 @@
     if(u8[0]===0x50 && u8[1]===0x4b) return parseXlsx(u8);
     return parseCsv(dec.decode(u8));
   }
+  // 모든 시트를 [{name, rows}] 로 반환 (xlsx 다중 시트) · csv 는 단일
+  async function parseSheets(file){
+    const name = (file && file.name || '').toLowerCase();
+    const buf = await file.arrayBuffer(); const u8=new Uint8Array(buf);
+    if(name.endsWith('.xlsx') || (u8[0]===0x50 && u8[1]===0x4b)) return parseAllSheets(u8);
+    const r = parseCsv(dec.decode(u8)); return [{ name:'csv', rows:r.rows }];
+  }
 
-  window.XlsxLite = { parseFile, parseXlsx, parseCsv };
+  window.XlsxLite = { parseFile, parseSheets, parseXlsx, parseCsv };
 })();
