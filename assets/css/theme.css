@@ -8,6 +8,8 @@
   --line:#e2e5ea; --line-2:#eceef1; --line-strong:#cfd4da;
   --ink:#151d27; --ink-2:#333c4a; --muted:#69727e; --faint:#98a0ab;
   --hover:#f2f4f7; --active-bg:#e9f1fb; --zebra:#fafbfc;
+  /* 기능 헤더(제목·탭) 밴드 톤 — 본문과 구분 */
+  --mhead-2:#e9edf3; --mhead-1:#f6f8fb;
   /* 주 색상 = 네이비/블루(신뢰 톤) · 브랜드 레드는 로고·강조·위험에만
      ※ 인터랙션(버튼·탭·활성·포커스)이 --red 를 참조하므로, --red 값을 네이비로 둬서 전체 전환 */
   --red:#1f56a3; --red-dk:#184484; --red-soft:#e9f1fb;
@@ -34,6 +36,7 @@
   --line:#272e3c; --line-2:#222836; --line-strong:#3a4453;
   --ink:#e8ebf1; --ink-2:#c4cbd7; --muted:#8b95a6; --faint:#6a7484;
   --hover:#1e2532; --active-bg:#1b2942; --zebra:#1a1f2b;
+  --mhead-2:#1f2735; --mhead-1:#171d27;
   --red-soft:#182a45; --info-bg:#152439; --ok-bg:#12271d; --warn-bg:#2a2410; --danger-soft:#2c1719;
   --sh-sm:0 1px 2px rgba(0,0,0,.45);
   --sh:0 2px 8px rgba(0,0,0,.5),0 8px 20px -6px rgba(0,0,0,.5);

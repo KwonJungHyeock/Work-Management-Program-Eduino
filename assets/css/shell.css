@@ -186,10 +186,15 @@
    공통 모듈 헤더 · 탭 · 본문 (전 기능 디자인 통일)
    각 모듈은 .mhead(제목/설명/액션) + .mtabs(탭) + .mbody(내용) 를 사용
    =========================================================================== */
-.mhead{position:sticky;top:0;z-index:6;background:color-mix(in srgb,var(--panel) 88%,transparent);
-  -webkit-backdrop-filter:saturate(1.4) blur(10px);backdrop-filter:saturate(1.4) blur(10px);
-  border-bottom:1px solid var(--line);padding:17px 24px 0}
+/* 제목/탭 영역을 톤 있는 밴드로 — 본문(흰 카드)과 명확히 구분(가시성 개선) */
+.mhead{position:sticky;top:0;z-index:6;
+  background:linear-gradient(180deg,var(--mhead-2,var(--panel-2)),var(--mhead-1,var(--panel)));
+  border-bottom:1px solid var(--line);box-shadow:0 4px 12px -9px rgba(16,24,40,.28);
+  padding:17px 24px 0}
 .mhead.pad{padding-bottom:16px}
+/* 탭은 헤더 하단에 얹혀 본문과 경계를 형성 — 활성 탭 밑줄이 경계선에 붙음 */
+.mhead .mtabs{margin-top:14px;border-bottom:0}
+.mhead .mtabs .t.on{background:var(--panel)}
 .mhead-row{display:flex;align-items:flex-start;gap:14px}
 .mhead .tt{position:relative;font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.2;padding-left:13px;
   text-rendering:optimizeLegibility}
