@@ -62,6 +62,7 @@
             ${(cfg.filters||[]).map(f=>`<select class="sv-in" data-fk="${esc(f.k)}"><option value="">${esc(f.label)} 전체</option></select>`).join('')}
             <input class="sv-in" id="fQ" type="text" placeholder="검색어…">
             <span class="sv-sp"></span>
+            ${(isAdmin&&cfg.sheetPush)?`<button class="btn ghost sm" id="btnPush">${icon('cloudUp')}시트로 전송</button>`:''}
             ${isAdmin?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>`:''}
             <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
           </div>
@@ -186,6 +187,25 @@
           toast('CSV로 저장했습니다');
         };
 
+        // 기존 누적 기록을 구글 시트로 일괄 전송(백필) — 관리자만 · 현재 필터/기간 대상
+        const pushBtn=$('#btnPush');
+        if(pushBtn) pushBtn.onclick=async()=>{
+          const sp=cfg.sheetPush; if(!sp) return;
+          const url=(store(sp.urlKey).get({})||{}).sheetUrl||'';
+          if(!url){ toast(`먼저 ‘${cfg.title}’ 연동 설정에서 시트 URL을 저장하세요`); return; }
+          const {rows,from,to}=filtered();
+          if(!rows.length){ toast('전송할 기록이 없습니다 (기간을 넓혀보세요)'); return; }
+          if(!confirm(`${from}~${to} · ${rows.length.toLocaleString()}건을 시트 "${sp.tab}" 탭으로 전송할까요?\n(id 기준으로 중복 없이 갱신됩니다)`)) return;
+          pushBtn.disabled=true; const org=pushBtn.innerHTML; pushBtn.innerHTML=`${icon('cloud')}전송 중…`;
+          const payload={ sheet:sp.tab, records: rows.map(sp.row) };
+          const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) };
+          let ok=false, unconf=false, errMsg='';
+          try{ const res=await fetch(url,opts); if(!res.ok) throw new Error('HTTP '+res.status); let d=null; try{d=await res.json();}catch(e){} if(d&&d.ok===false) throw new Error(d.error||'시트 처리 실패'); ok=true; }
+          catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ try{ await fetch(url,{...opts,mode:'no-cors'}); ok=true; unconf=true; }catch(e){} } else errMsg=err.message||'전송 실패'; }
+          pushBtn.disabled=false; pushBtn.innerHTML=org;
+          toast(ok?`시트 "${sp.tab}"에 ${rows.length.toLocaleString()}건 전송${unconf?' (응답 확인 불가·재전송 안전)':''}`:`전송 실패: ${errMsg}`);
+        };
+
         async function load(){
           if(!$('#meta')) return; $('#meta').textContent='불러오는 중…'; $('#tbl').innerHTML='';
           const {from,to}=range();
@@ -207,6 +227,9 @@
     desc:'전 상담사의 상담 메모가 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'상담사',
     filters:[ {k:'category',label:'분류'}, {k:'customerType',label:'고객유형'} ],
+    // 기존 누적 기록 → 구글시트 CS상담메모 탭 일괄 전송(백필)
+    sheetPush:{ tab:'CS상담메모', urlKey:STORE.csNoteCfg,
+      row:r=>{ const o={id:r.id}; for(const k in CS_SHEET_MAP) o[CS_SHEET_MAP[k]] = (k==='agent'?(r.agent||r.whoName||''):(r[k]!=null?r[k]:'')); return o; } },
     onSave: async(rec, old)=>{
       rec.agent = rec.whoName || rec.agent;                         // 상담사 편집 반영
       const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
@@ -223,6 +246,8 @@
     desc:'전 담당자의 TS(기술상담) 기록이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자',
     filters:[ {k:'platform',label:'문의플랫폼'}, {k:'prodType',label:'상품구분'} ],
+    sheetPush:{ tab:'TS상담메모', urlKey:STORE.tsNoteCfg,
+      row:r=>{ const o={id:r.id}; for(const k in TS_SHEET_MAP) o[TS_SHEET_MAP[k]] = (k==='agent'?(r.agent||r.whoName||''):(r[k]!=null?r[k]:'')); return o; } },
     onSave: async(rec, old)=>{
       rec.agent = rec.whoName || rec.agent;                         // 담당자 편집 반영
       const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
