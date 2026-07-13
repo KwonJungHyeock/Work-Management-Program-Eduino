@@ -45,7 +45,8 @@ var TABS_ = {
   '품절관리 현황': ['날짜','분류','자사/입점사','입점사명','자체코드','상품관리(제품명)','처리자','처리내용','상태','날짜(기록용)','특이사항','등록자','id'],
   '제품검수 현황': ['검수(제목)','입고일자','검수일자','담당자','상품코드','제품명','동작 기능','외관 및 구성품','상세페이지 수정','특이사항','등록자','id'],
   '상품관리 현황': ['상품관리(제품명)','날짜','처리자','분류','자체코드','처리내용','상태','날짜(기록용)','특이사항','등록자','id'],
-  'TS상담메모': ['날짜','문의플랫폼','담당자','상품코드','상품구분','제품명','고객정보','문의사항','답변요약','답변원본','비고','id']
+  'TS상담메모': ['날짜','문의플랫폼','담당자','상품코드','상품구분','제품명','고객정보','문의사항','답변요약','답변원본','비고','id'],
+  '입점사발주': ['일자','구분','주문경로','주문자명','입점사명','정산구분','자체상품코드','품명','수량','출고송장/입고','발주','배송정보/비고']
 };
 function setupTabs() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -65,6 +66,28 @@ function json_(obj) {
 }
 function norm_(s) { return String(s == null ? '' : s).replace(/\s/g, '').toLowerCase(); }
 
+// 발주표 형식(cols/rows) → 시트 열 이름에 맞춰 append (헤더 없으면 cols로 생성)
+function appendRows_(sh, cols, rows) {
+  if (!rows.length) return json_({ ok: true, added: 0 });
+  var lastCol = sh.getLastColumn();
+  var header = (sh.getLastRow() >= 1 && lastCol > 0) ? sh.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  var hasHeader = header.some(function (h) { return String(h).trim() !== ''; });
+  if (!hasHeader) { sh.getRange(1, 1, 1, cols.length).setValues([cols]); sh.setFrozenRows(1); header = cols.slice(); }
+  var idx = {};
+  header.forEach(function (h, i) { var k = norm_(h); if (k && idx[k] == null) idx[k] = i; });
+  function alias(name) { var k = norm_(name);
+    if (idx[k] != null) return idx[k];
+    if (k === norm_('자체상품코드') && idx[norm_('상품코드')] != null) return idx[norm_('상품코드')];
+    if (k === norm_('상품코드') && idx[norm_('자체상품코드')] != null) return idx[norm_('자체상품코드')];
+    return null; }
+  var width = Math.max(header.length, cols.length);
+  var out = rows.map(function (r) { var line = []; for (var i = 0; i < width; i++) line.push('');
+    cols.forEach(function (cName, ci) { var col = alias(cName); if (col == null) col = ci; if (col != null && col < width) line[col] = (r[ci] != null ? r[ci] : ''); });
+    return line; });
+  sh.getRange(sh.getLastRow() + 1, 1, out.length, width).setValues(out);
+  return json_({ ok: true, added: out.length });
+}
+
 function doGet() {
   try {
     var sh = getSheet_();
@@ -77,10 +100,14 @@ function doPost(e) {
   lock.waitLock(30000); // 동시 요청 직렬화 → 행 꼬임 방지
   try {
     var body = JSON.parse(e.postData.contents || '{}');
+    var sh = getSheet_(body.sheet);   // body.sheet = 모듈이 지정한 탭 이름(없으면 SHEET_NAME/첫 탭)
+
+    // (A) 발주표 형식 { cols:[헤더…], rows:[[…]] } → 포지셔널 append (입점사 발주)
+    if (body.cols && body.rows) return appendRows_(sh, body.cols, body.rows);
+
+    // (B) 일반 형식 { records:[{ id, 헤더:값 }] } → id 기준 upsert (상담/현황판 등)
     var records = body.records || (body.id ? [body] : []);
     if (!records.length) return json_({ ok: true, synced: [] });
-
-    var sh = getSheet_(body.sheet);   // body.sheet = 모듈이 지정한 탭 이름(없으면 SHEET_NAME/첫 탭)
 
     // 1) 헤더 확보 (없으면 첫 레코드의 키로 생성)
     var lastCol = sh.getLastColumn();

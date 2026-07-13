@@ -30,7 +30,7 @@
       const pending=orders.filter(o=>!o.synced); if(!pending.length) return;
       if(window.Records) pending.forEach(o=>Records.pushMD(o));               // 내부 발주 기록 재반영
       if(!cfg.sheetUrl || cfg.backup===false) return;                          // 외부 백업 미설정/미사용
-      const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:ordSheetRows(pending)})};
+      const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({sheet:'입점사발주', cols:ORDER_SHEET_COLS, rows:ordSheetRows(pending)})};
       try{ const res=await fetch(cfg.sheetUrl,opts); if(res.ok){ pending.forEach(o=>o.synced=true); ordDB().set(orders); } }
       catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ await fetch(cfg.sheetUrl,{...opts,mode:'no-cors'}); pending.forEach(o=>o.synced=true); ordDB().set(orders); } }
     }catch(e){}
@@ -355,7 +355,7 @@
         const cfg=getCfg(); if(!cfg.sheetUrl) return {ok:false,error:'시트 URL 미설정'};
         const targets=list.filter(o=>!o.synced); if(!targets.length) return {ok:true,sent:0};
         const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})};
+          body:JSON.stringify({sheet:'입점사발주', cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})};
         try{ const res=await fetch(cfg.sheetUrl, opts);
           if(!res.ok) throw new Error('HTTP '+res.status);
           let data=null; try{ data=await res.json(); }catch{}
@@ -773,7 +773,7 @@
             이제 시트의 <b>1행 헤더 이름</b>을 읽어 열을 맞추므로, 시트 열 순서가 달라도 정확히 들어갑니다.</div>
           <div class="note" style="max-width:820px"><b>이카운트 품목 연동됨</b> · 상품코드를 입력하면 이카운트 품목(매일 00시 자동 최신화)에서 품명을 자동 조회합니다. 이카운트용 배송비는 <b>복사/CSV</b>로 내보내 붙여넣습니다.
             발주표 시트 1행 헤더에 <span class="mono" style="font-size:12px">입점사명 · 정산구분 · 상품코드(또는 자체상품코드) · 품명 · 수량 · 배송정보/비고</span> 같은 이름이 있으면 그 칸으로 채워집니다.</div>`;
-        body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-orders.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
+        body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
         body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ ...getCfg(), sheetUrl:body.querySelector('#ordUrl').value.trim(),
           autoSend: body.querySelector('input[name=autoSend]:checked').value==='1',
           backup: body.querySelector('#ordBackup').checked }); toast('저장했습니다'); };
