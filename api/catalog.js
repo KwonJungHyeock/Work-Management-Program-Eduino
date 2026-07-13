@@ -76,6 +76,23 @@ module.exports = async function handler(req, res) {
         if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1];
         return res.status(200).json({ ok: true, count: Number(o.count) || 0, updatedAt: o.updatedAt || null });
       }
+      // 카탈로그에 실제 쓰이는 거래처코드·분류코드 목록 (매핑 화면용) — GET /api/catalog?facet=1
+      if (q.facet != null) {
+        const flat = await redis(['HGETALL', CATALOG_KEY]);
+        const vend = {}, cls = {};
+        if (Array.isArray(flat)) {
+          for (let i = 1; i < flat.length; i += 2) {
+            let p = null; try { p = JSON.parse(flat[i]); } catch (e) {}
+            if (!p) continue;
+            const vc = String(p.custCode || '').trim();
+            if (vc) { const o = (vend[vc] = vend[vc] || { code: vc, count: 0, sampleName: '', sampleCode: '', apiVendor: '' }); o.count++; if (!o.sampleName) { o.sampleName = p.name || ''; o.sampleCode = p.selfCode || ''; } if (p.vendor && !o.apiVendor) o.apiVendor = p.vendor; }
+            const cc = String(p.classCode || '').trim();
+            if (cc) { const o = (cls[cc] = cls[cc] || { code: cc, count: 0, sampleName: '', sampleCode: '' }); o.count++; if (!o.sampleName) { o.sampleName = p.name || ''; o.sampleCode = p.selfCode || ''; } }
+          }
+        }
+        const byCount = (o) => Object.values(o).sort((a, b) => b.count - a.count);
+        return res.status(200).json({ ok: true, vendors: byCount(vend), categories: byCount(cls), products: Array.isArray(flat) ? flat.length / 2 : 0 });
+      }
       // 상품명/코드 부분 검색 (CS·MD 조회용) — GET /api/catalog?q=아두이노&limit=30
       if (q.q != null) {
         const term = String(q.q || '').trim().toLowerCase();

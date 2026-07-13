@@ -519,50 +519,99 @@
       /* ---------------- 이카운트 매핑 (구매처·분류 코드→이름표) ---------------- */
       function drawCatMap(){
         const cur=store(STORE.catMap).get({vendor:{},category:{}});
-        const toText=m=>Object.entries(m||{}).map(([k,val])=>k+'\t'+val).join('\n');
+        const norm=s=>catCodeNorm(s);
         const parse=txt=>{ const out={}; String(txt||'').replace(/\r/g,'').split('\n').forEach(line=>{
           if(!line.trim()) return; const sep=line.includes('\t')?'\t':','; const i=line.indexOf(sep);
           const code=(i>=0?line.slice(0,i):line).trim(), name=(i>=0?line.slice(i+1):'').trim();
-          const k=catCodeNorm(code); if(!k||!name) return; out[k]=name; const kz=k.replace(/^0+/,''); if(kz&&!out[kz]) out[kz]=name; }); return out; };
+          const k=norm(code); if(!k||!name) return; out[k]=name; const kz=k.replace(/^0+/,''); if(kz&&!out[kz]) out[kz]=name; }); return out; };
         body.innerHTML=`
-          <div class="note" style="max-width:920px;margin-bottom:14px"><b>이카운트는 구매처명·상품분류를 API로 제공하지 않습니다.</b>
-            여기에 <b>코드↔이름표</b>를 한 번 넣어두면, 상품 조회·발주에서 자동으로 이름이 표시됩니다(품명·단가는 API로 매일 자동).
-            이카운트에서 <b>거래처</b>·<b>품목분류</b>를 엑셀로 열어 <b>두 열(코드·이름)</b>을 복사해 붙여넣으세요. 저장하면 <b>팀 전체에 공유</b>됩니다. 헤더 줄은 자동 무시됩니다.</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-            <div class="card"><div class="card-hd">${icon('truck')}<b>구매처(거래처) 이름표</b><span id="vCnt" class="muted" style="margin-left:auto;font-size:12.5px">${Object.keys(cur.vendor||{}).length}건</span></div>
-              <div class="card-bd"><div class="muted" style="font-size:12.5px;margin-bottom:6px">한 줄에 <b>사업자번호(또는 거래처코드)</b> · <b>거래처명</b></div>
-                <textarea id="vMap" rows="14" placeholder="1078841033	(주)로보로보&#10;8598800910	(주)컴스마트">${esc(toText(cur.vendor))}</textarea></div></div>
-            <div class="card"><div class="card-hd">${icon('grid')}<b>상품분류 이름표</b><span id="cCnt" class="muted" style="margin-left:auto;font-size:12.5px">${Object.keys(cur.category||{}).length}건</span></div>
-              <div class="card-bd"><div class="muted" style="font-size:12.5px;margin-bottom:6px">한 줄에 <b>분류코드</b> · <b>분류명</b></div>
-                <textarea id="cMap" rows="14" placeholder="00006	유아&#10;00010	교구">${esc(toText(cur.category))}</textarea></div></div>
+          <style>
+            .cm-steps{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+            .cm-step{flex:1 1 180px;display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 14px;box-shadow:var(--sh-sm)}
+            .cm-step .n{flex:none;width:24px;height:24px;border-radius:7px;background:var(--red-soft);color:var(--red);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+            .cm-step b{font-size:13px} .cm-step span{font-size:12px;color:var(--muted);line-height:1.5}
+            .cm-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px} @media(max-width:940px){.cm-cols{grid-template-columns:1fr}}
+            .cm-list{max-height:460px;overflow:auto}
+            .cm-row{display:grid;grid-template-columns:112px minmax(0,1fr) 200px;gap:10px;align-items:center;padding:9px 13px;border-top:1px solid var(--line-2)}
+            .cm-row:first-child{border-top:0}
+            .cm-row .cc{font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--ink)}
+            .cm-row .cm{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .cm-row input{height:34px;font-size:13.5px}
+            .cm-row.done .cc::after{content:" ✓";color:var(--ok)}
+            .cm-row.todo{background:color-mix(in srgb,var(--warn) 7%,transparent)}
+            .cm-hint{font-size:11px;color:var(--info);cursor:pointer;text-decoration:underline;margin-top:3px;display:inline-block}
+            .cm-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+          </style>
+          <div class="cm-steps">
+            <div class="cm-step"><span class="n">1</span><div><b>코드가 자동으로 나옵니다</b><br><span>지금 상품에 실제로 쓰이는 거래처코드를 아래에 자동으로 보여줘요. 코드를 몰라도 됩니다.</span></div></div>
+            <div class="cm-step"><span class="n">2</span><div><b>회사명만 적으세요</b><br><span>각 코드 옆 칸에 이카운트 거래처명(예: (주)컴스마트)을 입력합니다.</span></div></div>
+            <div class="cm-step"><span class="n">3</span><div><b>저장하면 끝</b><br><span>팀 전체에 공유되고, 상품 조회·발주에서 자동으로 구매처명이 표시됩니다.</span></div></div>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
-            <button class="btn pri" id="saveCatMap">${icon('save')}저장 (팀 공유)</button>
+          <div class="cm-cols">
+            <div class="card"><div class="card-hd">${icon('truck')}<b>구매처(거래처) 이름표</b><span id="vSum" class="muted" style="margin-left:auto;font-size:12.5px"></span></div>
+              <div class="card-bd" style="padding:0"><div class="cm-list" id="vList"><div class="cm-empty">${icon('cloud')} 불러오는 중…</div></div></div></div>
+            <div class="card"><div class="card-hd">${icon('grid')}<b>상품분류 이름표</b><span id="cSum" class="muted" style="margin-left:auto;font-size:12.5px"></span></div>
+              <div class="card-bd" style="padding:0"><div class="cm-list" id="cList"><div class="cm-empty">…</div></div></div></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+            <button class="btn pri lg" id="saveCatMap">${icon('save')}저장 (팀 공유)</button>
+            <button class="btn ghost sm" id="reloadFacet">${icon('refresh')}코드 다시 불러오기</button>
             <span class="muted" id="catStat" style="font-size:12.5px"></span></div>
+          <details style="margin-top:16px;max-width:960px"><summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--muted)">＋ 고급: 이카운트 엑셀에서 두 열(코드·이름) 통째로 붙여넣기</summary>
+            <div class="cm-cols" style="margin-top:10px">
+              <textarea id="vMap" rows="6" placeholder="1078841033	(주)로보로보&#10;8598800910	(주)컴스마트"></textarea>
+              <textarea id="cMap" rows="6" placeholder="00006	유아&#10;00010	교구"></textarea></div>
+            <div class="muted" style="font-size:12px;margin-top:6px">붙여넣은 내용도 저장 시 위 목록과 함께 반영됩니다(같은 코드는 위 입력칸이 우선).</div>
+          </details>
           <div class="card" style="margin-top:16px;max-width:560px"><div class="card-hd">${icon('search')}<b>테스트</b> <span class="muted" style="font-size:12px">· 저장 전 미리 확인</span></div>
             <div class="card-bd"><label class="fld">상품코드로 구매처명 확인<input type="text" id="catTest" placeholder="예: P-DA39" autocomplete="off"></label>
               <div id="catTestOut" class="muted" style="margin-top:8px;font-size:13px">상품코드를 입력하세요.</div></div></div>`;
+
+        function collect(listEl){ const out={}; if(!listEl) return out;
+          listEl.querySelectorAll('.cm-row').forEach(row=>{ const code=row.dataset.code, name=(row.querySelector('.cm-in')||{}).value; if(code&&name&&name.trim()){ const k=norm(code); out[k]=name.trim(); const kz=k.replace(/^0+/,''); if(kz&&!out[kz]) out[kz]=name.trim(); } }); return out; }
+        function updateSums(){ [['#vList','#vSum'],['#cList','#cSum']].forEach(([l,s])=>{ const list=body.querySelector(l), sum=body.querySelector(s); if(!list||!sum) return;
+          const rows=list.querySelectorAll('.cm-row'), done=list.querySelectorAll('.cm-row.done').length;
+          sum.innerHTML = rows.length? `${done}/${rows.length} 완료${done<rows.length?` · <b style="color:var(--warn)">미입력 ${rows.length-done}</b>`:' <span style="color:var(--ok)">✓</span>'}` : ''; }); }
+        function renderList(container, items, curMap, kind){
+          if(!items || !items.length){ container.innerHTML=`<div class="cm-empty">카탈로그에 ${kind==='vendor'?'거래처':'분류'}코드가 없습니다.<br><span style="font-size:12px">VPS 동기화가 코드(custCode)를 저장했는지 확인이 필요합니다. 아래 <b>테스트</b>에서 상품코드로 점검해 보세요.</span></div>`; return; }
+          container.innerHTML=items.map((it,idx)=>{ const val=catMapGet(curMap, it.code); const done=!!val;
+            const sug=(!val && it.apiVendor)?`<span class="cm-hint" data-fill="${idx}">API 추정: ${esc(it.apiVendor)} · 쓰기</span>`:'';
+            return `<div class="cm-row ${done?'done':'todo'}" data-code="${esc(it.code)}">
+              <div class="cc">${esc(it.code)}</div>
+              <div><div class="cm" title="${esc(it.sampleName||'')}">${it.count}개 · 예: ${esc(it.sampleName||it.sampleCode||'-')}</div>${sug}</div>
+              <div><input type="text" class="cm-in" value="${esc(val)}" placeholder="${kind==='vendor'?'회사명 입력':'분류명 입력'}"></div></div>`; }).join('');
+          container.querySelectorAll('.cm-hint[data-fill]').forEach(h=>{ h.onclick=()=>{ const row=h.closest('.cm-row'), inp=row.querySelector('.cm-in'); inp.value=items[+h.dataset.fill].apiVendor||''; row.classList.add('done'); row.classList.remove('todo'); updateSums(); }; });
+          container.querySelectorAll('.cm-in').forEach(inp=>{ inp.oninput=()=>{ const row=inp.closest('.cm-row'), has=!!inp.value.trim(); row.classList.toggle('done',has); row.classList.toggle('todo',!has); updateSums(); }; });
+        }
+        async function loadFacet(){ const vL=body.querySelector('#vList'), cL=body.querySelector('#cList');
+          if(vL) vL.innerHTML=`<div class="cm-empty">${icon('cloud')} 불러오는 중…</div>`;
+          try{ const r=await fetch('/api/catalog?facet=1'); const d=await r.json(); if(!root.isConnected) return;
+            renderList(vL, d.vendors, cur.vendor, 'vendor'); renderList(cL, d.categories, cur.category, 'category'); updateSums();
+          }catch(e){ if(vL) vL.innerHTML=`<div class="cm-empty">코드 목록을 불러오지 못했습니다(배포 환경에서 표시됩니다).</div>`; }
+        }
+        loadFacet();
+        body.querySelector('#reloadFacet').onclick=loadFacet;
         body.querySelector('#saveCatMap').onclick=()=>{
-          const vm=parse(body.querySelector('#vMap').value), cm=parse(body.querySelector('#cMap').value);
-          store(STORE.catMap).set({vendor:vm, category:cm});
-          body.querySelector('#vCnt').textContent=Object.keys(vm).length+'건';
-          body.querySelector('#cCnt').textContent=Object.keys(cm).length+'건';
-          body.querySelector('#catStat').innerHTML='<span style="color:var(--ok)">저장됨 · 팀 전체에 공유됩니다</span>';
-          toast('이름표 저장 — 상품 조회·발주에 자동 반영');
+          const vm={ ...(cur.vendor||{}), ...parse(body.querySelector('#vMap').value), ...collect(body.querySelector('#vList')) };
+          const cm={ ...(cur.category||{}), ...parse(body.querySelector('#cMap').value), ...collect(body.querySelector('#cList')) };
+          store(STORE.catMap).set({vendor:vm, category:cm}); cur.vendor=vm; cur.category=cm;
+          body.querySelector('#catStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨 · 팀 전체 공유 · 상품 조회·발주에 자동 반영</span>';
+          toast('구매처 이름표 저장 완료');
         };
         const testEl=body.querySelector('#catTest');
         testEl.oninput=async()=>{ const code=testEl.value.trim(); const o=body.querySelector('#catTestOut');
           if(!code){ o.textContent='상품코드를 입력하세요.'; return; }
-          const vm=parse(body.querySelector('#vMap').value), cm=parse(body.querySelector('#cMap').value);
+          const vm={ ...(cur.vendor||{}), ...parse(body.querySelector('#vMap').value), ...collect(body.querySelector('#vList')) };
+          const cm={ ...(cur.category||{}), ...parse(body.querySelector('#cMap').value), ...collect(body.querySelector('#cList')) };
           o.innerHTML=`${icon('cloud')} 조회 중…`;
           try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); const d=await r.json();
             if(!root.isConnected) return;
             if(!d||!d.product){ o.textContent='미등록 상품코드입니다.'; return; }
             const p=d.product;
-            const vn=p.vendor||catMapGet(vm,p.custCode)||`<span style="color:var(--danger)">이름표에 없음(거래처코드 ${esc(p.custCode||'-')})</span>`;
-            const cn=p.category||catMapGet(cm,p.classCode)||'-';
+            const vn=catMapGet(vm,p.custCode)||p.vendor||`<span style="color:var(--danger)">이름표에 없음(거래처코드 ${esc(p.custCode||'-')})</span>`;
+            const cn=catMapGet(cm,p.classCode)||p.category||'-';
             o.innerHTML=`품명 <b>${esc(p.name)}</b><br>구매처 <b>${vn}</b> · 분류 <b>${esc(cn)}</b>`;
-            if(!p.custCode) o.innerHTML+=`<br><span style="color:var(--danger);font-size:12px">※ 카탈로그에 거래처코드가 없습니다 — VPS에서 최신 sync 1회 실행 필요</span>`;
+            if(!p.custCode) o.innerHTML+=`<br><span style="color:var(--danger);font-size:12px">※ 카탈로그에 거래처코드(custCode)가 없습니다 — VPS에서 최신 sync 1회 실행이 필요합니다.</span>`;
           }catch(e){ o.textContent='조회 실패'; } };
       }
 

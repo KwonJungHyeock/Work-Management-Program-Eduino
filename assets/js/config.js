@@ -207,5 +207,6 @@ const SHARED_LABELS = {
 function catNameMap(){ try{ const m=store(STORE.catMap).get({}); return { vendor:(m&&m.vendor)||{}, category:(m&&m.category)||{} }; }catch(e){ return {vendor:{},category:{}}; } }
 const catCodeNorm = s => String(s||'').replace(/[^0-9a-z]/gi,'');
 function catMapGet(map, code){ const k=catCodeNorm(code); return map[k] || map[k.replace(/^0+/,'')] || ''; }
-function catVendorName(p){ if(!p) return ''; if(p.vendor) return p.vendor; return catMapGet(catNameMap().vendor, p.custCode); }
-function catCategoryName(p){ if(!p) return ''; if(p.category) return p.category; return catMapGet(catNameMap().category, p.classCode); }
+/* 관리자 이름표(catMap) 우선 → 없으면 API vendor/category 폴백. 이름표가 최종 기준이라 오연동도 이름표로 교정됨 */
+function catVendorName(p){ if(!p) return ''; return catMapGet(catNameMap().vendor, p.custCode) || p.vendor || ''; }
+function catCategoryName(p){ if(!p) return ''; return catMapGet(catNameMap().category, p.classCode) || p.category || ''; }
