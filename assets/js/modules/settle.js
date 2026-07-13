@@ -107,25 +107,41 @@
               ${aggCard(dept,agg)}
               <div class="st-sec-cap">전달한 담당자 · ${(doc.contributors||[]).length}명</div>
               <div class="st-contribs" id="stContribs">${contribHtml(doc)}</div>
-              <div class="st-sec-cap">내 특이사항 ${mine?'<span style="color:var(--ok);font-weight:700;text-transform:none">✓ 전달함</span>':''}</div>
+              <div class="st-sec-cap">① 내 특이사항 (담당자) ${mine?'<span style="color:var(--ok);font-weight:700;text-transform:none">✓ 전달함</span>':''}</div>
               <textarea class="st-note-in" id="stNote" placeholder="오늘 특이사항·인수인계·이슈를 적어주세요" ${locked?'disabled':''}>${esc(mine?mine.note:'')}</textarea>
               <div class="st-actions">
                 <button class="btn pri" id="stTransfer" ${locked?'disabled':''}>${icon('send')}${mine?'특이사항 수정 전달':'일일결산 전달'}</button>
-                ${isLead()||isAdmin()?`<button class="btn ${doc.status==='draft'?'ok':''}" id="stSubmit" ${doc.status!=='draft'?'disabled':''}>${icon('stamp')}결재 상신</button>`:''}
                 <span class="st-meta" id="stMsg"></span>
               </div>
-              ${doc.status!=='draft'?`<div class="st-sec-cap">파트 종합 의견 (파트장)</div><div class="st-cr"><div class="note">${esc(doc.partNote||'(없음)')}</div><div class="at" style="margin:0">상신 ${esc(doc.submittedByName||'')} · ${esc((doc.submittedAt||'').slice(0,16).replace('T',' '))}</div></div>`:''}
-              ${doc.status==='approved'?`<div class="st-meta" style="margin-top:10px;color:var(--ok);font-weight:700">✓ 대표 결재 완료 · ${esc(doc.approvedByName||'')} · ${esc((doc.approvedAt||'').slice(0,16).replace('T',' '))} · 구글 '일일결산' 시트 연동됨</div>`:''}
+              ${(isLead()||isAdmin()) ? `
+                <div class="st-sec-cap" style="margin-top:18px">② 파트 종합 의견 → 대표 결재함 상신 (파트장) ${doc.status!=='draft'?`<span style="color:var(--info);font-weight:700;text-transform:none">✓ 상신됨</span>`:''}</div>
+                <textarea class="st-note-in" id="stPartNote" placeholder="파트 종합 의견(선택) — 비워도 상신됩니다" ${locked?'disabled':''}>${esc(doc.partNote||'')}</textarea>
+                <div class="st-actions">
+                  <button class="btn ok" id="stSubmit" ${locked?'disabled':''}>${icon('stamp')}${doc.status==='draft'?'결재 상신 → 대표 결재함':'재상신(내용 갱신)'}</button>
+                  <span class="st-meta">상신하면 대표(관리자) <b>결재함</b>에 이 파트 결산이 올라갑니다.</span>
+                </div>`
+              : `<div class="st-meta" style="margin-top:14px;color:var(--muted)">파트장이 검토 후 <b>결재 상신</b>하면 대표 결재함으로 올라갑니다.</div>`}
+              ${doc.status==='approved'?`<div class="st-meta" style="margin-top:12px;color:var(--ok);font-weight:700">✓ 대표 결재 완료 · ${esc(doc.approvedByName||'')} · ${esc((doc.approvedAt||'').slice(0,16).replace('T',' '))} · 구글 '일일결산' 시트 연동됨</div>`:''}
             </div>`;
-          // 전달
+          // ① 담당자 전달 — 특이사항을 파트 결산 문서에 누적(팀 공유)
           root.querySelector('#stTransfer').onclick=async(e)=>{ const note=root.querySelector('#stNote').value.trim();
-            e.currentTarget.disabled=true; root.querySelector('#stMsg').textContent='전달 중…';
+            e.currentTarget.disabled=true; const msg=root.querySelector('#stMsg'); if(msg) msg.textContent='전달 중…';
             const cur=all.find(d=>d.id===doc.id) || doc; cur.contributors=cur.contributors||[]; cur.dept=dept; cur.date=date; cur.status=cur.status||'draft';
             const who=u.loginId||u.name; const ex=cur.contributors.find(c=>c.who===who);
             if(ex){ ex.note=note; ex.whoName=u.name||who; ex.at=nowISO(); } else cur.contributors.push({who,whoName:u.name||who,note,at:nowISO()});
-            await collPush(cur); toast('일일결산을 전달했습니다'); load(); };
-          // 상신(파트장/관리자)
-          const sb=root.querySelector('#stSubmit'); if(sb) sb.onclick=()=>submitFlow(dept,date,agg,all.find(d=>d.id===doc.id)||doc, load);
+            const r=await collPush(cur); if(msg) msg.textContent = r? '' : '전달 실패 — 잠시 후 다시 시도';
+            toast('일일결산을 전달했습니다'); load(); };
+          // ② 파트장 상신 — 대표 결재함으로 (prompt 없이 인라인 · 종합의견 선택)
+          const sb=root.querySelector('#stSubmit');
+          if(sb) sb.onclick=async(e)=>{ const partNote=(root.querySelector('#stPartNote')?.value||'').trim();
+            e.currentTarget.disabled=true;
+            const cur=all.find(d=>d.id===doc.id) || doc;
+            Object.assign(cur, { dept, date, status:'submitted',
+              metrics:{ total:agg.total, byCat:agg.byCat, byPerson:agg.byPerson },
+              partNote, submittedBy:u.loginId||u.name, submittedByName:u.name||u.loginId, submittedAt:nowISO() });
+            const r=await collPush(cur);
+            if(r){ toast('결재 상신 완료 — 대표 결재함으로 전송됐습니다'); } else { toast('상신 실패 — 서버 연결을 확인하세요'); e.currentTarget.disabled=false; return; }
+            load(); };
         }
         dateEl.onchange=load; load();
       }
@@ -136,17 +152,6 @@
     const cs=doc.contributors||[];
     if(!cs.length) return `<div class="muted" style="font-size:13px;padding:4px 2px">아직 전달한 담당자가 없습니다.</div>`;
     return cs.map(c=>`<div class="st-cr"><div style="display:flex;align-items:center"><span class="who">${esc(c.whoName||c.who)}</span><span class="at">${esc((c.at||'').slice(0,16).replace('T',' '))}</span></div>${c.note?`<div class="note">${esc(c.note)}</div>`:'<div class="note muted">(특이사항 없음)</div>'}</div>`).join('');
-  }
-
-  /* 파트장 상신 — 파트 종합 의견 입력 후 상태 submitted + 집계 스냅샷 저장 */
-  function submitFlow(dept,date,agg,doc,after){
-    const partNote=prompt(`${DEPT_LABEL[dept]} 파트 종합 의견을 입력하세요 (결재 상신)\n\n오늘 집계: ${agg.total}건 · ${catLine(agg)}`, doc.partNote||'');
-    if(partNote===null) return;
-    const u=meU();
-    const cur={ ...doc, dept, date, status:'submitted',
-      metrics:{ total:agg.total, byCat:agg.byCat, byPerson:agg.byPerson },
-      partNote:partNote.trim(), submittedBy:u.loginId||u.name, submittedByName:u.name||u.loginId, submittedAt:nowISO() };
-    collPush(cur).then(()=>{ toast('결재 상신했습니다 — 관리자 결재함으로 전송'); if(after) after(); });
   }
 
   /* ============================ 결재함(관리자) ============================ */
