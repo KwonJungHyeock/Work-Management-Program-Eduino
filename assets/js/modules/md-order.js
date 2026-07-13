@@ -15,7 +15,7 @@
   const getCfg     =()=>cfgDB().get({sheetUrl:'', autoSend:true});
   const vat=g=>{ const gross=Number(g)||0; const tax=Math.round(gross/11); return {gross,tax,supply:gross-tax}; };
 
-  /* 발주 → 구글시트 행 매핑 (화면/백그라운드 재시도 공용) */
+  /* 발주 → 구글시트 행 매핑 (미리보기 표/CSV용 · 포지셔널) */
   function ordSheetRows(list){
     return list.map(o=>ORDER_SHEET_COLS.map(c=>({
       '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
@@ -23,6 +23,11 @@
       '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`,
       '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
   }
+  /* 발주 → 구글시트 전송 레코드 (CS와 동일한 records+id upsert 방식 · 중복 없이 갱신) */
+  function ordSheetRecord(o){ return {
+    id:o.id, '일자':o.date||o.day||'', '구분':o.gubun||'', '주문경로':o.route||'', '주문자명':o.orderer||'', '입점사명':o.vendor||'',
+    '정산구분':o.settle||'', '자체상품코드':o.selfCode||o.code||'', '품명':o.name||'', '수량':(o.qty!=null?o.qty:''),
+    '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`, '발주':'O', '배송정보/비고':o.shipInfo||'' }; }
   /* 저장 실패로 미전송된 발주 자동 재시도 (주기적 + 재접속) — 내부는 멱등 재반영, 외부는 구글시트 */
   async function ordRetry(){
     try{
@@ -30,7 +35,7 @@
       const pending=orders.filter(o=>!o.synced); if(!pending.length) return;
       if(window.Records) pending.forEach(o=>Records.pushMD(o));               // 내부 발주 기록 재반영
       if(!cfg.sheetUrl || cfg.backup===false) return;                          // 외부 백업 미설정/미사용
-      const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({sheet:'입점사발주', cols:ORDER_SHEET_COLS, rows:ordSheetRows(pending)})};
+      const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({sheet:'입점사발주', records:pending.map(ordSheetRecord)})};
       try{ const res=await fetch(cfg.sheetUrl,opts); if(res.ok){ pending.forEach(o=>o.synced=true); ordDB().set(orders); } }
       catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ await fetch(cfg.sheetUrl,{...opts,mode:'no-cors'}); pending.forEach(o=>o.synced=true); ordDB().set(orders); } }
     }catch(e){}
@@ -356,7 +361,7 @@
         const cfg=getCfg(); if(!cfg.sheetUrl) return {ok:false,error:'시트 URL 미설정'};
         const targets=list.filter(o=>!o.synced); if(!targets.length) return {ok:true,sent:0};
         const opts={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body:JSON.stringify({sheet:'입점사발주', cols:ORDER_SHEET_COLS, rows:sheetRowsFor(targets)})};
+          body:JSON.stringify({sheet:'입점사발주', records:targets.map(ordSheetRecord)})};
         try{ const res=await fetch(cfg.sheetUrl, opts);
           if(!res.ok) throw new Error('HTTP '+res.status);
           let data=null; try{ data=await res.json(); }catch{}

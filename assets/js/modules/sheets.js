@@ -263,10 +263,11 @@
 
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
-    // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · 발주표는 추가(append) 방식
+    // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · CS와 동일 records+id upsert(중복 없음)
     sheetPush:{ tab:'입점사발주', urlKey:STORE.mdOrderCfg,
-      cols:['일자','구분','주문경로','주문자명','입점사명','정산구분','자체상품코드','품명','수량','출고송장/입고','발주','배송정보/비고'],
-      row:r=>[ r.date||r.day||'', r.gubun||'', r.route||'', r.orderer||'', r.vendor||'', r.settle||'', r.selfCode||r.code||'', r.name||'', (r.qty!=null?r.qty:''), `배송비 ${(Number(r.ship)||0).toLocaleString()}원`, 'O', r.shipInfo||'' ] },
+      row:r=>({ id:r.id, '일자':r.date||r.day||'', '구분':r.gubun||'', '주문경로':r.route||'', '주문자명':r.orderer||'', '입점사명':r.vendor||'',
+        '정산구분':r.settle||'', '자체상품코드':r.selfCode||r.code||'', '품명':r.name||'', '수량':(r.qty!=null?r.qty:''),
+        '출고송장/입고':`배송비 ${(Number(r.ship)||0).toLocaleString()}원`, '발주':'O', '배송정보/비고':r.shipInfo||'' }) },
     cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80}, {k:'gubun',h:'구분',w:70},
       {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
       {k:'settle',h:'정산구분',w:78}, {k:'selfCode',h:'자체상품코드',w:104},
