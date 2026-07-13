@@ -1,18 +1,10 @@
-/* MD · 상품 데이터 관리(기존 도구 iframe) + 상세이미지 변환기 */
+/* MD · 부가기능 (상품 데이터시트 관리 + 상세이미지 변환기) — 사용 빈도가 낮은 보조 도구 묶음 */
 
-/* ── 1) 상품 데이터 관리 도구 (기존 도구를 셸 안에 임베드) ── */
-MODULES['md.product'] = {
-  title:'상품 데이터 관리', icon:'grid', flush:true,
-  render(root){
-    root.style.display='flex'; root.style.flexDirection='column';
-    root.innerHTML = `
-      <div class="mhead pad"><div class="mhead-row"><div>
-        <div class="tt">상품 데이터 관리</div>
-        <div class="ds">엑셀·CSV를 불러와 상품 데이터를 일괄 편집합니다.</div></div></div></div>
-      <div style="flex:1;min-height:0;position:relative">
-        <iframe src="modules/md/product-tool.html" title="상품 데이터 관리 도구" style="position:absolute;inset:0;width:100%;height:100%;border:0;display:block"></iframe></div>`;
-  }
-};
+/* ── 1) 상품 데이터시트 관리 도구 (기존 도구를 셸 안에 임베드) ── */
+function renderProductSheetTool(body){
+  body.innerHTML = `<iframe src="modules/md/product-tool.html" title="상품 데이터시트 관리 도구"
+    style="position:absolute;inset:0;width:100%;height:100%;border:0;display:block"></iframe>`;
+}
 
 /* ── 2) 상세이미지 변환기 (좌: 업로드·검수 / 우: 작업 대시보드) ── */
 (function(){
@@ -43,9 +35,8 @@ MODULES['md.product'] = {
     return img + mono;
   }
 
-  MODULES['md.image'] = {
-    title:'상세이미지 변환기', icon:'image',
-    render(root){
+  function renderImageConverter(root, opts){
+      opts=opts||{};
       root.style.overflow='hidden';
       const pf=store(STORE.platforms);
       // 저장된 플랫폼에 기본값의 로고/색상/short 를 backfill 하고, 신규 기본 플랫폼(옥션 등)을 병합
@@ -120,9 +111,9 @@ MODULES['md.product'] = {
         .out-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
       </style>
       <div class="conv-wrap">
-        <div class="conv-head">
-          <div class="tt">상세이미지 변환기</div>
-          <div class="ds">통이미지를 왼쪽에서 검수하고, 오른쪽에서 플랫폼별 규격·확장자로 한 번에 변환해 ZIP으로 내려받습니다.</div>
+        <div class="conv-head" ${opts.embedded?'style="padding-top:8px;border-bottom:none"':''}>
+          ${opts.embedded?'':`<div class="tt">상세이미지 변환기</div>
+          <div class="ds">통이미지를 왼쪽에서 검수하고, 오른쪽에서 플랫폼별 규격·확장자로 한 번에 변환해 ZIP으로 내려받습니다.</div>`}
           <div class="mtabs"><div class="t" data-t="convert">이미지 변환</div><div class="t" data-t="settings">플랫폼 설정</div></div>
         </div>
         <div class="conv-body" id="cbody"></div>
@@ -440,6 +431,39 @@ MODULES['md.product'] = {
       }
 
       draw();
+  }
+  window.renderImageConverter = renderImageConverter;
+
+  /* ── 부가기능 래퍼 — 하위탭(상품 데이터시트 관리 / 상세이미지 변환기) ── */
+  MODULES['md.extra'] = {
+    title:'부가기능', icon:'grid', flush:true,
+    render(root, initial){
+      root.style.display='flex'; root.style.flexDirection='column';
+      let sub = (initial==='image'||initial==='sheet') ? initial : 'sheet';
+      root.innerHTML = `
+        <div class="mhead pad">
+          <div class="mhead-row"><div>
+            <div class="tt">부가기능</div>
+            <div class="ds">사용 빈도가 낮은 보조 도구 모음입니다.</div></div></div>
+          <div class="mtabs">
+            <div class="t" data-s="sheet">상품 데이터시트 관리</div>
+            <div class="t" data-s="image">상세이미지 변환기</div>
+          </div>
+        </div>
+        <div style="flex:1;min-height:0;position:relative" id="exBody"></div>`;
+      const body=root.querySelector('#exBody');
+      const tabs=root.querySelectorAll('.mtabs .t');
+      function draw(){
+        tabs.forEach(t=>t.classList.toggle('on',t.dataset.s===sub));
+        body.style.overflow = sub==='sheet' ? 'hidden' : '';
+        if(sub==='sheet') renderProductSheetTool(body);
+        else renderImageConverter(body, {embedded:true});
+      }
+      tabs.forEach(t=>t.onclick=()=>{ if(sub!==t.dataset.s){ sub=t.dataset.s; draw(); } });
+      draw();
     }
   };
+  // 하위 호환: 기존 딥링크(md.product / md.image)는 부가기능으로 진입
+  MODULES['md.product'] = { title:'상품 데이터시트 관리', icon:'grid', flush:true, render(root){ MODULES['md.extra'].render(root, 'sheet'); } };
+  MODULES['md.image']   = { title:'상세이미지 변환기', icon:'image', flush:true, render(root){ MODULES['md.extra'].render(root, 'image'); } };
 })();

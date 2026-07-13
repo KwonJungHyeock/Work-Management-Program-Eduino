@@ -82,7 +82,7 @@ const QUICK_LINKS = [
 
 /* CS 상담 메모 — 연동 구글시트 컬럼(날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사)에 맞춘 값
    · 수정이 잦은 값은 상수로 분리 (분류는 사용자가 화면에서 편집 가능) */
-const CS_INQUIRY_TYPES = ['후불','견적','상품/재고','주문/배송','기타'];   // 시트 '분류'
+const CS_INQUIRY_TYPES = ['후불','견적','대량견적','상품/재고','주문/배송','기타'];   // 시트 '분류'
 const CS_CUSTOMER_TYPES = ['유치원','초등학교','중학교','고등학교','대학교','기관','개인','업체','입점사','파트너사']; // 시트 '고객유형' (학교 세분화)
 const CS_PRODUCT_CATEGORIES = ['자사키트','자사부품','입점사키트','입점사부품']; // 시트 '상품분류'
 const CS_ORDER_ROUTES = ['사이트','스팜','후불','발주'];                     // 시트 '주문경로'
@@ -92,6 +92,18 @@ const CS_SHEET_MAP = {
   date:'날짜', category:'분류', route:'주문경로', contact:'연락처', customerType:'고객유형',
   name:'주문자/학교/업체명', prodCategory:'상품분류', prodCode:'상품코드',
   content:'내용', answer:'답변', agent:'상담사',
+};
+
+/* TS 상담 메모(MD 파트) — 노션 시트 구조 그대로: 날짜·문의플랫폼·담당자·상품코드·상품구분·제품명·고객정보·문의사항·답변요약·답변원본·비고
+   · 문의플랫폼/상품구분은 칩 토글(편집 가능) · 담당자 지정 · 상품코드 입력 시 제품명 자동연동 · 나머지는 수기입력 */
+const TS_PLATFORMS = ['게시판','쿠팡','카카오톡','메일','네이버톡톡'];              // 시트 '문의플랫폼'
+const TS_AGENTS = ['여미림','이진환'];                                              // 시트 '담당자'
+const TS_PRODUCT_TYPES = ['제품추천','자사제품','자사키트','입점사키트','입점사부품']; // 시트 '상품구분'
+/* TS 상담 메모 내부필드 → 구글시트 헤더 이름 매핑 */
+const TS_SHEET_MAP = {
+  date:'날짜', platform:'문의플랫폼', agent:'담당자', prodCode:'상품코드', prodType:'상품구분',
+  prodName:'제품명', customer:'고객정보', content:'문의사항',
+  answerSummary:'답변요약', answer:'답변원본', remark:'비고',
 };
 
 /* 좌측 내비게이션 구조 (활성: CS·MD / 예정: 디자인·경리)
@@ -104,18 +116,19 @@ const NAV = [
       { key:'home.memo',   name:'업무 메모',   icon:'send' },
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
-      { key:'cs.notes',     name:'상담 메모',   icon:'clipboard' },
-      { key:'cs.records',   name:'상담 기록',   icon:'sheet' },
+      { key:'cs.notes',     name:'CS상담 메모',   icon:'clipboard' },
+      { key:'cs.records',   name:'CS상담 기록',   icon:'sheet' },
       { key:'cs.china',     name:'중국 발주요청', icon:'box' },
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
-      { key:'md.order',   name:'입점사 발주',      icon:'truck' },
-      { key:'md.records', name:'발주 기록',        icon:'sheet' },
-      { key:'md.product', name:'상품 데이터 관리', icon:'grid' },
-      { key:'md.image',   name:'상세이미지 변환기', icon:'image' },
+      { key:'md.order',     name:'입점사 발주',   icon:'truck' },
+      { key:'md.records',   name:'발주 기록',     icon:'sheet' },
+      { key:'md.tsnotes',   name:'TS상담 메모',   icon:'clipboard' },
+      { key:'md.tsrecords', name:'TS상담 기록',   icon:'sheet' },
+      { key:'md.extra',     name:'부가기능',      icon:'grid' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
@@ -128,7 +141,7 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'md.records'];
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'md.records', 'md.tsrecords'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }
@@ -146,6 +159,12 @@ const STORE = {
   csAgents: 'eduino.cs.notes.agents',// 상담사 목록(사용자 편집)
   csTypes:  'eduino.cs.notes.types', // 문의유형 목록(사용자 편집)
   csSumTpl: 'eduino.cs.notes.sumtpl',// 일일 결산 저장 양식(커스텀)
+  tsNotes:  'eduino.ts.notes',           // TS 상담 메모 레코드 배열
+  tsNoteCfg:'eduino.ts.notes.cfg',       // { sheetUrl, backup }
+  tsAgent:  'eduino.ts.notes.agent',     // 마지막 선택 담당자
+  tsAgents: 'eduino.ts.notes.agents',    // 담당자 목록(사용자 편집)
+  tsTypes:  'eduino.ts.notes.platforms', // 문의플랫폼 목록(사용자 편집)
+  tsSumTpl: 'eduino.ts.notes.sumtpl',    // TS 일일 결산 저장 양식(커스텀)
   syncCfg:  'eduino.sync.cfg',       // 공용 저장소(구글) 연동 { url, autoPull }
   shareMap: 'eduino.share.map',      // 공유 범위 오버라이드 { settingKey: 'all'|'cs'|'md' } (전사 공유)
   catMap:   'eduino.md.catmap',      // 이카운트 코드→이름표 { vendor:{코드:구매처명}, category:{코드:분류명} }
@@ -164,6 +183,7 @@ const SHARE_DEFAULT = {
   [STORE.mdVendors]:'md', [STORE.mdOrderCfg]:'md', [STORE.catMap]:'all',
   [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
   [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
+  [STORE.tsNoteCfg]:'md', [STORE.tsAgents]:'md', [STORE.tsTypes]:'md', [STORE.tsSumTpl]:'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
@@ -184,7 +204,8 @@ function myShareScopes(){
 const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
-  STORE.csTypes, STORE.csSumTpl, STORE.shareMap, STORE.catMap,
+  STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
+  STORE.shareMap, STORE.catMap,
 ];
 /* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
 const SHARED_LABELS = {
@@ -199,6 +220,10 @@ const SHARED_LABELS = {
   [STORE.csAgents]:'상담사 목록',
   [STORE.csTypes]:'CS 분류',
   [STORE.csSumTpl]:'결산 저장 양식',
+  [STORE.tsNoteCfg]:'TS 상담시트 연동 URL',
+  [STORE.tsAgents]:'TS 담당자 목록',
+  [STORE.tsTypes]:'TS 문의플랫폼',
+  [STORE.tsSumTpl]:'TS 결산 저장 양식',
   [STORE.shareMap]:'공유 범위 규칙',
   [STORE.catMap]:'이카운트 구매처·분류 이름표',
 };

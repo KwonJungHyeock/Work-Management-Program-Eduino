@@ -217,6 +217,22 @@
       {k:'prodCategory',h:'상품분류',w:90}, {k:'prodCode',h:'상품코드',w:84},
       {k:'content',h:'내용',w:260,wrap:true}, {k:'answer',h:'답변',w:200,wrap:true} ] });
 
+  build({ key:'md.tsrecords', dept:'md', sheet:'tsnotes', title:'TS상담 기록', icon:'sheet',
+    desc:'전 담당자의 TS(기술상담) 기록이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
+    editable:true, whoLabel:'담당자',
+    filters:[ {k:'platform',label:'문의플랫폼'}, {k:'prodType',label:'상품구분'} ],
+    onSave: async(rec, old)=>{
+      rec.agent = rec.whoName || rec.agent;                         // 담당자 편집 반영
+      const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
+      if(window.Records && oldM && newM && oldM!==newM) await Records.del('md','tsnotes',rec.id,oldM,old.who,old.day||old.date);
+      if(window.Records) await Records.pushTS(rec);                 // 내부 TS 기록 갱신(중복 없이 덮어씀)
+      if(window.TSSheet && TSSheet.configured()) TSSheet.send([rec]); // 구글시트 갱신(id 기준 upsert)
+    },
+    cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'담당자',w:80,color:true}, {k:'platform',h:'문의플랫폼',w:90},
+      {k:'prodType',h:'상품구분',w:90}, {k:'prodCode',h:'상품코드',w:90}, {k:'prodName',h:'제품명',w:180,wrap:true},
+      {k:'customer',h:'고객정보',w:140,wrap:true}, {k:'content',h:'문의사항',w:240,wrap:true},
+      {k:'answerSummary',h:'답변요약',w:200,wrap:true}, {k:'answer',h:'답변원본',w:240,wrap:true}, {k:'remark',h:'비고',w:120,wrap:true} ] });
+
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
     cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80}, {k:'gubun',h:'구분',w:70},

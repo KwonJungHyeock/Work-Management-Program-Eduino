@@ -31,6 +31,13 @@ window.Records = (function(){
     const record={ ...rec, who: m?m.loginId:('@'+(rec.agent||'?')), whoName: rec.agent||'?', day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
     return pushRaw('cs','notes',record);
   }
+  /* TS 상담 레코드 → 서버 시트 'tsnotes' (담당=선택된 담당자, MD 파트 기술상담) */
+  async function pushTS(rec){
+    const R=await roster();
+    const m=R.find(p=>p.dept==='md' && p.name===rec.agent) || R.find(p=>p.name===rec.agent);
+    const record={ ...rec, who: m?m.loginId:('@'+(rec.agent||'?')), whoName: rec.agent||'?', day: (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today()) };
+    return pushRaw('md','tsnotes',record);
+  }
   /* MD 발주 레코드 → 서버 시트 'orders' (담당=로그인 계정) */
   function pushMD(rec){
     const u=(window.Auth&&Auth.user&&Auth.user())||{};
@@ -50,5 +57,5 @@ window.Records = (function(){
     try{ const r=await fetch(`/api/store?type=sheet&dept=${encodeURIComponent(dept)}&sheet=${encodeURIComponent(sheet)}&month=${encodeURIComponent(ym)}`);
       if(!r.ok) throw 0; const d=await r.json(); return (d&&d.records)||[]; }catch(e){ return null; }
   }
-  return { roster, pushCS, pushMD, pushRaw, del, month };
+  return { roster, pushCS, pushTS, pushMD, pushRaw, del, month };
 })();
