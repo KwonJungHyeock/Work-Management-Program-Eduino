@@ -127,6 +127,13 @@
         .lk-name{font-size:13.5px;line-height:1.45;color:var(--ink-2);font-weight:600}
         .lookup .pill{white-space:nowrap;background:var(--panel);font-weight:600;border-color:#b7dcc6}
         .lookup .pill b{color:var(--ink);font-weight:800;margin-left:2px}
+        /* 옵션 상품 선택 리스트 (P-D10 → P-D10-1~3) */
+        .lookup:has(.opt-list){display:block;align-items:stretch}
+        .opt-list{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow:auto}
+        .opt-row{display:flex;align-items:center;gap:11px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;text-align:left;transition:.12s;width:100%}
+        .opt-row:hover{border-color:var(--red);background:var(--red-soft)}
+        .opt-row .oc{font-family:var(--mono);font-weight:800;font-size:14px;min-width:96px;color:var(--ink)}
+        .opt-row .on{font-size:13px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .lookup .pill.pol{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 45%,var(--line));color:var(--warn);display:inline-flex;align-items:center;gap:4px;max-width:100%}
         .lookup .pill.pol b{color:var(--warn);white-space:normal}
         .lookup .pill.pol svg{width:13px;height:13px;flex:0 0 auto}
@@ -235,7 +242,9 @@
         const $f=id=>body.querySelector(id);
         const codeEl=$f('#fCode');
         const catCache={};   // 셀메이트 카탈로그 조회 캐시 (code → product)
-        async function fetchCatalog(code){ try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); if(!r.ok) return null; const d=await r.json(); return (d&&d.product)||null; }catch(e){ return null; } }
+        // 정확 일치 상품 + 옵션 후보(P-D10 → P-D10-1~3) 함께 반환
+        async function fetchCatalog(code){ try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); if(!r.ok) return {product:null,options:[]}; const d=await r.json(); return { product:(d&&d.product)||null, options:(d&&d.options)||[] }; }catch(e){ return {product:null,options:[]}; } }
+        function pickOption(o){ catCache[normCode(o.selfCode)]=o; codeEl.value=o.selfCode; form.code=o.selfCode; refreshLookup(); const n=nameEl(); }
         const resolveLocal=code=>prodMap()[normCode(code)]||catCache[normCode(code)];
         const nameEl=()=>$f('#fName');
         // 조회 결과에 맞춰 품명칸 동기화 — 자동 채운 값만 갱신/삭제, 사용자가 직접 입력한 값은 보존
@@ -251,8 +260,15 @@
           if(!p){
             // 로컬 상품 마스터에 없으면 서버 카탈로그(셀메이트)에서 조회
             box.className='lookup'; box.innerHTML=`${icon('cloud')} 카탈로그 조회 중…`;
-            fetchCatalog(code).then(prod=>{ if(codeEl.value.trim()!==code) return;
-              if(prod){ catCache[normCode(code)]=prod; refreshLookup(); }
+            fetchCatalog(code).then(res=>{ if(codeEl.value.trim()!==code) return;
+              if(res.product){ catCache[normCode(code)]=res.product; refreshLookup(); }
+              else if(res.options && res.options.length){   // 옵션 상품 — 선택 리스트 표시
+                syncName(null); box.className='lookup';
+                box.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">옵션 상품 <b style="color:var(--red)">${res.options.length}</b>개 — 선택하세요</div>
+                  <div class="opt-list">${res.options.map((o,i)=>`<button type="button" class="opt-row" data-i="${i}">
+                    <span class="oc">${esc(o.selfCode)}</span><span class="on">${o.name?esc(o.name):'<span class="muted">(품명 없음)</span>'}</span></button>`).join('')}</div>`;
+                box.querySelectorAll('.opt-row').forEach(r=>r.onclick=()=>pickOption(res.options[+r.dataset.i]));
+              }
               else { syncName(null); box.className='lookup warn'; box.innerHTML=`${icon('alert')} 이카운트 미등록 코드 — <b>품명을 직접 입력</b>하면 그대로 발주에 추가됩니다.`; } });
             return null;
           }
@@ -299,7 +315,10 @@
           const code=codeEl.value.trim();
           if(!code){ toast('상품코드를 입력하세요'); codeEl.focus(); return; }
           let p=resolveLocal(code);
-          if(!p){ p=await fetchCatalog(code); if(p) catCache[normCode(code)]=p; }
+          if(!p){ const res=await fetchCatalog(code);
+            if(res.product){ p=res.product; catCache[normCode(code)]=p; }
+            else if(res.options && res.options.length){ refreshLookup(); toast('옵션 상품입니다 — 아래 목록에서 옵션을 선택하세요'); return; }
+          }
           // 미등록 코드도 품명만 있으면 발주에 추가(이카운트에 없어도 정상 등록)
           const nameVal=($f('#fName').value||'').trim() || (p&&p.name) || '';
           if(!p && !nameVal){ toast('미등록 코드입니다 — 품명을 입력하면 추가됩니다'); refreshLookup(); const n=nameEl(); if(n) n.focus(); return; }

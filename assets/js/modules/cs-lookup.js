@@ -33,6 +33,15 @@
           .lk-empty{padding:44px 20px;text-align:center;color:var(--muted)}
           .lk-empty svg{width:34px;height:34px;opacity:.4;margin-bottom:10px}
           .lk-empty.bad{color:var(--danger)}
+          .lk-opts{margin-top:18px;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:var(--sh-sm)}
+          .lk-opts-hd{padding:12px 16px;background:var(--panel-2);border-bottom:1px solid var(--line);font-size:13px;font-weight:700;color:var(--ink-2)}
+          .lk-opts-hd b{color:var(--red)}
+          .lk-opt{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line-2);cursor:pointer;transition:.12s}
+          .lk-opt:first-child{border-top:none}
+          .lk-opt:hover{background:var(--red-soft)}
+          .lk-opt .oc{font-family:var(--mono);font-weight:800;font-size:15px;min-width:110px}
+          .lk-opt .on{font-size:14px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .lk-opt .go{color:var(--muted);display:flex}.lk-opt:hover .go{color:var(--red)}
         </style>
         <div class="mhead pad"><div class="mhead-row">
           <div><div class="tt">상품 조회</div>
@@ -65,7 +74,24 @@
         if(my!==seq||!root.isConnected) return;                       // 최신 조회만 반영
         if(!d||!d.ok){ hint(`${icon('alert')}<div>조회에 실패했습니다. 잠시 후 다시 시도하세요.</div>`,true); return; }
         const p=d.product;
-        if(!p){ hint(`${icon('alert')}<div>"${esc(code)}" — 미등록 상품코드입니다.<br><span style="font-size:12.5px">이카운트에 등록하면 매일 00시 자동 반영됩니다.</span></div>`,true); return; }
+        if(!p){
+          // 옵션 상품(예: P-D10-1~3) 후보가 있으면 선택 리스트 표시
+          const opts=(d.options||[]);
+          if(opts.length){
+            out.innerHTML=`<div class="lk-opts">
+              <div class="lk-opts-hd">"<b>${esc(code)}</b>" 옵션 상품 <b>${opts.length}</b>개 — 선택하세요</div>
+              ${opts.map((o,i)=>`<div class="lk-opt" data-i="${i}">
+                <span class="oc">${esc(o.selfCode)}</span>
+                <span class="on">${o.name?esc(o.name):'<span class="muted">(품명 없음)</span>'}</span>
+                <span class="go">${icon('chevron')}</span></div>`).join('')}</div>`;
+            out.querySelectorAll('.lk-opt').forEach(row=>row.onclick=()=>{ const o=opts[+row.dataset.i]; qEl.value=o.selfCode; showProduct(o); });
+            return;
+          }
+          hint(`${icon('alert')}<div>"${esc(code)}" — 미등록 상품코드입니다.<br><span style="font-size:12.5px">이카운트에 등록하면 매일 00시 자동 반영됩니다.</span></div>`,true); return;
+        }
+        showProduct(p);
+      }
+      function showProduct(p){
         const vendor=(typeof catVendorName==='function')?catVendorName(p):(p.vendor||'');
         const category=(typeof catCategoryName==='function')?catCategoryName(p):(p.category||'');
         out.innerHTML=`<div class="lk-card">

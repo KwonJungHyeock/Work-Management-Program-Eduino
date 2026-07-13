@@ -34,7 +34,7 @@ async function getSheet(dept, sheet, ym) {
 }
 // 월 단위 시트 백업 대상 — CS 상담/MD 발주 + TS 상담 + MD 현황판(입점사변동·품절·검수·상품관리)
 const MONTH_SHEETS = [
-  ['cs', 'notes'], ['md', 'orders'], ['md', 'tsnotes'],
+  ['cs', 'notes'], ['cs', 'exchange'], ['cs', 'postpay'], ['md', 'orders'], ['md', 'tsnotes'],
   ['md', 'vendorchg'], ['md', 'stockmgmt'], ['md', 'inspect'], ['md', 'prodmgmt'],
 ];
 async function snapshotMonth(m) {

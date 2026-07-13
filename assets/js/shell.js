@@ -414,7 +414,7 @@ function bootShell(){
       const d=new Date(); mSel.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       async function getSheet(dept,sheet,ym){ try{ const r=await fetch(`/api/store?type=sheet&dept=${dept}&sheet=${sheet}&month=${ym}`); if(!r.ok) throw 0; const j=await r.json(); return (j&&j.records)||[]; }catch(e){ return null; } }
       // 백업 대상 시트 — CS 상담 · MD 발주 + TS 상담 + MD 현황판(입점사변동·품절·검수·상품관리)
-      const BK_SHEETS=[ ['cs','notes'],['md','orders'],['md','tsnotes'],['md','vendorchg'],['md','stockmgmt'],['md','inspect'],['md','prodmgmt'] ];
+      const BK_SHEETS=[ ['cs','notes'],['cs','exchange'],['cs','postpay'],['md','orders'],['md','tsnotes'],['md','vendorchg'],['md','stockmgmt'],['md','inspect'],['md','prodmgmt'] ];
       ov.querySelector('#mBkDown').onclick=async()=>{
         const ym=mSel.value, stat=ov.querySelector('#mBkStat');
         if(!/^\d{4}-\d{2}$/.test(ym)){ stat.textContent='월을 선택하세요'; return; }

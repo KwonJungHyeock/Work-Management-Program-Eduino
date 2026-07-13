@@ -89,10 +89,10 @@
   /* ---- 상품코드 → 제품명 조회 (카탈로그 API, 결과 캐시) ---- */
   const codeCache = {};
   async function lookupProduct(code){
-    const c=String(code||'').trim().toUpperCase(); if(!c) return null;
+    const c=String(code||'').trim().toUpperCase(); if(!c) return {product:null,options:[]};
     if(Object.prototype.hasOwnProperty.call(codeCache, c)) return codeCache[c];
     try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(c)); const d=await r.json();
-      const p=(d&&d.product)||null; codeCache[c]=p; return p; }catch(e){ return null; }
+      const res={ product:(d&&d.product)||null, options:(d&&d.options)||[] }; codeCache[c]=res; return res; }catch(e){ return {product:null,options:[]}; }
   }
 
   /* ============================================================ */
@@ -320,9 +320,11 @@
           const run=()=>{ const code=codeEl.value.trim(); const my=++seq;
             if(!code){ hint.textContent=''; hint.className='pname-hint'; if(nameEl.dataset.auto==='1'){ nameEl.value=''; nameEl.dataset.auto=''; } return; }
             hint.textContent='조회 중…'; hint.className='pname-hint';
-            lookupProduct(code).then(p=>{ if(my!==seq || !body.isConnected) return;
+            lookupProduct(code).then(res=>{ if(my!==seq || !body.isConnected) return; const p=res.product;
               if(p){ hint.textContent='✓ '+(p.name||'(이름 없음)'); hint.className='pname-hint';
                 if(!nameEl.value.trim() || nameEl.dataset.auto==='1'){ nameEl.value=p.name||''; nameEl.dataset.auto='1'; } }
+              else if(res.options && res.options.length){ hint.innerHTML=`옵션 상품 ${res.options.length}개 — `+res.options.slice(0,6).map(o=>`<a href="#" data-c="${esc(o.selfCode)}" style="color:var(--info);text-decoration:underline">${esc(o.selfCode)}</a>`).join(', ')+(res.options.length>6?' …':''); hint.className='pname-hint';
+                hint.querySelectorAll('a[data-c]').forEach(a=>a.onclick=(e)=>{ e.preventDefault(); codeEl.value=a.dataset.c; nameEl.dataset.auto=''; run(); }); }
               else { hint.textContent='미등록 상품코드 — 제품명을 직접 입력하세요'; hint.className='pname-hint warn'; }
             });
           };

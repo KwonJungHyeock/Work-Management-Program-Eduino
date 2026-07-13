@@ -118,7 +118,22 @@ module.exports = async function handler(req, res) {
       if (!code) return res.status(400).json({ ok: false, error: 'code required' });
       const v = await redis(['HGET', CATALOG_KEY, code]);
       let product = null; if (v) { try { product = JSON.parse(v); } catch (e) {} }
-      return res.status(200).json({ ok: true, product });
+      // 정확히 일치하는 상품이 있으면 즉시 반환(옵션 없는 상품 = 기존 동작 유지)
+      if (product) return res.status(200).json({ ok: true, product, options: [] });
+      // 일치 없음 → 옵션 상품 후보(예: 'P-D10' → 'P-D10-1','P-D10-2'…) 목록 반환
+      const prefix = code + '-';
+      const flat = await redis(['HGETALL', CATALOG_KEY]);
+      const options = [];
+      if (Array.isArray(flat)) {
+        for (let i = 1; i < flat.length; i += 2) {
+          let p = null; try { p = JSON.parse(flat[i]); } catch (e) {}
+          if (!p) continue;
+          const sc = normCode(p.selfCode);
+          if (sc === code || sc.startsWith(prefix)) options.push(p);   // 'P-D100'은 접두 불일치로 제외
+        }
+      }
+      options.sort((a, b) => String(a.selfCode).localeCompare(String(b.selfCode), undefined, { numeric: true }));
+      return res.status(200).json({ ok: true, product: null, options: options.slice(0, 60) });
     }
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});

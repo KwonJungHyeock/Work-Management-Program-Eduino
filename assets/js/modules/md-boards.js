@@ -17,14 +17,15 @@
   /* 상품코드 → 제품명 조회 (카탈로그, 캐시) */
   const codeCache={};
   async function lookupProduct(code){
-    const c=String(code||'').trim().toUpperCase(); if(!c) return null;
+    const c=String(code||'').trim().toUpperCase(); if(!c) return {product:null,options:[]};
     if(Object.prototype.hasOwnProperty.call(codeCache,c)) return codeCache[c];
     try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(c)); const d=await r.json();
-      const p=(d&&d.product)||null; codeCache[c]=p; return p; }catch(e){ return null; }
+      const res={ product:(d&&d.product)||null, options:(d&&d.options)||[] }; codeCache[c]=res; return res; }catch(e){ return {product:null,options:[]}; }
   }
 
   function buildBoard(cfg){
-    // cfg: { key, title, icon, sheet, desc, fields:[{k,label,type,options?,w?,req?}], whoField, codeField, nameField, statusField }
+    // cfg: { key, dept?, title, icon, sheet, desc, fields:[{k,label,type,options?,w?,req?}], whoField, codeField, nameField }
+    // dept 기본 'md' — CS 등 다른 부서 시트도 이 엔진으로 생성(window.buildBoard 로 공유)
     MODULES[cfg.key]={
       title:cfg.title, icon:cfg.icon||'clipboard',
       render(root){
@@ -110,7 +111,7 @@
 
         const $=s=>root.querySelector(s);
         const form={};  // 폼 상태 (칩 선택값 등)
-        cfg.fields.forEach(f=>{ form[f.k] = f.type==='date' ? todayStr() : ''; });
+        cfg.fields.forEach(f=>{ form[f.k] = f.type==='date' ? todayStr() : (f.def||''); });
 
         /* ---- 입력 폼 렌더 (짧은 필드 먼저 촘촘히 → 넓은 textarea는 맨 아래 전폭) ---- */
         const grid=$('#fGrid');
@@ -129,7 +130,7 @@
                 else { sel.value=form[f.k]||''; } return; }
               form[f.k]=sel.value; };
           } else if(f.type==='select'){
-            wrap.innerHTML=lab+`<select data-k="${esc(f.k)}"><option value="">(선택)</option>${(f.options||[]).map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;
+            wrap.innerHTML=lab+`<select data-k="${esc(f.k)}"><option value="">(선택)</option>${(f.options||[]).map(o=>`<option ${o===form[f.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
             grid.appendChild(wrap);
             wrap.querySelector('select').onchange=e=>form[f.k]=e.target.value;
           } else if(f.type==='toggle'){
@@ -161,10 +162,12 @@
           const run=()=>{ const code=inp.value.trim(); const my=++seq;
             if(!code){ hint.textContent=''; hint.className='bd-code-hint'; return; }
             hint.textContent='조회 중…'; hint.className='bd-code-hint';
-            lookupProduct(code).then(p=>{ if(my!==seq||!root.isConnected) return;
+            lookupProduct(code).then(res=>{ if(my!==seq||!root.isConnected) return; const p=res.product;
               if(p){ hint.textContent='✓ '+(p.name||'(이름 없음)'); hint.className='bd-code-hint';
                 if(nameField){ const nEl=grid.querySelector(`[data-k="${nameField}"]`);
                   if(nEl && (!nEl.value.trim() || nEl.dataset.auto==='1')){ nEl.value=p.name||''; nEl.dataset.auto='1'; form[nameField]=p.name||''; } } }
+              else if(res.options && res.options.length){ hint.innerHTML=`옵션 상품 ${res.options.length}개 — `+res.options.slice(0,6).map(o=>`<a href="#" data-c="${esc(o.selfCode)}" style="color:var(--info);text-decoration:underline">${esc(o.selfCode)}</a>`).join(', ')+(res.options.length>6?' …':''); hint.className='bd-code-hint';
+                hint.querySelectorAll('a[data-c]').forEach(a=>a.onclick=(e)=>{ e.preventDefault(); inp.value=a.dataset.c; form[cfg.codeField]=a.dataset.c; if(cfg.nameField){ const nEl=grid.querySelector(`[data-k="${cfg.nameField}"]`); if(nEl) nEl.dataset.auto=''; } run(); }); }
               else { hint.textContent='미등록 코드 — 제품명을 직접 입력'; hint.className='bd-code-hint warn'; }
             }); };
           inp.addEventListener('input',()=>{ clearTimeout(tmr); tmr=setTimeout(run,300); });
@@ -183,9 +186,9 @@
             who: me.loginId||('@'+(who||'?')), whoName: who };
           cfg.fields.forEach(f=>{ rec[f.k]= form[f.k]!=null?form[f.k]:''; });
           all.unshift(rec); paint();
-          if(window.Records) Records.pushRaw('md', cfg.sheet, rec);
-          // 폼 리셋(담당자/날짜는 유지)
-          cfg.fields.forEach(f=>{ if(f.k===cfg.whoField) return; if(f.type==='date'){ form[f.k]=todayStr(); return; } form[f.k]=''; });
+          if(window.Records) Records.pushRaw(cfg.dept||'md', cfg.sheet, rec);
+          // 폼 리셋(담당자/날짜는 유지 · 기본값 있는 필드는 기본값으로)
+          cfg.fields.forEach(f=>{ if(f.k===cfg.whoField) return; if(f.type==='date'){ form[f.k]=todayStr(); return; } form[f.k]=f.def||''; });
           resetInputs();
           $('#fMsg').textContent='저장되었습니다'; setTimeout(()=>{ if($('#fMsg')) $('#fMsg').textContent=''; }, 2500);
         });
@@ -195,7 +198,7 @@
             if(k===cfg.whoField){ inp.value=form[k]||''; return; }   // 담당자는 다음 입력에도 유지
             if(f.type==='toggle'){ inp.checked=false; }
             else if(f.type==='date'){ inp.value=form[k]; }
-            else { inp.value=''; inp.dataset.auto=''; }
+            else { inp.value=form[k]||''; inp.dataset.auto=''; }   // select 는 기본값 복원, text 는 비움
           });
           grid.querySelectorAll('[data-codehint]').forEach(h=>h.textContent='');
         }
@@ -266,13 +269,13 @@
             if(cfg.dateField) rec.day = /^\d{4}-\d{2}-\d{2}$/.test(rec[cfg.dateField]||'')?rec[cfg.dateField]:rec.day;
             e.currentTarget.disabled=true;
             Object.assign(old,rec); editId=null; paintWho(); paint();
-            if(window.Records){ const oldM=String(old.day||'').slice(0,7); await Records.pushRaw('md',cfg.sheet,rec); }
+            if(window.Records){ const oldM=String(old.day||'').slice(0,7); await Records.pushRaw(cfg.dept||'md',cfg.sheet,rec); }
             toast('수정했습니다');
           });
           if(isAdmin) $('#tbl').querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
             if(!confirm('이 기록을 서버에서 삭제할까요? (되돌릴 수 없음)')) return;
             const r=all.find(x=>x.id===b.dataset.id); if(!r) return;
-            await Records.del('md',cfg.sheet,r.id,(r.day||'').slice(0,7),r.who,r.day);
+            await Records.del(cfg.dept||'md',cfg.sheet,r.id,(r.day||'').slice(0,7),r.who,r.day);
             all=all.filter(x=>x.id!==r.id); paintWho(); paint(); toast('삭제했습니다');
           });
         }
@@ -300,7 +303,7 @@
         async function load(){
           if(!$('#meta')) return; $('#meta').textContent='불러오는 중…';
           const {from,to}=range(); const ms=monthsBetween(from,to);
-          const packs=await Promise.all(ms.map(m=>Records.month('md',cfg.sheet,m)));
+          const packs=await Promise.all(ms.map(m=>Records.month(cfg.dept||'md',cfg.sheet,m)));
           if(!root.isConnected||!$('#meta')) return;
           if(packs.some(p=>p===null)){ $('#meta').textContent='서버에서 기록을 불러오지 못했습니다.'; return; }
           const map={}; packs.forEach(p=>(p||[]).forEach(r=>{ if(r&&r.id) map[r.id]=r; }));
@@ -376,4 +379,7 @@
       { k:'datetext', label:'날짜(기록용)', type:'text', ph:'예: 3/14, 3월 중' },
       { k:'remark', label:'특이사항', type:'textarea', ph:'특이사항' },
     ] });
+
+  // 다른 모듈(CS 등)에서 같은 엔진으로 현황판을 만들 수 있도록 공개
+  window.buildBoard = buildBoard;
 })();
