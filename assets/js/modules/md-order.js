@@ -555,14 +555,22 @@
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
             <button class="btn pri lg" id="saveCatMap">${icon('save')}저장 (팀 공유)</button>
+            <button class="btn ok sm" id="fillApi">⚡ API 추정 전체 채우기</button>
             <button class="btn ghost sm" id="reloadFacet">${icon('refresh')}코드 다시 불러오기</button>
             <span class="muted" id="catStat" style="font-size:12.5px"></span></div>
-          <details style="margin-top:16px;max-width:960px"><summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--muted)">＋ 고급: 이카운트 엑셀에서 두 열(코드·이름) 통째로 붙여넣기</summary>
-            <div class="cm-cols" style="margin-top:10px">
-              <textarea id="vMap" rows="6" placeholder="1078841033	(주)로보로보&#10;8598800910	(주)컴스마트"></textarea>
-              <textarea id="cMap" rows="6" placeholder="00006	유아&#10;00010	교구"></textarea></div>
-            <div class="muted" style="font-size:12px;margin-top:6px">붙여넣은 내용도 저장 시 위 목록과 함께 반영됩니다(같은 코드는 위 입력칸이 우선).</div>
-          </details>
+          <div class="card" style="margin-top:16px;max-width:960px"><div class="card-hd">${icon('download')}<b>거래처 목록 붙여넣기 → 자동 매칭</b>
+              <span class="muted" style="margin-left:auto;font-size:12px">이카운트 거래처/분류 목록을 통째로 붙여넣으면 코드를 알아서 찾아 채웁니다(열 순서 무관)</span></div>
+            <div class="card-bd">
+              <div class="cm-cols">
+                <div><div class="muted" style="font-size:12px;margin-bottom:5px"><b>구매처(거래처)</b> 목록 붙여넣기</div>
+                  <textarea id="vMap" rows="5" placeholder="이카운트 거래처 목록 복사 → 붙여넣기&#10;(거래처코드·거래처명 열이 섞여 있어도 자동 매칭)"></textarea></div>
+                <div><div class="muted" style="font-size:12px;margin-bottom:5px"><b>상품분류</b> 목록 붙여넣기</div>
+                  <textarea id="cMap" rows="5" placeholder="이카운트 품목분류 목록 복사 → 붙여넣기"></textarea></div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+                <button class="btn pri sm" id="autoMatch">${icon('check')}붙여넣은 내용 자동 매칭</button>
+                <span class="muted" id="matchStat" style="font-size:12.5px">붙여넣고 이 버튼을 누르면 위 목록의 빈칸이 자동으로 채워집니다.</span></div>
+            </div></div>
           <div class="card" style="margin-top:16px;max-width:560px"><div class="card-hd">${icon('search')}<b>테스트</b> <span class="muted" style="font-size:12px">· 저장 전 미리 확인</span></div>
             <div class="card-bd"><label class="fld">상품코드로 구매처명 확인<input type="text" id="catTest" placeholder="예: P-DA39" autocomplete="off"></label>
               <div id="catTestOut" class="muted" style="margin-top:8px;font-size:13px">상품코드를 입력하세요.</div></div></div>`;
@@ -583,14 +591,44 @@
           container.querySelectorAll('.cm-hint[data-fill]').forEach(h=>{ h.onclick=()=>{ const row=h.closest('.cm-row'), inp=row.querySelector('.cm-in'); inp.value=items[+h.dataset.fill].apiVendor||''; row.classList.add('done'); row.classList.remove('todo'); updateSums(); }; });
           container.querySelectorAll('.cm-in').forEach(inp=>{ inp.oninput=()=>{ const row=inp.closest('.cm-row'), has=!!inp.value.trim(); row.classList.toggle('done',has); row.classList.toggle('todo',!has); updateSums(); }; });
         }
+        let facetV=[], facetC=[];
         async function loadFacet(){ const vL=body.querySelector('#vList'), cL=body.querySelector('#cList');
           if(vL) vL.innerHTML=`<div class="cm-empty">${icon('cloud')} 불러오는 중…</div>`;
           try{ const r=await fetch('/api/catalog?facet=1'); const d=await r.json(); if(!root.isConnected) return;
-            renderList(vL, d.vendors, cur.vendor, 'vendor'); renderList(cL, d.categories, cur.category, 'category'); updateSums();
+            facetV=d.vendors||[]; facetC=d.categories||[];
+            renderList(vL, facetV, cur.vendor, 'vendor'); renderList(cL, facetC, cur.category, 'category'); updateSums();
           }catch(e){ if(vL) vL.innerHTML=`<div class="cm-empty">코드 목록을 불러오지 못했습니다(배포 환경에서 표시됩니다).</div>`; }
         }
         loadFacet();
         body.querySelector('#reloadFacet').onclick=loadFacet;
+        // ⚡ API가 준 이름(apiVendor)이 있는 코드를 한 번에 채움
+        body.querySelector('#fillApi').onclick=()=>{ let n=0;
+          (facetV||[]).forEach(it=>{ if(!it.apiVendor) return; const row=body.querySelector(`#vList .cm-row[data-code="${CSS.escape(it.code)}"]`); if(!row) return; const inp=row.querySelector('.cm-in'); if(inp && !inp.value.trim()){ inp.value=it.apiVendor; row.classList.add('done'); row.classList.remove('todo'); n++; } });
+          updateSums(); toast(n?`API 이름 ${n}개 채움 — 확인 후 저장하세요`:'API가 제공한 이름이 없습니다. (붙여넣기 자동 매칭을 이용하세요)'); };
+        // 붙여넣은 목록에서 코드를 찾아 이름을 자동 매칭(열 순서 무관)
+        function smartFill(listEl, text){
+          if(!listEl) return 0; const idx=new Map();
+          listEl.querySelectorAll('.cm-row').forEach(r=>{ const k=norm(r.dataset.code); idx.set(k,r); const z=k.replace(/^0+/,''); if(z) idx.set(z,r); });
+          let filled=0;
+          String(text||'').replace(/\r/g,'').split('\n').forEach(line=>{
+            if(!line.trim()) return; const cells=line.split(/\t|,|;|\s{2,}/).map(c=>c.trim()).filter(Boolean); if(cells.length<2) return;
+            let codeCell=null,row=null;
+            for(const c of cells){ const k=norm(c); if(k&&idx.has(k)){ codeCell=c; row=idx.get(k); break; } const z=k.replace(/^0+/,''); if(z&&idx.has(z)){ codeCell=c; row=idx.get(z); break; } }
+            if(!row) return;
+            let name=''; for(const c of cells){ if(c===codeCell) continue; if(/[가-힣]|\(주\)|㈜|주식회사|co\.|ltd|inc/i.test(c) && c.length>=name.length) name=c; }
+            if(!name){ for(const c of cells){ if(c===codeCell) continue; if(!/^[\d\-]+$/.test(c) && c.length>=name.length) name=c; } }
+            if(name){ const inp=row.querySelector('.cm-in'); if(inp){ inp.value=name; row.classList.add('done'); row.classList.remove('todo'); filled++; } }
+          });
+          return filled;
+        }
+        body.querySelector('#autoMatch').onclick=()=>{
+          const nv=smartFill(body.querySelector('#vList'), body.querySelector('#vMap').value);
+          const nc=smartFill(body.querySelector('#cList'), body.querySelector('#cMap').value);
+          updateSums();
+          const st=body.querySelector('#matchStat'); const tot=nv+nc;
+          st.innerHTML = tot? `<span style="color:var(--ok);font-weight:700">✓ ${tot}개 자동 매칭됨</span> — 확인 후 <b>저장</b>하세요` : '<span style="color:var(--warn)">매칭된 코드가 없습니다.</span> 붙여넣은 목록에 위 코드들이 포함돼 있는지 확인하세요.';
+          if(tot) toast(`${tot}개 자동 매칭 — 저장하면 반영`);
+        };
         body.querySelector('#saveCatMap').onclick=()=>{
           const vm={ ...(cur.vendor||{}), ...parse(body.querySelector('#vMap').value), ...collect(body.querySelector('#vList')) };
           const cm={ ...(cur.category||{}), ...parse(body.querySelector('#cMap').value), ...collect(body.querySelector('#cList')) };
