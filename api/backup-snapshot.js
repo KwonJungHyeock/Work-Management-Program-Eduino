@@ -32,13 +32,24 @@ async function getSheet(dept, sheet, ym) {
   if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { const rec = JSON.parse(arr[i + 1]); rec.id = arr[i]; out.push(rec); } catch (e) {} }
   return out;
 }
+// 월 단위 시트 백업 대상 — CS 상담/MD 발주 + TS 상담 + MD 현황판(입점사변동·품절·검수·상품관리)
+const MONTH_SHEETS = [
+  ['cs', 'notes'], ['md', 'orders'], ['md', 'tsnotes'],
+  ['md', 'vendorchg'], ['md', 'stockmgmt'], ['md', 'inspect'], ['md', 'prodmgmt'],
+];
 async function snapshotMonth(m) {
-  const cs = await getSheet('cs', 'notes', m), md = await getSheet('md', 'orders', m);
+  const sheets = {}, counts = {};
+  for (const [dept, sheet] of MONTH_SHEETS) {
+    const rows = await getSheet(dept, sheet, m);
+    sheets[dept + '/' + sheet] = rows; counts[dept + '/' + sheet] = rows.length;
+  }
   const at = new Date().toISOString();
-  await redis(['SET', 'eduino:backup:' + m, JSON.stringify({ month: m, at, cs, md, counts: { cs: cs.length, md: md.length } })]);
+  // 하위호환: 기존 cs/md 키 유지 + 전체 시트는 sheets 에 보관
+  const cs = sheets['cs/notes'] || [], md = sheets['md/orders'] || [];
+  await redis(['SET', 'eduino:backup:' + m, JSON.stringify({ month: m, at, cs, md, sheets, counts })]);
   await redis(['SADD', 'eduino:backup:index', m]);
   await redis(['HSET', 'eduino:backup:meta', 'lastAt', at, 'lastMonth', m]);
-  return { month: m, cs: cs.length, md: md.length };
+  return { month: m, counts };
 }
 // 월 단위가 아닌 공용 컬렉션(중국발주요청·공지·메모·콜백)의 현재 상태를 통째로 백업
 async function collAll(name) {

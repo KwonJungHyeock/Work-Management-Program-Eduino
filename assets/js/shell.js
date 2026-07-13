@@ -413,15 +413,21 @@ function bootShell(){
     (function(){ const mSel=ov.querySelector('#mBkMonth'); if(!mSel) return;
       const d=new Date(); mSel.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       async function getSheet(dept,sheet,ym){ try{ const r=await fetch(`/api/store?type=sheet&dept=${dept}&sheet=${sheet}&month=${ym}`); if(!r.ok) throw 0; const j=await r.json(); return (j&&j.records)||[]; }catch(e){ return null; } }
+      // 백업 대상 시트 — CS 상담 · MD 발주 + TS 상담 + MD 현황판(입점사변동·품절·검수·상품관리)
+      const BK_SHEETS=[ ['cs','notes'],['md','orders'],['md','tsnotes'],['md','vendorchg'],['md','stockmgmt'],['md','inspect'],['md','prodmgmt'] ];
       ov.querySelector('#mBkDown').onclick=async()=>{
         const ym=mSel.value, stat=ov.querySelector('#mBkStat');
         if(!/^\d{4}-\d{2}$/.test(ym)){ stat.textContent='월을 선택하세요'; return; }
         stat.textContent='불러오는 중…';
-        const [cs,md]=await Promise.all([getSheet('cs','notes',ym), getSheet('md','orders',ym)]);
-        if(cs===null||md===null){ stat.innerHTML='<span style="color:var(--danger)">서버에서 불러오지 못했습니다</span>'; return; }
-        const payload={ app:'eduino', type:'monthly-data-backup', month:ym, exportedAt:new Date().toISOString(), counts:{ cs:cs.length, md:md.length }, cs, md };
+        const packs=await Promise.all(BK_SHEETS.map(([d,s])=>getSheet(d,s,ym)));
+        if(packs.some(p=>p===null)){ stat.innerHTML='<span style="color:var(--danger)">서버에서 불러오지 못했습니다</span>'; return; }
+        const sheets={}, counts={}; let total=0;
+        BK_SHEETS.forEach(([d,s],i)=>{ const key=d+'/'+s; sheets[key]=packs[i]; counts[key]=packs[i].length; total+=packs[i].length; });
+        // 하위호환: cs/md 최상위 키 유지
+        const payload={ app:'eduino', type:'monthly-data-backup', month:ym, exportedAt:new Date().toISOString(),
+          counts, cs:sheets['cs/notes'], md:sheets['md/orders'], sheets };
         downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}), `eduino_data_${ym}.json`);
-        stat.innerHTML=`<span style="color:var(--ok)">상담 ${cs.length} · 발주 ${md.length}건 저장</span>`;
+        stat.innerHTML=`<span style="color:var(--ok)">총 ${total}건 저장 (상담 ${counts['cs/notes']} · 발주 ${counts['md/orders']} · TS ${counts['md/tsnotes']} 외)</span>`;
       };
     })();
 
