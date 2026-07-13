@@ -13,6 +13,14 @@
   async function rosterList(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch{ return []; } }
 
   const DEPT_LABEL={ all:'전체', cs:'CS', md:'MD' };
+  const DEPT_KO={ cs:'CS', md:'MD', admin:'관리자' };
+  const roleKo=r=> r==='admin'?'관리자' : r==='lead'?'파트장':'팀원';
+  /* 접속자 이름 → "부서 · 직책" (로스터 매칭 · 관리자는 별도 표기) */
+  function posLabel(name, roster){
+    const p=(roster||[]).find(r=>r.name===name);
+    if(p){ if(p.role==='admin'||p.dept==='admin') return '관리자'; return `${DEPT_KO[p.dept]||p.dept||'-'} · ${roleKo(p.role)}`; }
+    return name==='관리자' ? '관리자' : '';
+  }
   const targetLabel=(t,roster)=> DEPT_LABEL[t] || (roster&&(roster.find(r=>r.loginId===t)||{}).name) || t;
   const visibleTo=(target,u)=> target==='all' || target===u.dept || target===u.loginId;
   const dateShort=iso=>{ const d=new Date(iso); const t=todayStr(); const ds=todayStr(iso);
@@ -284,23 +292,47 @@
       const u=meU();
       const greeting=()=>{ const h=new Date().getHours(); return h<11?'좋은 아침이에요':h<14?'점심 맛있게 드세요':h<18?'좋은 오후예요':'오늘도 수고 많으셨어요'; };
       const weekday=()=>['일','월','화','수','목','금','토'][new Date().getDay()]+'요일';
-      const localNotes=()=>{ try{ return JSON.parse(localStorage.getItem(STORE.csNotes)||'[]'); }catch{ return []; } };
       root.innerHTML=`
       <style>
-        .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start;margin-top:16px}
+        /* 대시보드 세로 리듬 — 콘솔·요약·카드 사이 균일한 간격 */
+        #dashWrap{display:flex;flex-direction:column;gap:18px}
+        #dashWrap > .console{margin:0}
+        .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start;margin:0}
         @media(max-width:900px){.dash-2{grid-template-columns:1fr}}
-        .dcard{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;box-shadow:var(--sh-sm)}
-        .dcard-hd{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);
-          font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--panel-2)}
+        /* 요약 타일 — 살짝 도드라지는 상단 하이라이트 + 부드러운 그림자로 "현황판" 느낌 */
+        #statRow{margin:0;gap:14px}
+        #statRow .tile{border-radius:15px;padding:16px 17px;box-shadow:var(--sh-sm);
+          background:linear-gradient(180deg,color-mix(in srgb,var(--tc,var(--red)) 5%,var(--panel)),var(--panel) 62%)}
+        #statRow .tile::before{width:0}
+        #statRow .tile .tl{display:flex;align-items:center;gap:7px;font-size:11.5px}
+        #statRow .tile .tl .ic{width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;
+          font-size:14px;color:var(--tc,var(--red));background:color-mix(in srgb,var(--tc,var(--red)) 13%,transparent)}
+        #statRow .tile .tv{font-size:32px;margin-top:12px}
+        #statRow .tile.click:hover{transform:translateY(-2px);box-shadow:var(--sh);border-color:color-mix(in srgb,var(--tc,var(--red)) 45%,var(--line))}
+        .dcard{border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden;box-shadow:var(--sh-sm)}
+        .dcard-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);
+          font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+          background:linear-gradient(180deg,var(--panel-2),color-mix(in srgb,var(--panel-2) 40%,var(--panel)))}
         .dcard-hd .ic{font-size:14px;color:var(--faint)}
         .dcard-hd .more{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;text-transform:none;letter-spacing:0}
         .dcard-hd .more:hover{color:var(--red)}
-        .dcard-bd{padding:7px 8px}
-        .drow{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;font-size:13.5px}
+        .dcard-bd{padding:8px 9px}
+        .drow{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:9px;font-size:13.5px}
         .drow:hover{background:var(--hover);cursor:pointer}
         .drow .dt{font-weight:600;color:var(--ink)}
         .drow .dm{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
         .drow .pin{width:7px;height:7px;border-radius:50%;background:var(--danger);flex:none}
+        /* 접속 중 — 이니셜 아바타 + 이름/직책 2줄 */
+        .prow{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:10px}
+        .prow:hover{background:var(--hover)}
+        .pav{width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+          font-size:13px;font-weight:800;color:#fff;position:relative}
+        .pav::after{content:"";position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;
+          background:#42c98a;border:2px solid var(--panel);box-shadow:0 0 0 2px rgba(66,201,138,.18)}
+        .pnm{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+        .pnm .n{font-weight:700;color:var(--ink);font-size:13.5px}
+        .pnm .r{font-size:11.5px;color:var(--muted);font-weight:600}
+        .pme{margin-left:auto;font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-bg);border-radius:6px;padding:2px 8px}
         /* 개인 할 일(To-Do) */
         .todo-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;font-size:13.5px}
         .todo-row:hover{background:var(--hover)}
@@ -322,6 +354,7 @@
         .pp-dot2{width:8px;height:8px;border-radius:50%;background:#42c98a;box-shadow:0 0 0 3px rgba(66,201,138,.18);flex:none}
       </style>
       <div class="mbody">
+       <div id="dashWrap">
         <div class="console">
           <div>
             <div class="hi">${greeting()}, ${esc(u.name||'')}님</div>
@@ -347,6 +380,7 @@
                 <div class="todo-add"><input id="todoIn" placeholder="할 일 추가 후 Enter" maxlength="80" autocomplete="off"><button class="btn sm pri" id="todoAdd">${icon('plus')}</button></div></div></div>
           </div>
         </div>
+       </div>
       </div>`;
       // 개인 할 일(To-Do) — 이 기기에만 저장(나만 보기)
       (function(){
@@ -383,9 +417,8 @@
         a.innerHTML=`${icon('external')}${esc(l.name)}`; ql.appendChild(a); });
 
       // 통계 카드
-      function renderStats(nUnreadNotice, nMemo, nCbOpen){
-        const notes=localNotes();
-        const todayCs=notes.filter(r=>todayStr(r.createdAt)===todayStr()).length;
+      function renderStats(nUnreadNotice, nMemo, nCbOpen, todayCs){
+        todayCs=todayCs||0;
         const cards=[
           { k:'home.notice', ic:'megaphone', l:'미확인 공지', v:nUnreadNotice, c:'var(--d1)' },
           { k:'home.memo',   ic:'send',      l:'새 메모',     v:nMemo, c:'var(--d4)' },
@@ -407,7 +440,7 @@
       (async()=>{
         const raw=await collGet('notice');
         const box=root.querySelector('#dNotice'); if(!box || !root.isConnected) return;
-        if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0,0); }
+        if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0,0,0); }
         else {
           const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept));
           const list=raw.filter(n=>visibleTo(n.dept||'all',u)||mentMe(n)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
@@ -423,21 +456,34 @@
           const nMemo=(memos||[]).filter(m=>!m.done && (visibleTo(m.to||'all',u)) && m.author!==u.loginId).length;
           const cbs=await collGet('callbacks');
           const nCb=(cbs||[]).filter(c=>!c.done).length;
-          renderStats(unread, nMemo, nCb);
+          // 오늘 상담 — 서버 누적 시트에서 오늘 날짜 건수 집계(로컬 저장소 아님)
+          let todayCs=0;
+          if(u.dept==='cs'||u.role==='admin'){
+            try{ const recs=(window.Records&&Records.month)?await Records.month('cs','notes',todayStr().slice(0,7)):[];
+              todayCs=(recs||[]).filter(r=>(r.day||r.date||'')===todayStr()).length; }catch{}
+          }
+          renderStats(unread, nMemo, nCb, todayCs);
         }
       })();
 
-      // 접속자
+      // 접속 중 — 이름 + 직책 (공용 저장소를 직접 조회해 sync 설정과 무관하게 안정 동작)
       (async()=>{
         const box=root.querySelector('#dPres'); if(!box) return;
-        if(!(window.SyncStore && SyncStore.configured())){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 시 표시됩니다.</div>`; return; }
-        const list=await SyncStore.presence();
+        let list=null, roster=[];
+        try{ const [pd,rd]=await Promise.all([apiGet('type=presence'), rosterList()]);
+          list=(pd&&pd.presence)||[]; roster=rd||[]; }catch{ list=null; }
         if(!root.isConnected || !root.querySelector('#dPres')) return;
-        if(!list){ box.innerHTML=`<div class="muted" style="padding:10px">불러오지 못했습니다.</div>`; return; }
+        if(list===null){ box.innerHTML=`<div class="muted" style="padding:10px">접속자 정보를 불러오지 못했습니다.</div>`; return; }
         const pm=root.querySelector('#presMore'); if(pm) pm.textContent=`${list.length}명`;
         const ckp=root.querySelector('#ckPres'); if(ckp) ckp.textContent=list.length;
-        box.innerHTML = list.length? list.map(p=>`<div class="drow"><span class="pp-dot2"></span><span class="dt">${esc(p.device)}</span>${p.device===u.name?'<span class="dm">나</span>':''}</div>`).join('')
-          : `<div class="muted" style="padding:10px">접속자 정보가 없습니다.</div>`;
+        const palette=['#4f8cff','#f2724e','#42c98a','#a06bff','#ef5da8','#f7a52b','#38bdc9'];
+        const initial=n=>(String(n||'?').trim()||'?').slice(0,1);
+        box.innerHTML = list.length ? list.map((p,i)=>{
+          const nm=p.device||'', pos=posLabel(nm,roster), me=(nm===u.name);
+          return `<div class="prow"><span class="pav" style="background:${palette[i%palette.length]}">${esc(initial(nm))}</span>
+            <span class="pnm"><span class="n">${esc(nm||'(이름 없음)')}</span>${pos?`<span class="r">${esc(pos)}</span>`:''}</span>
+            ${me?'<span class="pme">나</span>':''}</div>`;
+        }).join('') : `<div class="muted" style="padding:10px">접속자 정보가 없습니다.</div>`;
       })();
 
       root.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>location.hash=x.dataset.go);
