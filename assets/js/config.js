@@ -239,6 +239,10 @@ const SHARED_LABELS = {
 function catNameMap(){ try{ const m=store(STORE.catMap).get({}); return { vendor:(m&&m.vendor)||{}, category:(m&&m.category)||{} }; }catch(e){ return {vendor:{},category:{}}; } }
 const catCodeNorm = s => String(s||'').replace(/[^0-9a-z]/gi,'');
 function catMapGet(map, code){ const k=catCodeNorm(code); return map[k] || map[k.replace(/^0+/,'')] || ''; }
-/* 관리자 이름표(catMap) 우선 → 없으면 API vendor/category 폴백. 이름표가 최종 기준이라 오연동도 이름표로 교정됨 */
-function catVendorName(p){ if(!p) return ''; return catMapGet(catNameMap().vendor, p.custCode) || p.vendor || ''; }
+/* 관리자 이름표(catMap) 우선 → 내장 거래처 기본값(VENDOR_DEFAULTS) → API vendor 폴백.
+   내장 기본값은 이카운트 거래처등록 파일(거래처코드→거래처명)을 앱에 포함한 것 · 관리자가 [이카운트 매핑]에서 저장하면 그 값이 우선 */
+function catVendorName(p){ if(!p) return '';
+  return catMapGet(catNameMap().vendor, p.custCode)
+      || catMapGet((typeof window!=='undefined'&&window.VENDOR_DEFAULTS)||{}, p.custCode)
+      || p.vendor || ''; }
 function catCategoryName(p){ if(!p) return ''; return catMapGet(catNameMap().category, p.classCode) || p.category || ''; }

@@ -625,7 +625,9 @@
           if(vL) vL.innerHTML=`<div class="cm-empty">${icon('cloud')} 불러오는 중…</div>`;
           try{ const r=await fetch('/api/catalog?facet=1'); const d=await r.json(); if(!root.isConnected) return;
             facetV=d.vendors||[]; facetC=d.categories||[];
-            renderList(vL, facetV, cur.vendor, 'vendor'); renderList(cL, facetC, cur.category, 'category'); updateSums();
+            // 표시용 base = 내장 거래처 기본값(VENDOR_DEFAULTS) + 관리자 저장값(우선) — 이미 매칭된 이름이 채워져 보임
+            const vBase={ ...((typeof window!=='undefined'&&window.VENDOR_DEFAULTS)||{}), ...(cur.vendor||{}) };
+            renderList(vL, facetV, vBase, 'vendor'); renderList(cL, facetC, cur.category, 'category'); updateSums();
           }catch(e){ if(vL) vL.innerHTML=`<div class="cm-empty">코드 목록을 불러오지 못했습니다(배포 환경에서 표시됩니다).</div>`; }
         }
         loadFacet();
@@ -722,7 +724,7 @@
         const testEl=body.querySelector('#catTest');
         testEl.oninput=async()=>{ const code=testEl.value.trim(); const o=body.querySelector('#catTestOut');
           if(!code){ o.textContent='상품코드를 입력하세요.'; return; }
-          const vm={ ...(cur.vendor||{}), ...parse(body.querySelector('#vMap').value), ...collect(body.querySelector('#vList')) };
+          const vm={ ...((typeof window!=='undefined'&&window.VENDOR_DEFAULTS)||{}), ...(cur.vendor||{}), ...parse(body.querySelector('#vMap').value), ...collect(body.querySelector('#vList')) };
           const cm={ ...(cur.category||{}), ...parse(body.querySelector('#cMap').value), ...collect(body.querySelector('#cList')) };
           o.innerHTML=`${icon('cloud')} 조회 중…`;
           try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); const d=await r.json();
