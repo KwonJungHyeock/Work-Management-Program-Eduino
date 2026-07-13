@@ -144,9 +144,21 @@
                 else { sel.value=form[f.k]||''; } return; }
               form[f.k]=sel.value; };
           } else if(f.type==='select'){
-            wrap.innerHTML=lab+`<select data-k="${esc(f.k)}"><option value="">(선택)</option>${(f.options||[]).map(o=>`<option ${o===form[f.k]?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+            // 선택 항목 = 공용 옵션 레지스트리(OptionSets) · 관리자만 ＋추가/✕삭제 → 팀 자동 공유
+            const setKey=cfg.key+'.'+f.k;
+            const buildSel=(cur)=>{ const opts=OptionSets.get(setKey, f.options||[]);
+              return `<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 항목 추가…</option>':''}`; };
+            wrap.innerHTML=lab+`<div style="display:flex;gap:6px;align-items:center"><select data-k="${esc(f.k)}" style="flex:1">${buildSel(form[f.k])}</select>${isAdmin?'<button type="button" class="btn ghost sm optDel" title="선택한 항목 삭제(팀 공유)" style="flex:none;height:40px;padding:0 10px">✕</button>':''}</div>`;
             grid.appendChild(wrap);
-            wrap.querySelector('select').onchange=e=>form[f.k]=e.target.value;
+            const sel=wrap.querySelector('select');
+            sel.onchange=()=>{ if(sel.value==='__add'){ const v=(prompt('추가할 “'+f.label+'” 항목','')||'').trim();
+                if(v){ const r=OptionSets.add(setKey, f.options||[], v); if(r.ok){ form[f.k]=v; toast('추가됨 · 팀 공유'); } else { toast('이미 있는 항목입니다'); form[f.k]=v; } }
+                sel.innerHTML=buildSel(form[f.k]); return; }
+              form[f.k]=sel.value; };
+            const del=wrap.querySelector('.optDel'); if(del) del.onclick=()=>{ const v=form[f.k];
+              if(!v){ toast('삭제할 항목을 먼저 선택하세요'); return; }
+              if(!confirm(`“${v}” 항목을 삭제할까요? (팀 전체 반영)`)) return;
+              OptionSets.remove(setKey, f.options||[], v); form[f.k]=''; sel.innerHTML=buildSel(''); toast('삭제됨 · 팀 공유'); };
           } else if(f.type==='toggle'){
             wrap.innerHTML=lab+`<label style="display:flex;align-items:center;gap:8px;height:40px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" data-k="${esc(f.k)}" style="width:18px;height:18px"> ${esc(f.onLabel||'완료')}</label>`;
             grid.appendChild(wrap);
@@ -261,7 +273,7 @@
         function editRow(r,hasAct){
           const cells=showCols.map(c=>{
             const v=r[c.k]==null?'':String(r[c.k]);
-            if(c.type==='select'||c.type==='agent'){ const opts=(c.type==='agent'?getAgents():(c.options||[]));
+            if(c.type==='select'||c.type==='agent'){ const opts=(c.type==='agent'?getAgents():OptionSets.get(cfg.key+'.'+c.k, c.options||[]));
               return `<td><select data-k="${esc(c.k)}"><option value="">(선택)</option>${[...new Set([...opts,v].filter(Boolean))].map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select></td>`; }
             if(c.type==='toggle'){ return `<td><input type="checkbox" data-k="${esc(c.k)}" ${v?'checked':''} data-on="${esc(c.onLabel||'완료')}"></td>`; }
             if(c.type==='textarea'){ return `<td><textarea data-k="${esc(c.k)}" rows="2" style="width:100%;min-width:160px;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">${esc(v)}</textarea></td>`; }

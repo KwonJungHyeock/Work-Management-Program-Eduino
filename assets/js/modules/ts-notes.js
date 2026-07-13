@@ -225,7 +225,8 @@
                       <div class="chips" id="platGroup"></div>
                     </div>
                     <div>
-                      <div class="q-sec-cap">상품구분 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="q-sec-cap">상품구분 <span class="opt">선택 · 다시 누르면 해제</span>
+                        ${isAdmin?'<button type="button" class="sec-edit" id="ptypeEdit">편집</button>':''}</div>
                       <div class="chips" id="ptypeGroup"></div>
                     </div>
                     <div>
@@ -300,14 +301,32 @@
           e.currentTarget.classList.toggle('on',typeEdit); e.currentTarget.textContent=typeEdit?'완료':'편집'; renderPlat(); }; }
         renderPlat();
 
-        /* --- 상품구분 칩 (단일선택 · 다시 누르면 해제) --- */
-        function renderChoice(sel, options, key){
-          const g=body.querySelector(sel); g.innerHTML='';
-          options.forEach(o=>{ const b=el('button','chip'+(form[key]===o?' on':'')); b.type='button'; b.textContent=o;
-            b.onclick=()=>{ form[key]=(form[key]===o?'':o); renderChoice(sel,options,key); };
+        /* --- 상품구분 칩 (단일선택 · 관리자는 ＋추가/×삭제 → 팀 자동 공유) --- */
+        const PTYPE_SET='md.tsnotes.prodType';
+        let ptypeEdit=false;
+        function renderChoice(sel, _o, key){
+          const g=body.querySelector(sel); if(!g) return;
+          const options=OptionSets.get(PTYPE_SET, TS_PRODUCT_TYPES); const edit=isAdmin && ptypeEdit;
+          if(form[key] && !options.includes(form[key])) form[key]='';
+          g.innerHTML='';
+          options.forEach(o=>{ const b=el('button','chip'+(form[key]===o?' on':'')); b.type='button';
+            b.innerHTML=`<span>${esc(o)}</span>${edit&&options.length>1?'<span class="q-del" title="삭제">✕</span>':''}`;
+            b.onclick=(e)=>{ if(e.target.classList.contains('q-del')){ OptionSets.remove(PTYPE_SET,TS_PRODUCT_TYPES,o); if(form[key]===o)form[key]=''; renderChoice(sel,_o,key); return; }
+              if(edit) return; form[key]=(form[key]===o?'':o); renderChoice(sel,_o,key); };
             g.appendChild(b); });
+          if(edit){ const add=el('div','chip-add');
+            add.innerHTML=`<input type="text" class="optNew" placeholder="새 상품구분" maxlength="14"><button type="button" class="btn pri sm optAdd">${icon('plus')}추가</button>`;
+            const doAdd=()=>{ const inp=add.querySelector('.optNew'); const r=OptionSets.add(PTYPE_SET,TS_PRODUCT_TYPES,inp.value);
+              if(!r.ok){ if(inp.value.trim()) toast('이미 있는 항목입니다'); return; } renderChoice(sel,_o,key);
+              const ni=g.querySelector('.optNew'); if(ni) ni.focus(); };
+            add.querySelector('.optAdd').onclick=doAdd;
+            add.querySelector('.optNew').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
+            g.appendChild(add);
+          }
         }
-        renderChoice('#ptypeGroup', TS_PRODUCT_TYPES, 'prodType');
+        renderChoice('#ptypeGroup', null, 'prodType');
+        { const pe=body.querySelector('#ptypeEdit'); if(pe) pe.onclick=(e)=>{ ptypeEdit=!ptypeEdit;
+          e.currentTarget.classList.toggle('on',ptypeEdit); e.currentTarget.textContent=ptypeEdit?'완료':'편집'; renderChoice('#ptypeGroup',null,'prodType'); }; }
 
         /* --- 상품코드 → 제품명 자동연동 --- */
         (function(){
@@ -459,7 +478,7 @@
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px">
             <label class="fld">문의플랫폼<select id="ePlat">${selOpts(getTypes(), r.platform)}</select></label>
             <label class="fld">담당자<input type="text" id="eAgent" value="${esc(r.agent||'')}"></label>
-            <label class="fld">상품구분<select id="ePtype">${selOpts(TS_PRODUCT_TYPES, r.prodType, '(없음)')}</select></label>
+            <label class="fld">상품구분<select id="ePtype">${selOpts(OptionSets.get('md.tsnotes.prodType',TS_PRODUCT_TYPES), r.prodType, '(없음)')}</select></label>
             <label class="fld">상품코드<input type="text" id="eProdCode" value="${esc(r.prodCode||'')}"></label>
             <label class="fld">제품명<input type="text" id="eProdName" value="${esc(r.prodName||'')}"></label>
             <label class="fld">고객정보<input type="text" id="eCustomer" value="${esc(r.customer||'')}"></label>
