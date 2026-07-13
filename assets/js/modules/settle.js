@@ -26,11 +26,23 @@
   async function aggregate(dept,date){
     const ym=date.slice(0,7); const specs=AGG[dept]||[];
     const packs=await Promise.all(specs.map(s=>Records.month(dept,s.sheet,ym).catch(()=>null)));
-    const byCat={}, byPerson={}; let total=0;
+    const byCat={}, byPerson={}, details={}; let total=0;
     specs.forEach((s,i)=>{ const recs=(packs[i]||[]).filter(r=>String(r.day||r.date||'')===date);
-      byCat[s.label]=recs.length; total+=recs.length;
+      byCat[s.label]=recs.length; total+=recs.length; details[s.sheet]=recs;   // 상세 내역 보관(관리자 결재함용)
       recs.forEach(r=>{ const w=r.whoName||r.who||'?'; byPerson[w]=(byPerson[w]||0)+1; }); });
-    return {byCat,byPerson,total};
+    return {byCat,byPerson,total,details};
+  }
+  /* 후불/발주 상세 표 (관리자 결재함) — 접수일자·구분·거래처·이름·금액·출고일·할인율·내용·담당자 */
+  function postpayDetailHtml(recs){
+    if(!recs || !recs.length) return `<div class="muted" style="font-size:13px;padding:6px 2px">해당 일자 후불/발주 내역이 없습니다.</div>`;
+    const cell=v=>esc(v==null?'':String(v));
+    return `<div style="overflow-x:auto"><table class="st-dtl"><thead><tr>
+      <th>구분</th><th>거래처명</th><th>이름</th><th>금액</th><th>출고일</th><th>할인율</th><th>내용</th><th>담당자</th></tr></thead><tbody>
+      ${recs.map(r=>`<tr><td><span class="st-dt-badge">${cell(r.gubun)}</span></td><td>${cell(r.vendor)}</td><td>${cell(r.name)}</td>
+        <td class="stnum">${cell(r.amount)}</td><td>${cell(r.shipdate)}</td><td>${cell(r.discount)}</td>
+        <td class="st-dt-wrap">${cell(r.content)}${r.memo?`<div class="muted" style="font-size:11.5px;margin-top:2px">메모: ${cell(r.memo)}</div>`:''}</td>
+        <td>${cell(r.whoName||r.who)}</td></tr>`).join('')}
+    </tbody></table></div>`;
   }
   const catLine=agg=>Object.entries(agg.byCat).map(([k,v])=>`${k} ${v}`).join(' · ');
   const personLine=agg=>Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}건`).join(', ');
@@ -73,6 +85,14 @@
     .st-meta{font-size:12.5px;color:var(--muted)}
     .st-approve{border-left:3px solid var(--info)}
     .st-approve.done{border-left-color:var(--ok)}
+    /* 후불/발주 상세 표 */
+    .st-dtl{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12.5px}
+    .st-dtl th{background:var(--panel-2);color:var(--muted);font-weight:800;text-align:left;padding:8px 10px;white-space:nowrap;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+    .st-dtl td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+    .st-dtl tr:last-child td{border-bottom:none}
+    .st-dtl .stnum{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+    .st-dtl .st-dt-wrap{min-width:180px;white-space:pre-wrap;word-break:break-word;line-height:1.45}
+    .st-dt-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:var(--info-bg);color:var(--info);white-space:nowrap}
   </style>`;
 
   /* ============================ 부서 일일결산(담당자·파트장) ============================ */
@@ -178,7 +198,10 @@
         for(const doc of actionable){ body.appendChild(await approvalCard(doc, load)); }
       }
       async function approvalCard(doc, after){
-        const dept=doc.dept; const m=doc.metrics||await aggregate(dept,doc.date);
+        const dept=doc.dept;
+        const agg=await aggregate(dept,doc.date);          // 최신 집계 + 상세 내역
+        const m=doc.metrics||agg;                          // 카운트는 상신 시 스냅샷 우선
+        const postpayRecs=(agg.details&&agg.details.postpay)||[];
         const done=doc.status==='approved';
         const card=el('div','st-card st-approve'+(done?' done':''));
         const ppl=Object.entries(m.byPerson||{}).sort((a,b)=>b[1]-a[1]);
@@ -189,6 +212,7 @@
             <div><div class="st-ppl-cap">담당자별</div><div>${ppl.length?ppl.map(([n,v])=>`<span class="st-chip">${esc(n)} <b>${v}</b></span>`).join(''):'<span class="muted">기록 없음</span>'}</div></div></div>
           <div class="st-sec-cap">담당자 특이사항 · ${(doc.contributors||[]).length}명</div>
           <div class="st-contribs">${contribHtml(doc)}</div>
+          ${dept==='cs'?`<div class="st-sec-cap">후불/발주 상세 · ${postpayRecs.length}건</div>${postpayDetailHtml(postpayRecs)}`:''}
           <div class="st-sec-cap">파트 종합 의견</div>
           <div class="st-cr"><div class="note">${esc(doc.partNote||'(없음)')}</div><div class="at" style="margin:0">상신 ${esc(doc.submittedByName||'')} · ${esc((doc.submittedAt||'').slice(0,16).replace('T',' '))}</div></div>
           <div class="st-actions">
