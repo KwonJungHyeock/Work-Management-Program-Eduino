@@ -40,8 +40,10 @@
           .lk-opt:first-child{border-top:none}
           .lk-opt:hover{background:var(--red-soft)}
           .lk-opt .oc{font-family:var(--mono);font-weight:800;font-size:15px;min-width:110px}
+          .lk-opt .oopt{font-size:13px;font-weight:700;color:var(--red);background:var(--red-soft);border-radius:6px;padding:2px 10px;white-space:nowrap;flex:none}
           .lk-opt .on{font-size:14px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .lk-opt .go{color:var(--muted);display:flex}.lk-opt:hover .go{color:var(--red)}
+          .lk-top .obadge{font-size:13px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:7px;padding:3px 11px;white-space:nowrap}
         </style>
         <div class="mhead pad"><div class="mhead-row">
           <div><div class="tt">상품 조회</div>
@@ -82,6 +84,7 @@
               <div class="lk-opts-hd">"<b>${esc(code)}</b>" 옵션 상품 <b>${opts.length}</b>개 — 선택하세요</div>
               ${opts.map((o,i)=>`<div class="lk-opt" data-i="${i}">
                 <span class="oc">${esc(o.selfCode)}</span>
+                ${o.option?`<span class="oopt">${esc(o.option)}</span>`:''}
                 <span class="on">${o.name?esc(o.name):'<span class="muted">(품명 없음)</span>'}</span>
                 <span class="go">${icon('chevron')}</span></div>`).join('')}</div>`;
             out.querySelectorAll('.lk-opt').forEach(row=>row.onclick=()=>{ const o=opts[+row.dataset.i]; qEl.value=o.selfCode; showProduct(o); });
@@ -98,6 +101,7 @@
           <div class="lk-top">
             <div style="flex:1;min-width:0"><div class="code">${esc(p.selfCode)}</div>
               <div class="nm">${p.name?esc(p.name):'<span class="muted">(품명 없음)</span>'}</div></div>
+            ${p.option?`<span class="obadge">옵션 ${esc(p.option)}</span>`:''}
             <button class="btn sm" id="lkCopy">${icon('copy')}제품명 복사</button></div>
           <div class="lk-grid">
             ${cell('구매처명', `<span class="v">${vendor?esc(vendor):'<span class="muted">미지정</span>'}</span>`)}

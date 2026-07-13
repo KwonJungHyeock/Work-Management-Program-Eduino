@@ -133,6 +133,7 @@
         .opt-row{display:flex;align-items:center;gap:11px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;text-align:left;transition:.12s;width:100%}
         .opt-row:hover{border-color:var(--red);background:var(--red-soft)}
         .opt-row .oc{font-family:var(--mono);font-weight:800;font-size:14px;min-width:96px;color:var(--ink)}
+        .opt-row .oopt{font-size:12.5px;font-weight:700;color:var(--red);background:var(--red-soft);border-radius:5px;padding:2px 9px;white-space:nowrap;flex:none}
         .opt-row .on{font-size:13px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .lookup .pill.pol{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 45%,var(--line));color:var(--warn);display:inline-flex;align-items:center;gap:4px;max-width:100%}
         .lookup .pill.pol b{color:var(--warn);white-space:normal}
@@ -266,7 +267,7 @@
                 syncName(null); box.className='lookup';
                 box.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">옵션 상품 <b style="color:var(--red)">${res.options.length}</b>개 — 선택하세요</div>
                   <div class="opt-list">${res.options.map((o,i)=>`<button type="button" class="opt-row" data-i="${i}">
-                    <span class="oc">${esc(o.selfCode)}</span><span class="on">${o.name?esc(o.name):'<span class="muted">(품명 없음)</span>'}</span></button>`).join('')}</div>`;
+                    <span class="oc">${esc(o.selfCode)}</span>${o.option?`<span class="oopt">${esc(o.option)}</span>`:''}<span class="on">${o.name?esc(o.name):'<span class="muted">(품명 없음)</span>'}</span></button>`).join('')}</div>`;
                 box.querySelectorAll('.opt-row').forEach(r=>r.onclick=()=>pickOption(res.options[+r.dataset.i]));
               }
               else { syncName(null); box.className='lookup warn'; box.innerHTML=`${icon('alert')} 이카운트 미등록 코드 — <b>품명을 직접 입력</b>하면 그대로 발주에 추가됩니다.`; } });
@@ -747,11 +748,10 @@
               <button class="btn pri sm" id="copyCode" style="margin-left:auto">${icon('copy')}Apps Script 코드 복사</button></div>
             <div class="card-bd">
               <ol class="setup-guide">
-                <li>발주표 <b>구글 시트</b>를 엽니다. <span class="muted" style="font-size:12.5px">(1행 헤더: 일자·구분·주문경로·주문자명·입점사명·정산구분·자체상품코드·품명·수량·출고송장/입고·발주·배송정보/비고)</span></li>
-                <li><span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> → 편집기 내용을 지우고 위 <b>[Apps Script 코드 복사]</b> 붙여넣기 후 저장.</li>
-                <li>코드 상단 <span class="mono" style="font-size:12px">SHEET_NAME</span> 을 기록할 <b>탭 이름</b>으로 맞춥니다. <span class="muted" style="font-size:12.5px">(실제 발주표 탭 이름)</span></li>
+                <li>백업용 <b>구글 스프레드시트</b>를 준비합니다. <span class="muted" style="font-size:12.5px">(탭·헤더 자동 생성 · 이 모듈 탭: <b>입점사발주</b>)</span></li>
+                <li><span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> → 편집기 내용을 지우고 위 <b>[Apps Script 코드 복사]</b> 붙여넣기 후 저장. <span class="muted" style="font-size:12.5px">(<span class="mono">SHEET_NAME</span>은 <b>비워둠</b> → 모듈별 탭에 기록)</span></li>
                 <li><span class="k">배포</span> → <span class="k">새 배포</span> → <span class="k">웹 앱</span> (실행: 나 / 액세스: <span class="k">모든 사용자</span>)로 배포. <span class="muted" style="font-size:12.5px">(권한 승인 창이 뜨면 허용)</span></li>
-                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장] → [연결 테스트]</b>.</li>
+                <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장] → [연결 테스트]</b>. <span class="muted" style="font-size:12.5px">다른 모듈과 <b>같은 URL</b> 사용 가능(탭만 달라짐).</span></li>
               </ol>
               <label class="fld" style="margin:8px 0 12px">웹 앱 URL<input type="text" id="ordUrl" value="${esc(cfg.sheetUrl)}" placeholder="https://script.google.com/macros/s/……/exec"></label>
               <div style="margin-bottom:14px">
@@ -779,8 +779,8 @@
           backup: body.querySelector('#ordBackup').checked }); toast('저장했습니다'); };
         body.querySelector('#ordTest').onclick=async()=>{ const url=body.querySelector('#ordUrl').value.trim(), stat=body.querySelector('#ordStat');
           if(!url){ stat.textContent='URL을 입력하세요'; return; } stat.textContent='테스트 중…';
-          try{ const res=await fetch(url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
-            stat.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`:`<span style="color:var(--danger)">HTTP ${res.status}</span>`;
+          try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent('입점사발주'),{method:'GET'}); let d=null; try{d=await res.json();}catch{}
+            stat.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공 · 이 모듈 저장 탭 <b>"입점사발주"</b>${d&&typeof d.rows==='number'?` (${d.rows}행)`:''}</span>`:`<span style="color:var(--danger)">HTTP ${res.status}</span>`;
           }catch(err){ stat.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(err.message)}</span>`; } };
       }
 

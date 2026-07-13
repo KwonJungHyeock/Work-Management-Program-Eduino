@@ -42,6 +42,7 @@ function normalizeProduct(p) {
     selfCode: code,
     code: String(p.code || ''),
     name: String(p.name || ''),
+    option: String(p.option || p.optionName || p.opt || ''),   // 이카운트 옵션값(예: 화이트/오렌지) · 옵션 상품 구분
     vendor: String(p.vendor || ''),
     category: String(p.category || ''),
     custCode: String(p.custCode || ''),     // 이카운트 거래처코드(이름표로 구매처명 치환용)

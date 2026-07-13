@@ -107,6 +107,7 @@ async function fetchEcount() {
       selfCode: x[M('CODE', 'PROD_CD')],
       code: '',
       name: x[M('NAME', 'PROD_DES')],
+      option: M('OPTION', '') ? x[M('OPTION', '')] : (x['SIZE_DES'] || x['OPT_DES'] || ''),  // 옵션값(화이트 등) · 기본 SIZE_DES
       vendor: vname,
       category: cls.map[ccode] || (M('CATEGORY', '') ? x[M('CATEGORY', '')] : ''),
       inPrice: Number(x[M('INPRICE', 'IN_PRICE')]) || 0,

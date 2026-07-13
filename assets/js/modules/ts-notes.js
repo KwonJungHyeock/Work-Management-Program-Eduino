@@ -610,13 +610,12 @@
               <button class="btn pri sm" id="copyCode" style="margin-left:auto">${icon('copy')}Apps Script 코드 복사</button></div>
             <div class="card-bd">
               <ol class="setup-guide">
-                <li>기록할 <b>구글 시트</b>를 엽니다. <span class="muted" style="font-size:12.5px">(1행 헤더: 날짜·문의플랫폼·담당자·상품코드·상품구분·제품명·고객정보·문의사항·답변요약·답변원본·비고)</span></li>
-                <li><span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> → 편집기 내용을 지우고 위 <b>[Apps Script 코드 복사]</b> 붙여넣기 후 저장.</li>
-                <li>코드 상단 <span class="mono" style="font-size:12px">SHEET_NAME</span> 을 기록할 <b>탭 이름</b>으로 맞춥니다.</li>
+                <li>백업용 <b>구글 스프레드시트</b>를 준비합니다. <span class="muted" style="font-size:12.5px">(탭·헤더 자동 생성 · 이 모듈 탭: <b>TS상담메모</b>)</span></li>
+                <li><span class="k">확장 프로그램</span> → <span class="k">Apps Script</span> → 편집기 내용을 지우고 위 <b>[Apps Script 코드 복사]</b> 붙여넣기 후 저장. <span class="muted" style="font-size:12.5px">(<span class="mono">SHEET_NAME</span>은 <b>비워둠</b> → 모듈별 탭에 기록)</span></li>
                 <li><span class="k">배포</span> → <span class="k">새 배포</span> → <span class="k">웹 앱</span> (실행: 나 / 액세스: <span class="k">모든 사용자</span>)로 배포.</li>
                 <li>표시된 <b>웹 앱 URL</b>(<span class="mono" style="font-size:12.5px">…/exec</span>)을 아래에 붙여넣고 <b>[저장] → [연결 테스트]</b>.</li>
               </ol>
-              <div class="note" style="margin-top:6px">시트 <b>1행 헤더 이름</b>을 읽어 칸을 맞추므로 열 순서가 달라도 정확히 들어갑니다. 각 기록은 숨은 <b>id</b> 열로 <b>중복 없이</b> 갱신됩니다.</div>
+              <div class="note" style="margin-top:6px"><b>같은 스프레드시트</b>를 쓰면 모든 모듈에 <b>같은 URL</b>을 넣어도 됩니다(탭만 달라짐). 시트 <b>1행 헤더</b>는 자동 생성되고, 각 기록은 숨은 <b>id</b> 열로 <b>중복 없이</b> 갱신됩니다.</div>
             </div>
           </div>
 
@@ -646,8 +645,8 @@
           const url=body.querySelector('#cfgUrl').value.trim(), stat=body.querySelector('#cfgStat');
           if(!url){ stat.textContent='URL을 입력하세요'; return; }
           stat.textContent='테스트 중…';
-          try{ const res=await fetch(url,{method:'GET'}); let d=null; try{d=await res.json();}catch{}
-            stat.innerHTML = res.ok ? `<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>` : `<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`;
+          try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent('TS상담메모'),{method:'GET'}); let d=null; try{d=await res.json();}catch{}
+            stat.innerHTML = res.ok ? `<span style="color:var(--ok)">연결 성공 · 이 모듈 저장 탭 <b>"TS상담메모"</b>${d&&typeof d.rows==='number'?` (${d.rows}행)`:''}</span>` : `<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`;
           }catch(err){ stat.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(err.message)}</span>`; }
         };
         body.querySelector('#cfgPush').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
