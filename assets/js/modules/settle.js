@@ -113,14 +113,12 @@
                 <button class="btn pri" id="stTransfer" ${locked?'disabled':''}>${icon('send')}${mine?'특이사항 수정 전달':'일일결산 전달'}</button>
                 <span class="st-meta" id="stMsg"></span>
               </div>
-              ${(isLead()||isAdmin()) ? `
-                <div class="st-sec-cap" style="margin-top:18px">② 파트 종합 의견 → 대표 결재함 상신 (파트장) ${doc.status!=='draft'?`<span style="color:var(--info);font-weight:700;text-transform:none">✓ 상신됨</span>`:''}</div>
-                <textarea class="st-note-in" id="stPartNote" placeholder="파트 종합 의견(선택) — 비워도 상신됩니다" ${locked?'disabled':''}>${esc(doc.partNote||'')}</textarea>
-                <div class="st-actions">
-                  <button class="btn ok" id="stSubmit" ${locked?'disabled':''}>${icon('stamp')}${doc.status==='draft'?'결재 상신 → 대표 결재함':'재상신(내용 갱신)'}</button>
-                  <span class="st-meta">상신하면 대표(관리자) <b>결재함</b>에 이 파트 결산이 올라갑니다.</span>
-                </div>`
-              : `<div class="st-meta" style="margin-top:14px;color:var(--muted)">파트장이 검토 후 <b>결재 상신</b>하면 대표 결재함으로 올라갑니다.</div>`}
+              <div class="st-sec-cap" style="margin-top:18px">② 파트 종합 의견 → 대표 결재함 상신 (파트장) ${doc.status!=='draft'?`<span style="color:var(--info);font-weight:700;text-transform:none">✓ 상신됨</span>`:''}</div>
+              <textarea class="st-note-in" id="stPartNote" placeholder="파트 종합 의견(선택) — 비워도 상신됩니다" ${locked?'disabled':''}>${esc(doc.partNote||'')}</textarea>
+              <div class="st-actions">
+                <button class="btn ok" id="stSubmit" ${locked?'disabled':''}>${icon('stamp')}${doc.status==='draft'?'결재 상신 → 대표 결재함':'재상신(내용 갱신)'}</button>
+                <span class="st-meta">상신하면 대표(관리자) <b>결재함</b>에 이 파트 결산이 올라갑니다.${doc.status!=='draft'?' <span style="color:var(--info)">이미 상신됨 — 결재함에서 확인 가능</span>':''}</span>
+              </div>
               ${doc.status==='approved'?`<div class="st-meta" style="margin-top:12px;color:var(--ok);font-weight:700">✓ 대표 결재 완료 · ${esc(doc.approvedByName||'')} · ${esc((doc.approvedAt||'').slice(0,16).replace('T',' '))} · 구글 '일일결산' 시트 연동됨</div>`:''}
             </div>`;
           // ① 담당자 전달 — 특이사항을 파트 결산 문서에 누적(팀 공유)
