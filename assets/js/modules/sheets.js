@@ -272,10 +272,10 @@
     sheetPush:{ tab:'입점사발주', urlKey:STORE.mdOrderCfg,
       row:r=>({ id:r.id, '일자':r.date||r.day||'', '구분':r.gubun||'', '주문경로':r.route||'', '주문자명':r.orderer||'', '입점사명':r.vendor||'',
         '정산구분':r.settle||'', '자체상품코드':r.selfCode||r.code||'', '품명':r.name||'', '수량':(r.qty!=null?r.qty:''),
-        '출고송장/입고':`배송비 ${(Number(r.ship)||0).toLocaleString()}원`, '발주':'O', '배송정보/비고':r.shipInfo||'' }) },
-    cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80}, {k:'gubun',h:'구분',w:70,tag:true},
+        '출고송장/입고':'', '발주':'O', '배송정보/비고':r.shipInfo||'' }) },
+    cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80,color:true}, {k:'gubun',h:'구분',w:70,tag:true},
       {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
-      {k:'settle',h:'정산구분',w:78}, {k:'selfCode',h:'자체상품코드',w:104},
+      {k:'settle',h:'정산구분',w:78,tag:true}, {k:'selfCode',h:'자체상품코드',w:104},
       {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},
       {k:'ship',h:'배송비',w:78,num:true,money:true}, {k:'shipInfo',h:'배송정보/비고',w:180,wrap:true} ] });
 })();
