@@ -533,7 +533,7 @@
             <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;padding-bottom:2px">
               ${isAdmin?`<button class="btn" id="editTpl">${icon('settings')}양식 편집</button>`:''}
               <button class="btn" id="copySum">${icon('copy')}텍스트 복사</button>
-              <button class="btn pri" id="saveTxt">${icon('download')}메모장 저장(.txt)</button>
+              ${isAdmin?`<button class="btn pri" id="saveTxt">${icon('download')}메모장 저장(.txt)</button>`:''}
               <button class="btn" id="pushSum">${icon('cloudUp')}미전송분 시트 전송</button></div>
           </div>
           <div id="tplBox" class="hidden"></div>
@@ -546,7 +546,7 @@
           else if(r==='7'){ const d=new Date(); d.setDate(d.getDate()-6); from=isoOf(d); to=t; }
           fEl.value=from; tEl.value=to; renderSum(); });
         body.querySelector('#copySum').onclick=()=>copyText(buildSummary(from,to));
-        body.querySelector('#saveTxt').onclick=()=>{ downloadBlob(new Blob([buildSummary(from,to)],{type:'text/plain;charset=utf-8'}),`TS결산_${from===to?from:from+'_'+to}.txt`); toast('메모장(.txt)으로 저장했습니다'); };
+        { const st=body.querySelector('#saveTxt'); if(st) st.onclick=()=>{ downloadBlob(new Blob([buildSummary(from,to)],{type:'text/plain;charset=utf-8'}),`TS결산_${from===to?from:from+'_'+to}.txt`); toast('메모장(.txt)으로 저장했습니다'); }; }
         { const et=body.querySelector('#editTpl'); if(et) et.onclick=openTpl; }
         body.querySelector('#pushSum').onclick=async(e)=>{ const b=e.currentTarget; b.disabled=true;
           const r=await syncRecords(unsynced()); b.disabled=false; renderSum();

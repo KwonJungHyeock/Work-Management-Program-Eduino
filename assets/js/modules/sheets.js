@@ -62,7 +62,7 @@
             ${(cfg.filters||[]).map(f=>`<select class="sv-in" data-fk="${esc(f.k)}"><option value="">${esc(f.label)} 전체</option></select>`).join('')}
             <input class="sv-in" id="fQ" type="text" placeholder="검색어…">
             <span class="sv-sp"></span>
-            <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
+            ${isAdmin?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>`:''}
             <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
           </div>
           <p class="sv-meta" id="meta"></p>
@@ -175,7 +175,9 @@
         (cfg.filters||[]).forEach(f=>{ const sel=root.querySelector(`[data-fk="${f.k}"]`); if(sel) sel.onchange=()=>{ fvals[f.k]=sel.value; paint(); }; });
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
         $('#btnReload').onclick=load;
-        $('#btnCsv').onclick=()=>{
+        const csvBtn=$('#btnCsv');   // 시트 다운로드(CSV)는 관리자만 (팀원 화면엔 버튼 미표시)
+        if(csvBtn) csvBtn.onclick=()=>{
+          if(!isAdmin){ toast('시트 다운로드는 관리자만 가능합니다'); return; }
           const {rows,from,to}=filtered();
           const header=cfg.cols.map(c=>c.h);
           const lines=[header, ...rows.map(r=>cfg.cols.map(c=>{ let v=r[c.k]; if(c.money) v=fmtNum(v); return v==null?'':String(v); }))];

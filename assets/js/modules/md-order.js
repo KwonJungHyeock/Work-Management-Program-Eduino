@@ -558,6 +558,16 @@
             <button class="btn ok sm" id="fillApi">⚡ API 추정 전체 채우기</button>
             <button class="btn ghost sm" id="reloadFacet">${icon('refresh')}코드 다시 불러오기</button>
             <span class="muted" id="catStat" style="font-size:12.5px"></span></div>
+          <div class="card" style="margin-top:16px;max-width:960px"><div class="card-hd">${icon('upload')}<b>이카운트 거래처 목록 파일 불러오기</b>
+              <span class="muted" style="margin-left:auto;font-size:12px">엑셀(.xlsx)·CSV를 올리면 거래처코드→거래처명을 통째로 이름표에 반영</span></div>
+            <div class="card-bd">
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <input type="file" id="vendorFile" accept=".xlsx,.csv,.tsv,.txt" class="hidden">
+                <button class="btn pri" id="vendorFileBtn">${icon('upload')}거래처 파일 선택 (.xlsx/.csv)</button>
+                <span class="muted" id="vendorFileStat" style="font-size:13px">이카운트 › 거래처등록 › 엑셀 내려받기 파일을 그대로 올리면 됩니다. (거래처코드·거래처명 열 자동 인식)</span>
+              </div>
+              <div class="note" style="margin-top:10px;font-size:12px">파일은 <b>브라우저 안에서만</b> 처리되어 이름표(구매처명)로 저장됩니다. 상품코드의 거래처코드와 일치하는 항목이 자동으로 구매처명으로 표시됩니다.</div>
+            </div></div>
           <div class="card" style="margin-top:16px;max-width:960px"><div class="card-hd">${icon('download')}<b>거래처 목록 붙여넣기 → 자동 매칭</b>
               <span class="muted" style="margin-left:auto;font-size:12px">이카운트 거래처/분류 목록을 통째로 붙여넣으면 코드를 알아서 찾아 채웁니다(열 순서 무관)</span></div>
             <div class="card-bd">
@@ -629,6 +639,60 @@
           st.innerHTML = tot? `<span style="color:var(--ok);font-weight:700">✓ ${tot}개 자동 매칭됨</span> — 확인 후 <b>저장</b>하세요` : '<span style="color:var(--warn)">매칭된 코드가 없습니다.</span> 붙여넣은 목록에 위 코드들이 포함돼 있는지 확인하세요.';
           if(tot) toast(`${tot}개 자동 매칭 — 저장하면 반영`);
         };
+        /* ---- 이카운트 거래처 목록 파일(.xlsx/.csv) 일괄 불러오기 → 이름표 반영 ---- */
+        // 행 배열에서 거래처코드 열·거래처명 열을 자동 인식해 {정규화코드:이름} 생성
+        function vendorMapFromRows(rows){
+          if(!rows || !rows.length) return {};
+          const isCode = v => { const d=String(v||'').replace(/[^0-9]/g,''); return d.length>=8 && /^\d+$/.test(d); };
+          // 1) 헤더 이름으로 열 찾기 — 코드·이름 헤더가 "같은 행"에 있는 행만 헤더로 인정
+          //    (첫 행의 "회사명 : 주식회사…" 같은 제목 행이 이름열로 오인식되는 것 방지)
+          let codeCol=-1, nameCol=-1, headerRow=-1;
+          for(let r=0;r<Math.min(rows.length,6);r++){ const row=rows[r]||[]; let cc=-1, nc=-1;
+            row.forEach((c,i)=>{ const t=String(c||'').replace(/\s/g,'');
+              if(cc<0 && /(거래처|사업자|업체|구매처)?코드$|^코드/.test(t)) cc=i;
+              if(nc<0 && !/코드/.test(t) && /(거래처명|구매처명|업체명|상호명|회사명|^거래처$|^구매처$|^상호$|^업체$)/.test(t)) nc=i; });
+            if(cc>=0 && nc>=0){ codeCol=cc; nameCol=nc; headerRow=r; break; }
+          }
+          // 2) 헤더 못 찾으면 값 패턴으로 추정 (숫자코드 비율이 가장 높은 열 = 코드열, 그 옆 텍스트열 = 이름열)
+          if(codeCol<0){ const cols=Math.max(...rows.map(r=>r.length)); let best=-1,bestFrac=0;
+            for(let i=0;i<cols;i++){ let num=0,tot=0; for(const r of rows){ const v=r[i]; if(v==null||v==='')continue; tot++; if(isCode(v))num++; } const f=tot?num/tot:0; if(f>bestFrac){ bestFrac=f; best=i; } }
+            if(bestFrac>0.5){ codeCol=best; } }
+          if(codeCol>=0 && nameCol<0){ // 코드열 다음의 한글/텍스트 열
+            const cols=Math.max(...rows.map(r=>r.length));
+            for(let i=codeCol+1;i<cols;i++){ let txt=0,tot=0; for(const r of rows){ const v=r[i]; if(v==null||v==='')continue; tot++; if(/[가-힣A-Za-z]/.test(String(v))&&!isCode(v))txt++; } if(tot&&txt/tot>0.5){ nameCol=i; break; } }
+          }
+          if(codeCol<0 || nameCol<0) return { __err:'열 인식 실패' };
+          const map={}; let cnt=0;
+          for(let r=(headerRow>=0?headerRow+1:0); r<rows.length; r++){ const row=rows[r]||[];
+            const code=String(row[codeCol]||'').trim(), name=String(row[nameCol]||'').trim();
+            if(!isCode(code) || !name) continue;
+            const k=norm(code); if(!k) continue; map[k]=name; const kz=k.replace(/^0+/,''); if(kz&&!map[kz]) map[kz]=name; cnt++;
+          }
+          map.__count=cnt; return map;
+        }
+        (function(){ const fEl=body.querySelector('#vendorFile'), btn=body.querySelector('#vendorFileBtn'), stat=body.querySelector('#vendorFileStat');
+          if(!btn) return; btn.onclick=()=>fEl.click();
+          fEl.onchange=async()=>{ const f=fEl.files&&fEl.files[0]; fEl.value=''; if(!f) return;
+            if(!window.XlsxLite){ stat.textContent='파서를 불러오지 못했습니다.'; return; }
+            stat.textContent='파일 읽는 중…';
+            try{
+              const { rows } = await XlsxLite.parseFile(f);
+              const built = vendorMapFromRows(rows);
+              if(built.__err || !built.__count){ stat.innerHTML='<span style="color:var(--danger)">거래처코드·거래처명 열을 찾지 못했습니다. 이카운트 거래처등록 엑셀을 그대로 올려주세요.</span>'; return; }
+              const cnt=built.__count; delete built.__count;
+              // 이름표에 병합 저장(기존 값 유지, 파일값 우선)
+              const vm={ ...(cur.vendor||{}), ...built }; cur.vendor=vm;
+              store(STORE.catMap).set({ vendor:vm, category:(cur.category||{}) });
+              // 현재 상품에 쓰이는 거래처코드 중 몇 개가 이번에 매칭됐는지 집계
+              let covered=0; (facetV||[]).forEach(it=>{ if(catMapGet(vm, it.code)) covered++; });
+              const totalFacet=(facetV||[]).length;
+              stat.innerHTML=`<span style="color:var(--ok);font-weight:700">✓ 거래처 ${cnt.toLocaleString()}건 이름표 반영</span> · 현재 상품 거래처코드 ${totalFacet?`${covered}/${totalFacet}개 매칭`:'매칭 확인'} — <b>저장 완료(팀 공유)</b>`;
+              renderList(body.querySelector('#vList'), facetV, cur.vendor, 'vendor'); updateSums();
+              toast(`거래처 ${cnt.toLocaleString()}건 반영 · 상품 코드 ${covered}개 매칭`);
+            }catch(e){ stat.innerHTML=`<span style="color:var(--danger)">파일 처리 실패: ${esc(e.message||e)}</span>`; }
+          };
+        })();
+
         body.querySelector('#saveCatMap').onclick=()=>{
           const vm={ ...(cur.vendor||{}), ...parse(body.querySelector('#vMap').value), ...collect(body.querySelector('#vList')) };
           const cm={ ...(cur.category||{}), ...parse(body.querySelector('#cMap').value), ...collect(body.querySelector('#cList')) };

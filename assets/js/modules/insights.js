@@ -158,8 +158,8 @@
           <span class="seg" id="segDept">
             <button data-d="all" class="on">종합</button><button data-d="cs">CS</button><button data-d="md">MD</button><button data-d="china">중국발주</button></span>
           <span class="iv-sp"></span>
-          <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
-          <button class="btn ghost sm" id="btnPng">${icon('image')}차트 PNG</button>
+          ${isAdminV?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
+          <button class="btn ghost sm" id="btnPng">${icon('image')}차트 PNG</button>`:''}
           <button class="btn ghost sm" id="btnPrint">${icon('sheet')}인쇄</button>
           <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
         </div>
@@ -622,8 +622,8 @@
         dept=b.dataset.d; $('#segDept').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); paint(); });
       $('#dFrom').onchange=()=>{ custom.from=$('#dFrom').value||custom.from; refresh(); };
       $('#dTo').onchange=()=>{ custom.to=$('#dTo').value||custom.to; refresh(); };
-      $('#btnCsv').onclick=exportCsv;
-      $('#btnPng').onclick=exportPng;
+      if($('#btnCsv')) $('#btnCsv').onclick=exportCsv;   // 다운로드는 관리자만(버튼도 관리자만 노출)
+      if($('#btnPng')) $('#btnPng').onclick=exportPng;
       $('#btnPrint').onclick=()=>window.print();
       $('#btnReload').onclick=()=>{ Object.keys(cache).forEach(k=>delete cache[k]); chinaCache=null; loadErr=false; if(dept==='china') paintChina(); else load(); };
 

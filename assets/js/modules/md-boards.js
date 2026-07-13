@@ -100,7 +100,7 @@
             ${cfg.whoField?`<select class="bd-in" id="fWho"><option value="">${esc((whoCfg&&whoCfg.label)||'담당자')} 전체</option></select>`:''}
             <input class="bd-in" id="fQ" type="text" placeholder="검색어…">
             <span class="bd-sp"></span>
-            <button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>
+            ${isAdmin?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>`:''}
             <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
           </div>
           <p class="bd-meta" id="meta"></p>
@@ -112,9 +112,10 @@
         const form={};  // 폼 상태 (칩 선택값 등)
         cfg.fields.forEach(f=>{ form[f.k] = f.type==='date' ? todayStr() : ''; });
 
-        /* ---- 입력 폼 렌더 ---- */
+        /* ---- 입력 폼 렌더 (짧은 필드 먼저 촘촘히 → 넓은 textarea는 맨 아래 전폭) ---- */
         const grid=$('#fGrid');
-        cfg.fields.forEach(f=>{
+        const formOrder=[...cfg.fields].sort((a,b)=>(a.type==='textarea'?1:0)-(b.type==='textarea'?1:0));
+        formOrder.forEach(f=>{
           const wrap=el('div','bd-f'+((f.type==='textarea')?' wide':''));
           const lab=`<label>${esc(f.label)}${f.req?'<span class="req">*</span>':''}</label>`;
           if(f.type==='agent' || (f.type==='select' && f.k===cfg.whoField)){
@@ -295,7 +296,7 @@
         if($('#fWho')) $('#fWho').onchange=()=>{ who=$('#fWho').value; paint(); };
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
         $('#btnReload').onclick=load;
-        $('#btnCsv').onclick=()=>{ const {rows,from,to}=filtered();
+        if($('#btnCsv')) $('#btnCsv').onclick=()=>{ if(!isAdmin){ toast('시트 다운로드는 관리자만 가능합니다'); return; } const {rows,from,to}=filtered();
           const header=showCols.map(c=>c.label);
           const lines=[header,...rows.map(r=>showCols.map(c=>r[c.k]==null?'':String(r[c.k])))];
           const csv='﻿'+lines.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\r\n');
@@ -323,7 +324,7 @@
       { k:'title', label:'타이틀(업무 내용)', type:'text', req:true, ph:'예: OO사 신규 입점 / △△ 공급가 인상' },
       { k:'status', label:'진행상태', type:'select', options:['신규 제품/입점사','기존 공급가변동/이슈','신규입점','대기 업무','프로모션 현황','보류','아카이브'] },
       { k:'gubun', label:'프로젝트 구분', type:'select', options:['MD','CS','디자이너','물류','마케팅','팀장','프로모션'] },
-      { k:'assignee', label:'담당자', type:'agent', options:[] },
+      { k:'assignee', label:'담당자', type:'agent', options:['여미림','이진환'] },
       { k:'sdate', label:'시작일', type:'date' },
       { k:'edate', label:'종료(예정)일', type:'date' },
       { k:'progress', label:'진행율(%)', type:'number', max:100, ph:'0~100' },
@@ -344,6 +345,7 @@
       { k:'handler', label:'처리자', type:'agent', options:['여미림','이진환','신아름'] },
       { k:'content', label:'처리내용', type:'textarea', ph:'처리 내용' },
       { k:'status', label:'상태', type:'toggle', onLabel:'완료' },
+      { k:'datetext', label:'날짜(기록용)', type:'text', ph:'예: 3/14, 3월 중' },
       { k:'remark', label:'특이사항', type:'textarea', ph:'특이사항' },
     ] });
 
@@ -376,6 +378,7 @@
       { k:'code', label:'자체코드', type:'code', ph:'예: P-AJ26' },
       { k:'content', label:'처리내용', type:'textarea', ph:'처리 내용' },
       { k:'status', label:'상태', type:'toggle', onLabel:'완료' },
+      { k:'datetext', label:'날짜(기록용)', type:'text', ph:'예: 3/14, 3월 중' },
       { k:'remark', label:'특이사항', type:'textarea', ph:'특이사항' },
     ] });
 })();
