@@ -89,7 +89,7 @@
               <div class="bd-actions">
                 <button type="submit" class="btn pri lg">${icon('save')}저장</button>
                 <span class="muted" id="fMsg" style="font-size:13px"></span></div>
-            </div></form></div>
+            </form></div>
           </div>
 
           <div class="bd-ctrl">
