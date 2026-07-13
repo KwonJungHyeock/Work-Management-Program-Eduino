@@ -101,7 +101,23 @@
       const vendorName=p=>{ const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
         return v||(isJasa(p&&p.selfCode)?'자사':''); };
       // 배송비 = 입점사 정보(배송정보 리스트) 우선 · 없으면 이카운트 상품 배송비 (리스트는 화면에서 수정 가능)
-      const shipFor=p=>{ const vs=vendorShip(vendorName(p)); return vs>0?vs:(Number(p&&p.ship)||0); };
+      const baseShipFor=p=>{ const vs=vendorShip(vendorName(p)); return vs>0?vs:(Number(p&&p.ship)||0); };
+      // 무료배송 임계값 파싱: "5만원 이상"→{amount:50000} · "3만원 이상"→30000 · "5권 이상"→{qty:5}
+      function freeThreshold(policy){ const s=String(policy||'');
+        let m=s.match(/([\d,]+(?:\.\d+)?)\s*만원\s*이상/); if(m) return { amount:Math.round(parseFloat(m[1].replace(/,/g,''))*10000) };
+        m=s.match(/([\d,]+)\s*원\s*이상/); if(m) return { amount:Number(m[1].replace(/,/g,'')) };
+        m=s.match(/(\d+)\s*(?:권|개|세트|박스|ea|EA)\s*이상/); if(m) return { qty:Number(m[1]) };
+        return {}; }
+      // 실제 배송비 = 무료조건 충족 시 0, 아니면 기본 배송비 (총주문금액/수량 기준)
+      function shipInfoFor(p, totalAmt, qty){
+        const base=baseShipFor(p); const ven=vendorObj(vendorName(p)); const th=freeThreshold(ven&&ven.policy);
+        const free = (th.amount!=null && totalAmt>=th.amount) || (th.qty!=null && qty>=th.qty);
+        return { base, ship: free?0:base, free, th };
+      }
+      const shipFor=p=>baseShipFor(p);   // 하위호환(수량 미고려 기본 배송비)
+      const shipPillHtml=si=> si.free
+        ? `배송비 <b style="color:var(--ok)">무료</b> <span class="muted" style="font-weight:600">(조건충족 · 원래 ${fmtNum(si.base)}원)</span>`
+        : `배송비 <b>${fmtNum(si.ship)}원</b>`;
 
       root.innerHTML=`
       <style>
@@ -280,15 +296,16 @@
             return null;
           }
           syncName(p);
-          const sh=shipFor(p); const ven=vendorObj(vendorName(p));
+          const ven=vendorObj(vendorName(p));
           const policy=(ven&&ven.policy||'').trim();
           const settle=(ven&&ven.settle)||p.settle||'-';        // 배송정보 리스트(월말정산/선결제) 우선
           const unit=Number(p.inPrice)||0, qty=Number(form.qty)||1;   // 이카운트 금액합계 = 입고단가 × 수량
+          const si=shipInfoFor(p, unit*qty, qty);
           box.className='lookup ok';
           box.innerHTML=`<div class="lk">
             <div class="lk-top"><span class="lk-vn">${esc(vendorName(p)||'입점사 미지정')}</span>
               <span class="pill">정산 <b>${esc(settle)}</b></span>
-              <span class="pill">배송비 <b>${fmtNum(sh)}원</b></span>${policy?`<span class="pill pol">${icon('truck')}<b>${esc(policy)}</b></span>`:''}</div>
+              <span class="pill" id="lkShip">${shipPillHtml(si)}</span>${policy?`<span class="pill pol">${icon('truck')}<b>${esc(policy)}</b></span>`:''}</div>
             <div class="lk-amt" id="lkAmt">총주문금액 <b>${fmtNum(unit*qty)}원</b> <span class="muted">= 입고단가 ${fmtNum(unit)}원 × ${qty}${unit?'':' · 단가 미등록'}</span></div>
             <div class="lk-name">${p.name?esc(p.name):'<span class="muted">품명 미등록 — 직접 입력하세요</span>'}</div></div>`;
           curProd=p; return p;
@@ -296,8 +313,9 @@
         codeEl.oninput=()=>{ form.code=codeEl.value; refreshLookup(); };
         if(nameEl()) nameEl().oninput=e=>{ form.name=e.target.value; e.target.dataset.auto=''; };  // 수동 편집 시 자동채움 잠금 해제
         ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value;
-          if(id==='fQty' && curProd){ const amt=$f('#lkAmt'); if(amt){ const u=Number(curProd.inPrice)||0, q=Number(form.qty)||1;
-            amt.innerHTML=`총주문금액 <b>${fmtNum(u*q)}원</b> <span class="muted">= 입고단가 ${fmtNum(u)}원 × ${q}${u?'':' · 단가 미등록'}</span>`; } } });
+          if(id==='fQty' && curProd){ const u=Number(curProd.inPrice)||0, q=Number(form.qty)||1; const tot=u*q;
+            const amt=$f('#lkAmt'); if(amt) amt.innerHTML=`총주문금액 <b>${fmtNum(tot)}원</b> <span class="muted">= 입고단가 ${fmtNum(u)}원 × ${q}${u?'':' · 단가 미등록'}</span>`;
+            const shp=$f('#lkShip'); if(shp) shp.innerHTML=shipPillHtml(shipInfoFor(curProd, tot, q)); } });
         $f('#fShipInfo').oninput=e=>form.shipInfo=e.target.value;
         $f('#fHandler').onchange=e=>form.handler=e.target.value;
         fillHandler($f('#fHandler'));
@@ -337,7 +355,7 @@
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||'', selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
-            qty:Number($f('#fQty').value)||1, ship:p?shipFor(p):0, shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
+            qty:Number($f('#fQty').value)||1, ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
           orders.push(rec); saveOrders();
           // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지
           form.code=''; form.name=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
