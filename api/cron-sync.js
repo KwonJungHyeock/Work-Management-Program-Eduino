@@ -98,6 +98,16 @@ async function fetchEcount() {
   const cls = await fetchClassMap(host(zone), sid);
 
   const M = (k, d) => process.env['ECOUNT_MAP_' + k] || d;
+  // 옵션값 필드 자동 판별: ECOUNT_MAP_OPTION > 흔한 필드명 > 키 이름에 opt/size/옵션/규격 포함(코드·수량·단가 제외)
+  const OPT_KNOWN = ['SIZE_DES','OPT_DES','OPTION_DES','SIZE1_DES','SIZE2_DES','PROD_SIZE_DES','PROD_SIZE','SIZE_DES1','OPT1_DES','OPTION_NAME','OPTION','OPT'];
+  const optEnv = M('OPTION', '');
+  const findOption_ = (x) => {
+    if (optEnv) return String(x[optEnv] || '');
+    for (const k of OPT_KNOWN) { const v = x[k]; if (v != null && String(v).trim() !== '') return String(v); }
+    for (const k in x) { if (/opt|size|규격|옵션/i.test(k) && !/cd$|code|_no$|qty|price|단가|수량|번호|일자|date/i.test(k)) {
+      const v = x[k]; if (v != null && String(v).trim() !== '') return String(v); } }
+    return '';
+  };
   const VCODE = M('VENDORCODE', 'CUST');   // 품목 레코드에서 거래처코드가 들어있는 필드
   const products = arr.map(x => {
     const vcode = String(x[VCODE] || '').trim();
@@ -107,10 +117,8 @@ async function fetchEcount() {
       selfCode: x[M('CODE', 'PROD_CD')],
       code: '',
       name: x[M('NAME', 'PROD_DES')],
-      // 옵션값(화이트/오렌지 등) — 환경변수 매핑 우선, 없으면 이카운트 흔한 옵션 필드명들을 순차 탐색
-      option: M('OPTION', '') ? x[M('OPTION', '')]
-        : (x['SIZE_DES'] || x['OPT_DES'] || x['OPTION_DES'] || x['SIZE1_DES'] || x['SIZE2_DES']
-           || x['PROD_SIZE_DES'] || x['PROD_SIZE'] || x['SIZE_DES1'] || x['OPT1_DES'] || x['OPTION_NAME'] || x['OPTION'] || ''),
+      // 옵션값(화이트/오렌지 등) — 환경변수 매핑 우선 → 흔한 필드명 → 자동 탐색(키에 opt/size/옵션/규격 포함)
+      option: findOption_(x),
       vendor: vname,
       category: cls.map[ccode] || (M('CATEGORY', '') ? x[M('CATEGORY', '')] : ''),
       inPrice: Number(x[M('INPRICE', 'IN_PRICE')]) || 0,
