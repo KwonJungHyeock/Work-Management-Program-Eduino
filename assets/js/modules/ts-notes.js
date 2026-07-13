@@ -31,7 +31,7 @@
       configured: cfg => !!(cfg && cfg.sheetUrl),
       async send(records, cfg){
         const payload = records.map(toSheetRecord);
-        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ records: payload }) };
+        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ sheet:'TS상담메모', records: payload }) };
         try{
           const res = await fetch(cfg.sheetUrl, opts);
           if(!res.ok) throw new Error('HTTP '+res.status);

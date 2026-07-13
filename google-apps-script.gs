@@ -1,29 +1,34 @@
 /**
- * 에듀이노 통합 업무관리 · CS 상담 메모 → 구글 시트 연동 (Apps Script 웹앱)
+ * 에듀이노 통합 업무관리 · 구글 시트 2차 백업 연동 (Apps Script 웹앱) · 범용/통합본
  * ---------------------------------------------------------------------------
- * 설치
- *  1) 기록할 구글 시트를 연다. (1행 헤더 예:
- *     날짜 · 분류 · 연락처 · 고객유형 · 주문자/학교/업체명 · 상품분류 · 상품코드 · 내용 · 답변 · 상담사)
+ * ★ 한 번만 배포하면 모든 모듈(상담 메모/발주/후불·발주/교환·반품/현황판/TS 등)이
+ *   각자 "탭(sheet)"에 자동으로 쌓입니다. 모듈이 보낼 탭 이름을 요청에 담아 보냅니다.
+ *
+ * 설치 (한 번)
+ *  1) 백업용 구글 스프레드시트를 하나 만든다. (탭은 자동 생성되므로 비어 있어도 됨)
  *  2) 확장 프로그램 → Apps Script 에 이 코드를 전부 붙여넣고 저장.
- *  3) 아래 SHEET_NAME 을 기록할 탭 이름으로 맞춘다. (테스트: '상담test' / 실제: '2026 CS 상담이력')
+ *  3) SHEET_NAME 은 비워둔다('') → 각 모듈이 자기 탭에 기록. (특정 탭에 고정하려면 탭 이름 입력)
  *  4) 배포 → 새 배포 → 웹 앱(실행: 나 / 액세스: 모든 사용자)로 배포.
- *  5) /exec URL 을 프로그램 → CS → 상담 메모 → 연동 설정 에 입력.
+ *  5) 표시된 /exec URL 을 프로그램의 각 모듈 [시트 연동]에 붙여넣는다.
+ *     (같은 스프레드시트를 쓰면 모든 모듈에 같은 URL 을 붙여넣으면 됨 — 탭만 달라짐)
  *  ※ 코드 수정 후에는 반드시 [배포 관리 → 새 버전 → 배포]로 재배포.
  *
  * 동작
- *  - doPost: { records:[{ id, 날짜, 분류, 연락처, 고객유형, 주문자/학교/업체명,
- *                          상품분류, 상품코드, 내용, 답변, 상담사 }] }
+ *  - doPost: { sheet:'탭이름', records:[{ id, 헤더1:값, 헤더2:값, … }] }
+ *    ★ body.sheet 로 기록할 탭 지정(없으면 SHEET_NAME/첫 탭). 없는 탭은 자동 생성.
  *    ★ 시트 1행(헤더 이름)을 읽어 "열 이름"으로 매핑 → 열 순서가 달라도 올바른 칸에 들어감.
+ *      (헤더가 비어 있으면 첫 레코드의 키로 헤더를 자동 생성)
  *    ★ 숨은 'id' 열로 upsert(있으면 갱신, 없으면 추가) → 재전송/수정해도 중복 행 없음.
- *      (id 열이 없으면 맨 오른쪽에 자동 생성)
  *  - doGet : 헬스체크.
  */
 
-var SHEET_NAME = '상담test';   // 기록할 탭 이름 (실제 운영 시 '2026 CS 상담이력' 등으로 변경)
+var SHEET_NAME = '';   // 비워두면 요청이 지정한 탭(모듈명)에 자동 기록 · 특정 탭 고정 시 탭 이름 입력
+                       // ※ 한 번만 배포하면 모든 모듈(상담/발주/현황판 등)이 각자 탭에 쌓입니다.
 
-function getSheet_() {
+function getSheet_(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (SHEET_NAME) return ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  var target = SHEET_NAME || name;   // 고정 탭(SHEET_NAME) 우선, 없으면 요청이 준 탭 이름
+  if (target) return ss.getSheetByName(target) || ss.insertSheet(target);
   return ss.getSheets()[0];
 }
 function json_(obj) {
@@ -46,7 +51,7 @@ function doPost(e) {
     var records = body.records || (body.id ? [body] : []);
     if (!records.length) return json_({ ok: true, synced: [] });
 
-    var sh = getSheet_();
+    var sh = getSheet_(body.sheet);   // body.sheet = 모듈이 지정한 탭 이름(없으면 SHEET_NAME/첫 탭)
 
     // 1) 헤더 확보 (없으면 첫 레코드의 키로 생성)
     var lastCol = sh.getLastColumn();

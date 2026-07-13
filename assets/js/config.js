@@ -191,6 +191,8 @@ const SHARE_DEFAULT = {
   [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
   [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
   [STORE.tsNoteCfg]:'md', [STORE.tsAgents]:'md', [STORE.tsTypes]:'md', [STORE.tsSumTpl]:'md',
+  'eduino.board.exchange.cfg':'cs', 'eduino.board.postpay.cfg':'cs',
+  'eduino.board.vendorchg.cfg':'md', 'eduino.board.stockmgmt.cfg':'md', 'eduino.board.inspect.cfg':'md', 'eduino.board.prodmgmt.cfg':'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
@@ -213,6 +215,9 @@ const SHARED_SETTING_KEYS = [
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
   STORE.shareMap, STORE.catMap,
+  // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
+  'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
+  'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
 ];
 /* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
 const SHARED_LABELS = {
@@ -231,6 +236,12 @@ const SHARED_LABELS = {
   [STORE.tsAgents]:'TS 담당자 목록',
   [STORE.tsTypes]:'TS 문의플랫폼',
   [STORE.tsSumTpl]:'TS 결산 저장 양식',
+  'eduino.board.exchange.cfg':'교환/반품 시트 연동 URL',
+  'eduino.board.postpay.cfg':'후불/발주 시트 연동 URL',
+  'eduino.board.vendorchg.cfg':'입점사 신규/변동 시트 연동 URL',
+  'eduino.board.stockmgmt.cfg':'품절관리 시트 연동 URL',
+  'eduino.board.inspect.cfg':'제품검수 시트 연동 URL',
+  'eduino.board.prodmgmt.cfg':'상품관리 시트 연동 URL',
   [STORE.shareMap]:'공유 범위 규칙',
   [STORE.catMap]:'이카운트 구매처·분류 이름표',
 };

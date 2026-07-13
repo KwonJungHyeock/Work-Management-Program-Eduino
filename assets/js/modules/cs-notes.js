@@ -37,7 +37,7 @@
       /* records 를 Apps Script 웹앱(doPost)으로 전송. id 기준 upsert 이므로 재시도해도 중복 없음 */
       async send(records, cfg){
         const payload = records.map(toSheetRecord);
-        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ records: payload }) };
+        const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ sheet:'CS상담메모', records: payload }) };
         try{
           const res = await fetch(cfg.sheetUrl, opts);
           if(!res.ok) throw new Error('HTTP '+res.status);

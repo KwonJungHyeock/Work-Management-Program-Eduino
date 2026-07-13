@@ -37,6 +37,18 @@
         const getAgents=()=> store(agentsKey).get((whoCfg&&whoCfg.options)?whoCfg.options.slice():[]);
         const setAgents=(v)=> store(agentsKey).set(v);
 
+        // ── 구글 시트 2차 백업 연동 (모듈별 탭) ──
+        const syncCfgKey='eduino.board.'+cfg.sheet+'.cfg';
+        const getSyncCfg=()=> store(syncCfgKey).get({sheetUrl:'',backup:true});
+        const setSyncCfg=(v)=> store(syncCfgKey).set(v);
+        const tabName=(cfg.sheetTab||cfg.title).replace(/[\/\\:?*\[\]]/g,'·');   // 시트 탭 이름(금지문자 치환)
+        function toSheetRow(rec){ const o={ id:rec.id }; cfg.fields.forEach(f=>{ o[f.label]= rec[f.k]!=null?rec[f.k]:''; }); o['등록자']=rec.whoName||''; return o; }
+        async function sendSheet(records){ const c=getSyncCfg(); if(!c.sheetUrl||!records.length) return {ok:false,error:'URL 미설정'};
+          const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({ sheet:tabName, records:records.map(toSheetRow) }) };
+          try{ const res=await fetch(c.sheetUrl,opts); if(!res.ok) throw new Error('HTTP '+res.status); let d=null; try{d=await res.json();}catch(e){} if(d&&d.ok===false) throw new Error(d.error||'시트 처리 실패'); return {ok:true}; }
+          catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ try{ await fetch(c.sheetUrl,{...opts,mode:'no-cors'}); return {ok:true,unconfirmed:true}; }catch(e){} } return {ok:false,error:err.message||'전송 실패'}; } }
+        function backupOne(rec){ const c=getSyncCfg(); if(c.backup!==false && c.sheetUrl) sendSheet([rec]); }
+
         root.innerHTML=`
         <style>
           .bd-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
@@ -83,6 +95,7 @@
         </style>
         <div class="mhead pad"><div class="tt">${esc(cfg.title)}</div><div class="ds">${esc(cfg.desc)}</div></div>
         <div class="mbody wide">
+          <div id="syncPanel" class="hidden" style="margin-bottom:20px"></div>
           <div class="bd-card">
             <div class="bd-hd"><span class="bd-ic">${icon('plus')}</span>새 기록 입력</div>
             <div class="bd-bd"><form id="bForm"><div class="bd-grid" id="fGrid"></div>
@@ -101,6 +114,7 @@
             ${cfg.whoField?`<select class="bd-in" id="fWho"><option value="">${esc((whoCfg&&whoCfg.label)||'담당자')} 전체</option></select>`:''}
             <input class="bd-in" id="fQ" type="text" placeholder="검색어…">
             <span class="bd-sp"></span>
+            ${isAdmin?`<button class="btn ghost sm" id="btnSync">${icon('cloud')}시트 연동</button>`:''}
             ${isAdmin?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>`:''}
             <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
           </div>
@@ -187,6 +201,7 @@
           cfg.fields.forEach(f=>{ rec[f.k]= form[f.k]!=null?form[f.k]:''; });
           all.unshift(rec); paint();
           if(window.Records) Records.pushRaw(cfg.dept||'md', cfg.sheet, rec);
+          backupOne(rec);   // 구글 시트 2차 백업(설정 시)
           // 폼 리셋(담당자/날짜는 유지 · 기본값 있는 필드는 기본값으로)
           cfg.fields.forEach(f=>{ if(f.k===cfg.whoField) return; if(f.type==='date'){ form[f.k]=todayStr(); return; } form[f.k]=f.def||''; });
           resetInputs();
@@ -270,6 +285,7 @@
             e.currentTarget.disabled=true;
             Object.assign(old,rec); editId=null; paintWho(); paint();
             if(window.Records){ const oldM=String(old.day||'').slice(0,7); await Records.pushRaw(cfg.dept||'md',cfg.sheet,rec); }
+            backupOne(rec);   // 시트 백업도 갱신(id upsert)
             toast('수정했습니다');
           });
           if(isAdmin) $('#tbl').querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
@@ -294,6 +310,40 @@
         if($('#fWho')) $('#fWho').onchange=()=>{ who=$('#fWho').value; paint(); };
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
         $('#btnReload').onclick=load;
+        if($('#btnSync')) $('#btnSync').onclick=renderSyncPanel;
+        function renderSyncPanel(){
+          const panel=$('#syncPanel'); if(!panel) return;
+          if(!panel.classList.contains('hidden')){ panel.classList.add('hidden'); panel.innerHTML=''; return; }
+          panel.classList.remove('hidden');
+          const c=getSyncCfg(); const headers=cfg.fields.map(f=>f.label).concat(['등록자']);
+          panel.innerHTML=`<div class="bd-card">
+            <div class="bd-hd"><span class="bd-ic">${icon('cloud')}</span>구글 시트 2차 백업 연동
+              <span class="muted" style="font-weight:600;font-size:12.5px;margin-left:6px">· 탭 이름: <b>${esc(tabName)}</b> · 관리자 전용</span></div>
+            <div class="bd-bd">
+              <ol class="setup-guide" style="margin:0 0 12px">
+                <li>백업용 <b>구글 스프레드시트</b>를 하나 준비합니다. <span class="muted" style="font-size:12.5px">(탭은 자동 생성 · 1행 헤더 자동: ${esc(headers.join(' · '))})</span></li>
+                <li><b>확장 프로그램 → Apps Script</b>에 <b>[코드 복사]</b>를 붙여넣고 저장. (<span class="mono">SHEET_NAME</span>은 비워두면 이 탭에 기록)</li>
+                <li><b>배포 → 새 배포 → 웹 앱</b>(실행: 나 / 액세스: 모든 사용자) → 표시된 <span class="mono">…/exec</span> URL 복사.</li>
+                <li>아래에 URL 붙여넣고 <b>저장 → 연결 테스트</b>. <span class="muted" style="font-size:12.5px">같은 스프레드시트를 쓰면 모든 모듈에 같은 URL을 넣어도 됩니다(탭만 달라짐).</span></li>
+              </ol>
+              <div style="margin-bottom:10px"><button class="btn sm" id="syncCopyCode">${icon('copy')}Apps Script 코드 복사</button></div>
+              <label class="fld" style="margin-bottom:12px">웹 앱 URL<input type="text" id="syncUrl" value="${esc(c.sheetUrl||'')}" placeholder="https://script.google.com/macros/s/……/exec"></label>
+              <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="syncBackup" ${c.backup!==false?'checked':''}> 저장 시 시트로 <b>자동 백업</b> <span class="muted" style="font-weight:500">· 끄면 내부 서버 기록에만 저장</span></label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button class="btn pri" id="syncSave">${icon('check')}저장</button>
+                <button class="btn" id="syncTest">${icon('cloud')}연결 테스트</button>
+                <button class="btn" id="syncAll">${icon('cloudUp')}이번 목록 전체 전송</button>
+                <button class="btn ghost" id="syncClose">닫기</button>
+                <span class="muted" id="syncStat" style="font-size:13px"></span></div>
+            </div></div>`;
+          panel.querySelector('#syncClose').onclick=()=>{ panel.classList.add('hidden'); panel.innerHTML=''; };
+          panel.querySelector('#syncCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 사용'); } };
+          panel.querySelector('#syncSave').onclick=()=>{ setSyncCfg({ sheetUrl:panel.querySelector('#syncUrl').value.trim(), backup:panel.querySelector('#syncBackup').checked }); panel.querySelector('#syncStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('연동 설정 저장'); };
+          panel.querySelector('#syncTest').onclick=async()=>{ const url=panel.querySelector('#syncUrl').value.trim(), st=panel.querySelector('#syncStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
+            try{ const res=await fetch(url); let d=null; try{d=await res.json();}catch(e){} st.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공${d&&d.sheet?` · 시트 "${esc(d.sheet)}"`:''}</span>`:`<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`; }catch(e){ st.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(e.message)}</span>`; } };
+          panel.querySelector('#syncAll').onclick=async()=>{ const st=panel.querySelector('#syncStat'); if(!getSyncCfg().sheetUrl){ st.textContent='먼저 URL을 저장하세요'; return; } st.textContent=`전송 중… (${all.length}건)`;
+            const r=await sendSheet(all); st.innerHTML=r.ok?`<span style="color:var(--ok)">${all.length}건 전송${r.unconfirmed?' (응답 확인 불가 · 재전송 안전)':''}</span>`:`<span style="color:var(--danger)">전송 실패: ${esc(r.error||'')}</span>`; };
+        }
         if($('#btnCsv')) $('#btnCsv').onclick=()=>{ if(!isAdmin){ toast('시트 다운로드는 관리자만 가능합니다'); return; } const {rows,from,to}=filtered();
           const header=showCols.map(c=>c.label);
           const lines=[header,...rows.map(r=>showCols.map(c=>r[c.k]==null?'':String(r[c.k])))];
