@@ -35,8 +35,9 @@ const TAG_SEMANTIC = {
   '견적':9,
   '후불':4,'상세페이지':4,
   '결제요청':6,'주문/배송':6,'썸네일':6,'누락':6,
-  '대량견적':5,'교환':5,
+  '대량견적':5,'교환':5,'월말정산':5,
   '상품/재고':8,'사고':8,
+  '선결제':3,
 };
 function tagColor(val){ const v=String(val==null?'':val).trim(); if(!v) return null;
   let idx = TAG_SEMANTIC[v];
