@@ -20,14 +20,14 @@
     return list.map(o=>ORDER_SHEET_COLS.map(c=>({
       '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
       '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,
-      '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`,
+      '출고송장/입고':'',   // 배송비 연동 제거 — 실제 출고 시 담당자가 송장번호를 직접 기입
       '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
   }
   /* 발주 → 구글시트 전송 레코드 (CS와 동일한 records+id upsert 방식 · 중복 없이 갱신) */
   function ordSheetRecord(o){ return {
     id:o.id, '일자':o.date||o.day||'', '구분':o.gubun||'', '주문경로':o.route||'', '주문자명':o.orderer||'', '입점사명':o.vendor||'',
     '정산구분':o.settle||'', '자체상품코드':o.selfCode||o.code||'', '품명':o.name||'', '수량':(o.qty!=null?o.qty:''),
-    '출고송장/입고':`배송비 ${fmtNum(o.ship)}원`, '발주':'O', '배송정보/비고':o.shipInfo||'' }; }
+    '출고송장/입고':'', '발주':'O', '배송정보/비고':o.shipInfo||'' }; }   // 출고송장/입고는 비워둠(담당자가 송장번호 직접 기입)
   /* 저장 실패로 미전송된 발주 자동 재시도 (주기적 + 재접속) — 내부는 멱등 재반영, 외부는 구글시트 */
   async function ordRetry(){
     try{
@@ -89,8 +89,9 @@
       // 자체상품코드(selfCode)가 기준 · 카페24 상품코드(code)로도 찾히게 보조 매핑(정규화 키)
       const prodMap=()=>{ const m={}; products.forEach(p=>{ const s=normCode(p.selfCode), c=normCode(p.code);
         if(s) m[s]=p; if(c && !m[c]) m[c]=p; }); return m; };
-      // 회사명 정규화 — (주)·㈜·주식회사·유한회사 등 접두/접미어와 공백 제거 후 비교(입점사 정보 매칭 견고화)
-      const normCo=s=>String(s||'').replace(/\(주\)|㈜|\(유\)|주식회사|유한회사|\(재\)|재단법인/g,'').replace(/\s/g,'').toLowerCase();
+      // 회사명 정규화 — 괄호주석(사이트·카카오톡 등)·(주)·㈜·주식회사 등과 공백 제거 후 비교(입점사 정보 매칭 견고화)
+      const normCo=s=>String(s||'').replace(/[(（[][^)）\]]*[)）\]]/g,'')      // (사이트)·(네오봇 카톡 검색) 등 괄호 주석 제거
+        .replace(/㈜|주식회사|유한회사|재단법인/g,'').replace(/\s/g,'').toLowerCase();
       const vendorObj=n=>{ if(!n) return null; const exact=vendors.find(x=>x.name===n); if(exact) return exact;
         const k=normCo(n); return k? (vendors.find(x=>normCo(x.name)===k)||null) : null; };
       const vendorShip=n=>{ const v=vendorObj(n); return v?Number(v.ship)||0:0; };
@@ -235,21 +236,12 @@
           <div class="out-tbl" style="max-height:none;margin-bottom:22px"><table class="tbl" id="ordTable"></table></div>
 
           <div class="fieldset fs-green">
-            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트 미리보기 (입점사명·정산구분·품명·배송비 자동) · <b>[저장]</b>으로 함께 전송됩니다
+            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트 미리보기 (입점사명·정산구분·품명 자동) · <b>[저장]</b>으로 함께 전송됩니다
               <span class="hint" style="display:flex;gap:6px">
                 <button class="btn sm" id="sheetCopy">${icon('copy')}복사</button>
                 <button class="btn sm" id="sheetCsv">${icon('download')}CSV</button></span></div>
             <div class="fs-bd"><div class="out-tbl"><table class="tbl" id="sheetTable"></table></div>
-              <div class="note" style="margin-top:10px"><b>출고송장/입고</b> 칸에는 <b>배송비</b>가 먼저 들어갑니다. 이후 실제 출고 시 담당자가 이 칸을 <b>송장번호로 덮어쓰면</b> 됩니다.</div></div>
-          </div>
-
-          <div class="fieldset fs-amber">
-            <div class="fs-hd"><span class="step" style="background:#b26a00">2</span>이카운트용 배송비 (입점사별 자동 산출)
-              <span class="hint" style="display:flex;gap:6px">
-                <button class="btn sm" id="ecCopy">${icon('copy')}복사</button>
-                <button class="btn sm" id="ecCsv">${icon('download')}CSV</button></span></div>
-            <div class="fs-bd"><div class="out-tbl"><table class="tbl" id="ecTable"></table></div>
-              <div class="note" style="margin-top:10px">거래처(입점사)마다 <b>배송비 1줄</b>씩 생성됩니다. 단가(vat포함)를 공급가·부가세로 자동 분리(÷11)합니다.</div></div>
+              <div class="note" style="margin-top:10px"><b>출고송장/입고</b> 칸은 비워둡니다 — 실제 출고 시 담당자가 <b>송장번호를 직접 기입</b>합니다. (배송비는 <b>입점사 정보</b>에서 관리)</div></div>
           </div>`;
 
         const $f=id=>body.querySelector(id);
@@ -344,7 +336,7 @@
           if(!p && !nameVal){ toast('미등록 코드입니다 — 품명을 입력하면 추가됩니다'); refreshLookup(); const n=nameEl(); if(n) n.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
-            vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:p?(p.settle||''):'', selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
+            vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||'', selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
             qty:Number($f('#fQty').value)||1, ship:p?shipFor(p):0, shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
           orders.push(rec); saveOrders();
           // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지
@@ -363,8 +355,6 @@
         $f('#sheetCopy').onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이 데이터 행만
         $f('#sheetCsv').onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); };
         $f('#saveOrders').onclick=onSave;
-        $f('#ecCopy').onclick=()=>{ const {rows}=ecData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이
-        $f('#ecCsv').onclick=()=>{ const {cols,rows}=ecData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_이카운트배송비_${todayStr()}.csv`); toast('CSV 저장'); };
         refreshLookup(); renderAll(); codeEl.focus();
       }
 
@@ -393,13 +383,7 @@
           return {ok:false, error:err.message||'전송 실패'};
         }
       }
-      function ecData(){
-        const byV={}; orders.forEach(o=>{ if(!byV[o.vendor]) byV[o.vendor]=vendorShip(o.vendor); });
-        const cols=['거래처','품목코드','품목명','수량','단가(vat포함)','공급가','부가세'];
-        const rows=Object.entries(byV).map(([v,ship])=>{ const s=vat(ship); return [v,'00001','배송비',1,ship,s.supply,s.tax]; });
-        return { cols, rows };
-      }
-      function renderAll(){ renderOrders(); renderSheet(); renderEc(); }
+      function renderAll(){ renderOrders(); renderSheet(); }
       function renderOrders(){
         const t=body.querySelector('#ordTable'), cnt=body.querySelector('#ordCnt'); if(!t) return;
         if(cnt) cnt.textContent=`· ${orders.length}건`;
@@ -439,7 +423,6 @@
           <tbody>${rows.length?rows.map(r=>`<tr>${r.map((c,ci)=>`<td class="${ci>=cols.length-3&&typeof c==='number'?'num mono':''}">${esc(c)}</td>`).join('')}</tr>`).join('')
             :`<tr><td colspan="${cols.length}" class="muted" style="text-align:center;padding:14px">발주 목록이 비어 있습니다.</td></tr>`}</tbody>`; }
       const renderSheet=()=>fillTable('#sheetTable',sheetData());
-      const renderEc=()=>fillTable('#ecTable',ecData());
 
       /* 저장 = 내부 시트(Records) + 외부 구글시트 동시 반영 */
       async function commit(list){
