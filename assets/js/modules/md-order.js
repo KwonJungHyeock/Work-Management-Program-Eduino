@@ -139,6 +139,9 @@
         .code-in:focus{border-color:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
         .oe{height:32px;font-size:13px;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel)}
         .oe:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft);outline:none}
+        .settle-sel{border:1px solid var(--line-2);border-radius:5px;background:var(--panel);font-size:12.5px;font-weight:700;padding:1px 4px;color:var(--ink);vertical-align:middle}
+        .lookup .pill .settle-sel{height:22px}
+        .settle-sel:focus{border-color:var(--red);outline:none}
         #ordTable tr:has(.oe){background:var(--active-bg)}
         /* 자동 조회 */
         .lookup{display:flex;align-items:center;padding:13px 16px;border-radius:11px;border:1.5px solid var(--line);background:var(--panel-2);min-height:66px;font-size:14px;transition:border-color .14s,background .14s,box-shadow .14s}
@@ -202,7 +205,7 @@
 
       /* ---------------- 발주 입력 ---------------- */
       const meName=((Auth.user&&Auth.user())||{}).name||'';
-      let form={ code:'', name:'', qty:1, orderer:'', route:'', gubun:'직배', shipInfo:'', handler:meName, date:todayStr().slice(5).replace('-','/') };
+      let form={ code:'', name:'', qty:1, orderer:'', route:'', gubun:'직배', settle:'', shipInfo:'', handler:meName, date:todayStr().slice(5).replace('-','/') };
       // 담당자 셀렉트 채우기 — MD 구성원(+관리자 본인). 팀원은 본인으로 기본 고정
       async function fetchRoster(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch{ return []; } }
       function fillHandler(sel){ if(!sel) return;
@@ -262,6 +265,10 @@
 
         const $f=id=>body.querySelector(id);
         let curProd=null;   // 현재 자동조회된 상품(수량 변경 시 총주문금액 재계산용)
+        let curSettle='';   // 자동조회로 판정된 정산구분(월정산/선결제) — 사용자가 직접 고르면 form.settle 이 우선
+        // 정산구분(월정산/선결제) 선택 드롭다운 — 구글시트 정산구분 칸으로 들어감
+        const settleSelHtml=(cur,id)=>`<select id="${id}" class="settle-sel"><option value="">-</option>`+
+          ['월정산','선결제'].map(o=>`<option ${o===cur?'selected':''}>${o}</option>`).join('')+`</select>`;
         const codeEl=$f('#fCode');
         const catCache={};   // 셀메이트 카탈로그 조회 캐시 (code → product)
         // 정확 일치 상품 + 옵션 후보(P-D10 → P-D10-1~3) 함께 반환
@@ -298,19 +305,21 @@
           syncName(p);
           const ven=vendorObj(vendorName(p));
           const policy=(ven&&ven.policy||'').trim();
-          const settle=(ven&&ven.settle)||p.settle||'-';        // 배송정보 리스트(월말정산/선결제) 우선
+          const settle=normSettle((ven&&ven.settle)||p.settle||'');   // 배송정보 리스트(월정산/선결제) 우선
+          curSettle=settle;                                            // 자동조회 기준값(사용자가 미선택 시 사용)
           const unit=Number(p.inPrice)||0, qty=Number(form.qty)||1;   // 이카운트 금액합계 = 입고단가 × 수량
           const si=shipInfoFor(p, unit*qty, qty);
           box.className='lookup ok';
           box.innerHTML=`<div class="lk">
             <div class="lk-top"><span class="lk-vn">${esc(vendorName(p)||'입점사 미지정')}</span>
-              <span class="pill">정산 <b>${esc(settle)}</b></span>
+              <span class="pill" style="padding:2px 6px 2px 9px">정산 ${settleSelHtml(form.settle||settle,'lkSettle')}</span>
               <span class="pill" id="lkShip">${shipPillHtml(si)}</span>${policy?`<span class="pill pol">${icon('truck')}<b>${esc(policy)}</b></span>`:''}</div>
             <div class="lk-amt" id="lkAmt">총주문금액 <b>${fmtNum(unit*qty)}원</b> <span class="muted">= 입고단가 ${fmtNum(unit)}원 × ${qty}${unit?'':' · 단가 미등록'}</span></div>
             <div class="lk-name">${p.name?esc(p.name):'<span class="muted">품명 미등록 — 직접 입력하세요</span>'}</div></div>`;
+          const ss=box.querySelector('#lkSettle'); if(ss) ss.onchange=e=>{ form.settle=e.target.value; };
           curProd=p; return p;
         }
-        codeEl.oninput=()=>{ form.code=codeEl.value; refreshLookup(); };
+        codeEl.oninput=()=>{ form.code=codeEl.value; form.settle=''; refreshLookup(); };  // 코드 변경 시 정산 선택은 자동판정으로 초기화
         if(nameEl()) nameEl().oninput=e=>{ form.name=e.target.value; e.target.dataset.auto=''; };  // 수동 편집 시 자동채움 잠금 해제
         ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value;
           if(id==='fQty' && curProd){ const u=Number(curProd.inPrice)||0, q=Number(form.qty)||1; const tot=u*q;
@@ -354,11 +363,11 @@
           if(!p && !nameVal){ toast('미등록 코드입니다 — 품명을 입력하면 추가됩니다'); refreshLookup(); const n=nameEl(); if(n) n.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
-            vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||'', selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
+            vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
             qty:Number($f('#fQty').value)||1, ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
           orders.push(rec); saveOrders();
-          // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지
-          form.code=''; form.name=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
+          // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지 (정산 선택도 초기화 — 다음 상품은 자동판정)
+          form.code=''; form.name=''; form.settle=''; curSettle=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
           $f('#fOrderer').value=''; $f('#fShipInfo').value=''; $f('#fQty').value=1;
           refreshLookup(); renderAll(); codeEl.focus();
           // 자동 저장이면 추가 즉시 내부+시트 동시 저장, 아니면 [저장] 대기
@@ -416,7 +425,7 @@
               <td><input class="oe" data-k="handler" value="${esc(o.handler||'')}" style="width:80px"></td>
               <td><input class="oe" data-k="orderer" value="${esc(o.orderer||'')}" style="width:88px"></td>
               <td>${o.vendor==='자사'?'<span class="vbadge jasa">자사</span>':'<b>'+esc(o.vendor||'-')+'</b>'}</td>
-              <td>${esc(o.settle)}</td><td class="mono">${esc(o.selfCode||o.code)}</td>
+              <td><select class="oe settle-sel" data-k="settle"><option value="">-</option>${['월정산','선결제'].map(x=>`<option ${x===normSettle(o.settle)?'selected':''}>${x}</option>`).join('')}</select></td><td class="mono">${esc(o.selfCode||o.code)}</td>
               <td style="max-width:360px">${esc(o.name)}<input class="oe" data-k="shipInfo" value="${esc(o.shipInfo||'')}" placeholder="배송정보/비고" style="width:100%;margin-top:5px"></td>
               <td class="num"><input type="number" min="1" class="oe" data-k="qty" value="${o.qty}" style="width:54px;text-align:right"></td>
               <td class="num">${fmtNum(o.ship)}</td><td></td>
@@ -432,7 +441,13 @@
               <td>${o.synced?`<span class="badge live">${SHEET_MSG.badgeDone}</span>`:`<span class="badge soon">${SHEET_MSG.badgePending}</span>`}</td>
               <td><span style="display:flex;gap:3px"><button class="btn ghost sm" data-a="oedit">수정</button><button class="btn ghost sm" data-a="odel" title="삭제">${icon('x')}</button></span></td>`;
             tr.querySelector('[data-a=oedit]').onclick=()=>{ editIdx=i; renderAll(); };
-            tr.querySelector('[data-a=odel]').onclick=()=>{ orders.splice(i,1); if(editIdx===i)editIdx=-1; saveOrders(); renderAll(); };
+            tr.querySelector('[data-a=odel]').onclick=()=>{
+              const rec=orders[i];
+              // 저장(전송)된 발주는 삭제 시 서버 발주기록·일일결산에서도 함께 차감 — 오표기 정정 시 잔재가 남지 않도록
+              if(rec && rec.synced && !confirm('이 발주를 삭제할까요? 발주 기록·일일결산에서도 함께 삭제됩니다.')) return;
+              orders.splice(i,1); if(editIdx===i)editIdx=-1; saveOrders(); renderAll();
+              if(window.Records && rec) Records.delMD(rec).then(()=>toast('삭제했습니다 · 발주 기록에서도 제거')).catch(()=>{});
+            };
           }
           tb.appendChild(tr); });
       }

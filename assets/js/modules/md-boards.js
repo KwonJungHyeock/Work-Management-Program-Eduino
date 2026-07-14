@@ -99,7 +99,7 @@
         <div class="mbody wide">
           <div id="syncPanel" class="hidden" style="margin-bottom:20px"></div>
           <div class="bd-card">
-            <div class="bd-hd"><span class="bd-ic">${icon('plus')}</span>새 기록 입력
+            <div class="bd-hd">새 기록 입력
               ${isAdmin && (cfg.fields||[]).some(f=>f.type==='select')?`<button type="button" class="btn ghost sm" id="bOptEdit" style="margin-left:auto">${icon('settings')}선택 항목 편집</button>`:''}</div>
             <div class="bd-bd"><form id="bForm"><div class="bd-grid" id="fGrid"></div>
               <div class="bd-actions">
@@ -190,13 +190,18 @@
             lookupProduct(code).then(res=>{ if(my!==seq||!root.isConnected) return; const p=res.product;
               if(p){ hint.textContent='✓ '+(p.name||'(이름 없음)'); hint.className='bd-code-hint';
                 if(nameField){ const nEl=grid.querySelector(`[data-k="${nameField}"]`);
-                  if(nEl && (!nEl.value.trim() || nEl.dataset.auto==='1')){ nEl.value=p.name||''; nEl.dataset.auto='1'; form[nameField]=p.name||''; } } }
+                  if(nEl && (!nEl.value.trim() || nEl.dataset.auto==='1')){ nEl.value=p.name||''; nEl.dataset.auto='1'; form[nameField]=p.name||''; } }
+                // 자체코드 → 입점사명 자동 채움(구매처명 이름표 우선) · 사용자가 직접 입력했으면 보존
+                if(cfg.vendorField){ const vName=(typeof catVendorName==='function'?catVendorName(p):(p.vendor||''))||'';
+                  const vEl=grid.querySelector(`[data-k="${cfg.vendorField}"]`);
+                  if(vEl && vName && (!vEl.value.trim() || vEl.dataset.auto==='1')){ vEl.value=vName; vEl.dataset.auto='1'; form[cfg.vendorField]=vName; } } }
               else if(res.options && res.options.length){ hint.innerHTML=`옵션 상품 ${res.options.length}개 — `+res.options.slice(0,6).map(o=>`<a href="#" data-c="${esc(o.selfCode)}" style="color:var(--info);text-decoration:underline">${esc(o.selfCode)}</a>`).join(', ')+(res.options.length>6?' …':''); hint.className='bd-code-hint';
                 hint.querySelectorAll('a[data-c]').forEach(a=>a.onclick=(e)=>{ e.preventDefault(); inp.value=a.dataset.c; form[cfg.codeField]=a.dataset.c; if(cfg.nameField){ const nEl=grid.querySelector(`[data-k="${cfg.nameField}"]`); if(nEl) nEl.dataset.auto=''; } run(); }); }
               else { hint.textContent='미등록 코드 — 제품명을 직접 입력'; hint.className='bd-code-hint warn'; }
             }); };
           inp.addEventListener('input',()=>{ clearTimeout(tmr); tmr=setTimeout(run,300); });
           if(cfg.nameField){ const nEl=grid.querySelector(`[data-k="${cfg.nameField}"]`); if(nEl) nEl.addEventListener('input',()=>{ nEl.dataset.auto=''; }); }
+          if(cfg.vendorField){ const vEl=grid.querySelector(`[data-k="${cfg.vendorField}"]`); if(vEl) vEl.addEventListener('input',()=>{ vEl.dataset.auto=''; }); }
         }
 
         /* ---- 저장 ---- */
@@ -414,8 +419,7 @@
     titleField:'title', whoField:'assignee', dateField:'sdate',
     fields:[
       { k:'title', label:'타이틀(업무 내용)', type:'text', req:true, ph:'예: OO사 신규 입점 / △△ 공급가 인상' },
-      { k:'status', label:'진행상태', type:'select', options:['신규 제품/입점사','기존 공급가변동/이슈','신규입점','대기 업무','프로모션 현황','보류','아카이브'] },
-      { k:'gubun', label:'프로젝트 구분', type:'select', options:['MD','CS','디자이너','물류','마케팅','팀장','프로모션'] },
+      { k:'status', label:'진행상태', type:'select', options:['대기','[신규] 제품/입점','[기존] 단가/이슈','보류'] },
       { k:'assignee', label:'담당자', type:'agent', options:['여미림','이진환'] },
       { k:'sdate', label:'시작일', type:'date' },
       { k:'edate', label:'종료(예정)일', type:'date' },
@@ -425,19 +429,18 @@
 
   /* ── 2) 품절관리 현황 ── */
   buildBoard({ key:'md.stock', title:'품절관리 현황', icon:'box', sheet:'stockmgmt',
-    desc:'제품별 판매·품절·단종 상태와 처리 내역을 팀 공유로 기록합니다. 자체코드 입력 시 제품명이 자동 연동됩니다.',
-    titleField:'name', whoField:'handler', dateField:'date', codeField:'code', nameField:'name',
+    desc:'제품별 판매·품절·단종 상태와 처리 내역을 팀 공유로 기록합니다. 자체코드 입력 시 제품명·입점사명이 자동 연동됩니다.',
+    titleField:'name', whoField:'handler', dateField:'date', codeField:'code', nameField:'name', vendorField:'vendor',
     fields:[
       { k:'date', label:'날짜', type:'date' },
       { k:'gubun', label:'분류', type:'select', options:['판매','품절','단종'] },
       { k:'own', label:'자사/입점사', type:'select', options:['자사 키트','자사 부품','입점사 키트','입점사 부품'] },
-      { k:'vendor', label:'입점사명', type:'text', ph:'입점사명' },
+      { k:'vendor', label:'입점사명', type:'text', ph:'자체코드 입력 시 자동' },
       { k:'code', label:'자체코드', type:'code', ph:'예: P-AP3' },
       { k:'name', label:'상품관리(제품명)', type:'text', req:true, ph:'자체코드 입력 시 자동' },
       { k:'handler', label:'처리자', type:'agent', options:['여미림','이진환','신아름'] },
       { k:'content', label:'처리내용', type:'textarea', ph:'처리 내용' },
       { k:'status', label:'상태', type:'toggle', onLabel:'완료' },
-      { k:'datetext', label:'날짜(기록용)', type:'text', ph:'예: 3/14, 3월 중' },
       { k:'remark', label:'특이사항', type:'textarea', ph:'특이사항' },
     ] });
 

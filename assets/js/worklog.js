@@ -54,11 +54,23 @@ window.Records = (function(){
     const u=(window.Auth&&Auth.user&&Auth.user())||{};
     const actor=u.name || u.loginId || '?';
     return post({ op:'recDel', dept, sheet, id, month, who, day, actor }); }
+  /* MD 발주 레코드 삭제 — pushMD 와 동일한 귀속(who/day) 규칙으로 서버 발주기록·일일결산·카운터를 함께 정리 */
+  async function delMD(rec){
+    if(!rec || !rec.id) return null;
+    const R=await roster();
+    const u=(window.Auth&&Auth.user&&Auth.user())||{};
+    const dev=(window.Auth&&Auth.device&&Auth.device())||'';
+    const who = (rec.handler&&String(rec.handler).trim()) || u.name || dev || u.loginId || '?';
+    const m = R.find(p=>p.dept==='md' && p.name===who) || R.find(p=>p.name===who);
+    const day = (/^\d{4}-\d{2}-\d{2}$/.test(rec.date||'')?rec.date:today());
+    const whoId = m?m.loginId:(u.loginId||('@'+who));
+    return del('md','orders',rec.id, day.slice(0,7), whoId, day);
+  }
 
   /* 한 달치 시트 레코드 조회 */
   async function month(dept, sheet, ym){
     try{ const r=await fetch(`/api/store?type=sheet&dept=${encodeURIComponent(dept)}&sheet=${encodeURIComponent(sheet)}&month=${encodeURIComponent(ym)}`);
       if(!r.ok) throw 0; const d=await r.json(); return (d&&d.records)||[]; }catch(e){ return null; }
   }
-  return { roster, pushCS, pushTS, pushMD, pushRaw, del, month };
+  return { roster, pushCS, pushTS, pushMD, pushRaw, del, delMD, month };
 })();

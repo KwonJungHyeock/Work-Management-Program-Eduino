@@ -99,12 +99,15 @@ async function fetchEcount() {
 
   const M = (k, d) => process.env['ECOUNT_MAP_' + k] || d;
   // 옵션값 필드 자동 판별: ECOUNT_MAP_OPTION > 흔한 필드명 > 키 이름에 opt/size/옵션/규격 포함(코드·수량·단가 제외)
-  const OPT_KNOWN = ['SIZE_DES','OPT_DES','OPTION_DES','SIZE1_DES','SIZE2_DES','PROD_SIZE_DES','PROD_SIZE','SIZE_DES1','OPT1_DES','OPTION_NAME','OPTION','OPT'];
+  // 이카운트 '규격' 필드 후보 — GetBasicProductsList 는 보통 SIZE_DES(규격명). 계정 설정에 따라 이름이 달라 폭넓게 탐색.
+  const OPT_KNOWN = ['SIZE_DES','SIZE_DES1','SIZE_DES2','OPT_DES','OPTION_DES','SIZE1_DES','SIZE2_DES',
+    'PROD_SIZE_DES','PROD_SIZE','ITEM_SIZE','SIZE_NAME','SPEC_DES','SPEC','OPT1_DES','OPTION_NAME','OPTION','OPT','규격','규격명'];
   const optEnv = M('OPTION', '');
   const findOption_ = (x) => {
     if (optEnv) return String(x[optEnv] || '');
     for (const k of OPT_KNOWN) { const v = x[k]; if (v != null && String(v).trim() !== '') return String(v); }
-    for (const k in x) { if (/opt|size|규격|옵션/i.test(k) && !/cd$|code|_no$|qty|price|단가|수량|번호|일자|date/i.test(k)) {
+    // 자동 탐색: 키에 opt/size/spec/규격/옵션 포함(코드·수량·단가·플래그 제외)
+    for (const k in x) { if (/opt|size|spec|규격|옵션/i.test(k) && !/cd$|code|_no$|qty|price|단가|수량|번호|일자|date|flag|yn$|여부/i.test(k)) {
       const v = x[k]; if (v != null && String(v).trim() !== '') return String(v); } }
     return '';
   };

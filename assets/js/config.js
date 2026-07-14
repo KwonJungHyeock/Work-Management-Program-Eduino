@@ -105,13 +105,14 @@ const DEFAULT_MD_PRODUCTS = [
   { selfCode:'P-AJ64', code:'', vendor:'삼쩜일사',   settle:'선결제', name:'[로봇과 함께하는 인공지능 교육 12차시 태블릿&크롬북 활용 교재] 카미봇파이 워크북', ship:'' },
 ];
 /* 입점사 정보 (배송비 vat포함 + 무료배송조건/담당자/연락처/발주메일/특이사항)
-   · 상품에 개별 배송비가 있으면 그 값이 우선 · 실제 목록은 data/입점사_배송정보.csv 임포트 */
-const DEFAULT_MD_VENDORS = [
-  { name:'자사',       ship:3000, policy:'자사 상품 (모두 3,000원)', manager:'', contact:'', email:'', note:'' },
-  { name:'삼쩜일사',   ship:5100, policy:'',                    manager:'', contact:'', email:'', note:'' },
-  { name:'아이씨뱅큐', ship:0,    policy:'무료배송',            manager:'', contact:'', email:'', note:'' },
-  { name:'다산북스',   ship:2500, policy:'2,500원 - 3만원 이상 구매', manager:'김재민 본부장', contact:'070-4481-2631', email:'leehan011@dasanbooks.com', note:'' },
-];
+   · 상품에 개별 배송비가 있으면 그 값이 우선 · 전 직원 기본 탑재값은 vendors-ship-data.js(=data/입점사_배송정보.csv 자동생성)
+   · 관리자가 [입점사 정보]에서 저장/임포트하면 그 값이 우선(팀 동기화). 번들 기본값 덕분에 동기화 전에도 배송비가 정확히 표시됨 */
+const DEFAULT_MD_VENDORS = (typeof window!=='undefined' && Array.isArray(window.MD_VENDORS_DEFAULT) && window.MD_VENDORS_DEFAULT.length)
+  ? window.MD_VENDORS_DEFAULT
+  : [
+      { name:'자사',       ship:3000, policy:'자사 상품 (모두 3,000원)', manager:'', contact:'', email:'', note:'' },
+      { name:'아이씨뱅큐', ship:2700, policy:'2,700원 - 5만원 이상 구매', manager:'', contact:'', email:'', note:'' },
+    ];
 
 /* 프로그램 명칭 */
 const APP_NAME = '에듀이노 통합 업무관리';
