@@ -541,6 +541,31 @@
       { k:'remark', label:'특이사항', type:'textarea', ph:'특이사항' },
     ] });
 
+  // 상품관리·품절관리·제품검수를 한 메뉴에서 서브탭으로 (개별 보드는 그대로 유지 · 임베드)
+  MODULES['md.prodhub']={
+    title:'상품·품질 관리', icon:'grid',
+    render(root){
+      const SUBS=[
+        { t:'prodmgmt', key:'md.prodmgmt', label:'상품관리' },
+        { t:'stock',    key:'md.stock',    label:'품절관리' },
+        { t:'inspect',  key:'md.inspect',  label:'제품검수' },
+      ];
+      let tab='prodmgmt';
+      root.innerHTML=`
+        <div class="mhead">
+          <div class="tt">상품·품질 관리</div>
+          <div class="ds">상품관리 · 품절관리 · 제품검수 현황을 한 곳에서 관리합니다.</div>
+          <div class="mtabs">${SUBS.map(s=>`<div class="t" data-t="${s.t}">${esc(s.label)}</div>`).join('')}</div>
+        </div>
+        <div class="mbody wide" id="phBody"></div>`;
+      const body=root.querySelector('#phBody');
+      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
+        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
+      function draw(){ const s=SUBS.find(x=>x.t===tab)||SUBS[0]; embedModule(body, s.key); }
+      draw();
+    }
+  };
+
   // 다른 모듈(CS 등)에서 같은 엔진으로 현황판을 만들 수 있도록 공개
   window.buildBoard = buildBoard;
 })();

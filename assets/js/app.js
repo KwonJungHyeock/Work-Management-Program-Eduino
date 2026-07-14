@@ -72,6 +72,17 @@ function icon(name){ return `<span class="ic">${ICONS[name]?`<svg viewBox="0 0 2
 function $(id){ return document.getElementById(id); }
 function el(tag,cls,html){ const n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* 다른 모듈을 서브탭 안에 임베드 — 임베드된 모듈의 중복 헤더(.mhead)는 제거해 한 화면처럼 보이게 함.
+   합쳐진 메뉴(발주 기록·TS상담 기록·상품/품절/제품검수 등)에서 공용으로 사용. */
+function embedModule(container, key){
+  container.innerHTML='';
+  const m=(window.MODULES||{})[key];
+  if(!m || !m.render){ container.innerHTML='<div class="muted" style="padding:18px">화면을 불러오지 못했습니다.</div>'; return null; }
+  const c=el('div'); container.appendChild(c);
+  try{ m.render(c); }catch(e){ container.innerHTML='<div class="muted" style="padding:18px">화면을 불러오지 못했습니다.</div>'; return null; }
+  const mh=c.querySelector('.mhead'); if(mh) mh.remove();   // 탭 안이라 중복 제목 제거
+  return c;
+}
 function store(key){ return {
   get(def){ try{ const v=localStorage.getItem(key); return v==null?def:JSON.parse(v); }catch{ return def; } },
   set(v){ localStorage.setItem(key,JSON.stringify(v)); },

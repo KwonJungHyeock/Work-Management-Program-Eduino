@@ -175,22 +175,17 @@ const NAV = [
       { key:'cs.postpay',   name:'견적/발주/후불', icon:'truck' },
       { key:'cs.exchange',  name:'교환/반품',     icon:'refresh' },
       { key:'cs.china',     name:'중국 발주요청', icon:'box' },
-      { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
-      { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
+      { key:'cs.templates', name:'답변·메일 템플릿', icon:'chat' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
       { key:'cs.custdb',    name:'고객 정보 검색', icon:'search' },
       { key:'cs.settle',    name:'일일결산',    icon:'check2' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
       { key:'md.order',     name:'입점사 발주',        icon:'truck' },
-      { key:'md.records',   name:'발주 기록',          icon:'sheet' },
       { key:'md.payreq',    name:'결제요청',           icon:'stamp' },
       { key:'md.vendorchg', name:'입점사 신규/변동',   icon:'truck' },
-      { key:'md.prodmgmt',  name:'상품관리 현황',      icon:'grid' },
-      { key:'md.stock',     name:'품절관리 현황',      icon:'box' },
-      { key:'md.inspect',   name:'제품검수 현황',      icon:'check' },
+      { key:'md.prodhub',   name:'상품·품질 관리',     icon:'grid' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
-      { key:'md.tsrecords', name:'TS상담 기록',        icon:'sheet' },
       { key:'md.settle',    name:'일일결산',           icon:'check2' },
       { key:'md.extra',     name:'부가기능',           icon:'grid' },
   ]},
@@ -207,7 +202,7 @@ const NAV = [
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
 const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
-  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.settle'];
+  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.settle'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }

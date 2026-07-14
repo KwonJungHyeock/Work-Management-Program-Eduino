@@ -202,6 +202,7 @@
         <div class="ds">상품코드만 입력하면 입점사·정산구분·품명(구글시트)과 배송비(이카운트)가 자동으로 채워집니다.</div>
         <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
+          <div class="t" data-t="records">발주 기록</div>
           ${isAdmin?`<div class="t" data-t="catmap">이카운트 매핑</div>
           <div class="t" data-t="vendor">입점사 정보</div>
           <div class="t" data-t="settings">연동 설정</div>`:''}
@@ -211,8 +212,8 @@
       const body=root.querySelector('#ordBody');
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
-      const draw=()=>{ if(!isAdmin && tab!=='entry') tab='entry';
-        return tab==='entry'?drawEntry(): tab==='catmap'?drawCatMap(): tab==='vendor'?drawVendors(): drawSettings(); };
+      const draw=()=>{ if(!isAdmin && tab!=='entry' && tab!=='records') tab='entry';
+        return tab==='entry'?drawEntry(): tab==='records'?embedModule(body,'md.records'): tab==='catmap'?drawCatMap(): tab==='vendor'?drawVendors(): drawSettings(); };
 
       /* ---------------- 발주 입력 ---------------- */
       const meName=((Auth.user&&Auth.user())||{}).name||'';

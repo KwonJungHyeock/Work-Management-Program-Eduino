@@ -197,6 +197,7 @@
         <div class="ds">기술상담(TS) 문의를 문의플랫폼·상품구분을 누르고 내용을 적으면(Ctrl+Enter 저장) <b>내부 TS 상담 기록과 구글시트에 동시에 저장</b>됩니다. 상품코드를 넣으면 제품명이 자동으로 채워집니다.</div>
         <div class="mtabs">
           <div class="t" data-t="memo">TS 상담 메모</div>
+          <div class="t" data-t="records">TS 상담 기록</div>
           <div class="t" data-t="summary">일일 결산</div>
           ${isAdmin?'<div class="t" data-t="settings">연동 설정</div>':''}
         </div>
@@ -206,7 +207,7 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ if(tab==='settings' && !isAdmin) tab='memo';
-        return tab==='memo'?drawMemo(): tab==='summary'?drawSummary(): drawSettings(); };
+        return tab==='memo'?drawMemo(): tab==='records'?embedModule(body,'md.tsrecords'): tab==='summary'?drawSummary(): drawSettings(); };
 
       /* ---------------- TS 상담 메모 탭 ---------------- */
       function drawMemo(){
