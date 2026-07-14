@@ -20,7 +20,9 @@
       title:cfg.title, icon:cfg.icon||'sheet',
       render(root){
         const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
-        const canDel=isAdmin || (Auth.user&&Auth.user()||{}).role==='lead';   // 기록 삭제 = 파트장급(파트장·관리자)
+        const _me=(Auth.user&&Auth.user())||{};
+        // 기록 삭제 = 파트장급(파트장·관리자) · 단 cfg.delByDept 시 해당 부서 담당자도 삭제 가능
+        const canDel=isAdmin || _me.role==='lead' || (cfg.delByDept && _me.dept===cfg.dept);
         root.innerHTML=`
         <style>
           .sv-ctrl{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:14px}
@@ -237,7 +239,7 @@
 
   build({ key:'cs.records', dept:'cs', sheet:'notes', title:'상담 기록', icon:'sheet',
     desc:'전 상담사의 상담 메모가 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
-    editable:true, whoLabel:'상담사',
+    editable:true, delByDept:true, whoLabel:'상담사',
     filters:[ {k:'category',label:'분류'}, {k:'customerType',label:'고객유형'} ],
     // 기존 누적 기록 → 구글시트 CS상담메모 탭 일괄 전송(백필)
     sheetPush:{ tab:'CS상담메모', urlKey:STORE.csNoteCfg,

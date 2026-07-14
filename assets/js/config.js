@@ -132,6 +132,14 @@ const CS_CUSTOMER_TYPES = ['유치원','초등학교','중학교','고등학교'
 const CS_PRODUCT_CATEGORIES = ['자사키트','자사부품','입점사키트','입점사부품']; // 시트 '상품분류'
 /* 고객 데이터베이스(원장) 타겟 = 고객유형. 값은 데이터시트 00_요약 집계(COUNTIF)와 정확히 일치해야 함(가운뎃점 · 포함) */
 const CUSTDB_TARGETS = ['대학','고등','중등','초등','유아','공공기관','기업·학원','개인','파트너·입점사','미분류'];
+/* CS 입력용 고객유형(친숙한 표기) → 원장 타겟(00_요약 집계값) 변환.
+   CS는 유치원/초등학교/… 로 입력하고, 원장(21_거래내역)엔 유아/초등/… 로 저장되어 요약과 매칭됨 */
+const CUSTTYPE_TO_TARGET = {
+  '유치원':'유아', '어린이집':'유아', '초등학교':'초등', '중학교':'중등', '고등학교':'고등', '대학교':'대학',
+  '기관':'공공기관', '개인':'개인', '업체':'기업·학원', '학원':'기업·학원',
+  '입점사':'파트너·입점사', '파트너사':'파트너·입점사',
+};
+function custTypeToTarget(v){ v=String(v||'').trim(); return CUSTTYPE_TO_TARGET[v] || (CUSTDB_TARGETS.indexOf(v)>=0?v:(v?'미분류':'')); }
 const CS_ORDER_ROUTES = ['사이트','스팜','후불','발주'];                     // 시트 '주문경로'
 const CS_AGENTS = ['함인영','신아름','송민희','박정길'];                      // 시트 '상담사'
 /* 상담 메모 내부필드 → 구글시트 헤더 이름 매핑 (Apps Script가 헤더 이름으로 칸을 맞춤) */
@@ -165,7 +173,7 @@ const NAV = [
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.notes',     name:'CS상담 메모',   icon:'clipboard' },
       { key:'cs.records',   name:'CS상담 기록',   icon:'sheet' },
-      { key:'cs.postpay',   name:'후불/발주',     icon:'truck' },
+      { key:'cs.postpay',   name:'견적/발주/후불', icon:'truck' },
       { key:'cs.exchange',  name:'교환/반품',     icon:'refresh' },
       { key:'cs.china',     name:'중국 발주요청', icon:'box' },
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },

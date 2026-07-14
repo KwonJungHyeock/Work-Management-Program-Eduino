@@ -44,6 +44,20 @@
         <td>${cell(r.whoName||r.who)}</td></tr>`).join('')}
     </tbody></table></div>`;
   }
+  /* 견적·발주·후불 금액 결산 (CS) — 구분별 건수+총금액, 견적/발주/후불 순 */
+  const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
+  function payMoneyHtml(recs){
+    recs=recs||[]; const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
+    recs.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
+    const won=n=>Number(n||0).toLocaleString();
+    const tc=order.reduce((a,k)=>a+g[k].c,0), ts=order.reduce((a,k)=>a+g[k].s,0);
+    return `<div class="st-sec-cap">견적·발주·후불 결산 (금액)</div>
+      <div style="overflow-x:auto"><table class="st-tbl" style="max-width:540px"><tbody>
+        <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
+        ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
+        <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
+      </tbody></table></div>`;
+  }
   const catLine=agg=>Object.entries(agg.byCat).map(([k,v])=>`${k} ${v}`).join(' · ');
   const personLine=agg=>Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}건`).join(', ');
 
@@ -125,12 +139,14 @@
               <div class="st-hd"><div class="st-t">${esc(date)} · ${DEPT_LABEL[dept]} 파트 집계</div>
                 <span class="st-badge" style="color:${st.c};background:${st.bg}">${st.l}</span></div>
               ${aggCard(dept,agg)}
+              ${dept==='cs'?payMoneyHtml((agg.details&&agg.details.postpay)||[]):''}
               <div class="st-sec-cap">전달한 담당자 · ${(doc.contributors||[]).length}명</div>
               <div class="st-contribs" id="stContribs">${contribHtml(doc)}</div>
               <div class="st-sec-cap">① 내 특이사항 (담당자) ${mine?'<span style="color:var(--ok);font-weight:700;text-transform:none">✓ 전달함</span>':''}</div>
               <textarea class="st-note-in" id="stNote" placeholder="오늘 특이사항·인수인계·이슈를 적어주세요" ${locked?'disabled':''}>${esc(mine?mine.note:'')}</textarea>
               <div class="st-actions">
                 <button class="btn pri" id="stTransfer" ${locked?'disabled':''}>${icon('send')}${mine?'특이사항 수정 전달':'일일결산 전달'}</button>
+                ${mine?`<button class="btn ghost" id="stDelNote" ${locked?'disabled':''}>${icon('trash')}내 특이사항 삭제</button>`:''}
                 <span class="st-meta" id="stMsg"></span>
               </div>
               <div class="st-sec-cap" style="margin-top:18px">② 파트 종합 의견 → 대표 결재함 상신 (파트장) ${doc.status!=='draft'?`<span style="color:var(--info);font-weight:700;text-transform:none">✓ 상신됨</span>`:''}</div>
@@ -149,6 +165,12 @@
             if(ex){ ex.note=note; ex.whoName=u.name||who; ex.at=nowISO(); } else cur.contributors.push({who,whoName:u.name||who,note,at:nowISO()});
             const r=await collPush(cur); if(msg) msg.textContent = r? '' : '전달 실패 — 잠시 후 다시 시도';
             toast('일일결산을 전달했습니다'); load(); };
+          // ①-b 내 특이사항 삭제 (본인 것만)
+          const dn=root.querySelector('#stDelNote');
+          if(dn) dn.onclick=async()=>{ if(!confirm('내 특이사항을 삭제할까요?')) return;
+            const who=u.loginId||u.name; const cur=all.find(d=>d.id===doc.id)||doc;
+            cur.contributors=(cur.contributors||[]).filter(c=>c.who!==who);
+            const r=await collPush(cur); toast(r?'삭제했습니다':'삭제 실패 — 다시 시도'); load(); };
           // ② 파트장 상신 — 대표 결재함으로 (prompt 없이 인라인 · 종합의견 선택)
           const sb=root.querySelector('#stSubmit');
           if(sb) sb.onclick=async(e)=>{ const partNote=(root.querySelector('#stPartNote')?.value||'').trim();
