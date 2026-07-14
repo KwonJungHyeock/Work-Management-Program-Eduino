@@ -131,7 +131,7 @@ async function getWorkRaw(dept, month) {
 // 부서별 허용 시트(레코드 버킷) — 현황판/신설 페이지가 추가될 때마다 등록해야 서버에 저장됨
 const SHEET_ALLOW = {
   cs: ['notes', 'postpay', 'exchange'],
-  md: ['orders', 'tsnotes', 'vendorchg', 'stockmgmt', 'inspect', 'prodmgmt'],
+  md: ['orders', 'tsnotes', 'vendorchg', 'stockmgmt', 'inspect', 'prodmgmt', 'payreq'],
 };
 function sheetOk(dept, sheet) { return SHEET_ALLOW[dept] && SHEET_ALLOW[dept].indexOf(sheet) >= 0; }
 function sheetBucket(dept, sheet, ym) { return 'eduino:sheet:' + dept + ':' + sheet + ':' + ym; }

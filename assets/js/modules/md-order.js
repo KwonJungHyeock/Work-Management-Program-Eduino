@@ -375,7 +375,8 @@
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
-            qty:Number($f('#fQty').value)||1, ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
+            qty:Number($f('#fQty').value)||1, amount:(Number(p&&p.inPrice)||0)*(Number($f('#fQty').value)||1),
+            ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
           orders.push(rec); saveOrders();
           // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지 (정산 선택도 초기화 — 다음 상품은 자동판정)
           form.code=''; form.name=''; form.settle=''; curSettle=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
@@ -457,7 +458,8 @@
               // 저장(전송)된 발주는 삭제 시 서버 발주기록·일일결산에서도 함께 차감 — 오표기 정정 시 잔재가 남지 않도록
               if(rec && rec.synced && !confirm('이 발주를 삭제할까요? 발주 기록·일일결산에서도 함께 삭제됩니다.')) return;
               orders.splice(i,1); if(editIdx===i)editIdx=-1; saveOrders(); renderAll();
-              if(window.Records && rec) Records.delMD(rec).then(()=>toast('삭제했습니다 · 발주 기록에서도 제거')).catch(()=>{});
+              if(window.Records && rec){ Records.delMD(rec).then(()=>toast('삭제했습니다 · 발주 기록에서도 제거')).catch(()=>{});
+                Records.del('md','payreq',rec.id,dayOfOrder(rec).slice(0,7)); }   // 결제요청에서도 제거
             };
           }
           tb.appendChild(tr); });
@@ -468,10 +470,20 @@
             :`<tr><td colspan="${cols.length}" class="muted" style="text-align:center;padding:14px">발주 목록이 비어 있습니다.</td></tr>`}</tbody>`; }
       const renderSheet=()=>fillTable('#sheetTable',sheetData());
 
+      // 선결제 발주 → 결제요청(payreq) 미러: 발주 기록에 남기고, 선결제면 결제요청 시트에도 한 번 더 올림
+      const dayOfOrder=o=>/^\d{4}-\d{2}-\d{2}$/.test(o.date||'')?o.date:todayStr();
+      function payreqFromOrder(o){ const ven=vendorObj(o.vendor);
+        return { id:o.id, day:dayOfOrder(o), date:o.date, kind:'발주',
+          orderer:[o.route,o.orderer].filter(Boolean).join(' '), vendor:o.vendor||'', content:o.name||'',
+          amount:Number(o.amount)||0, account:(ven&&ven.account)||'', handler:o.handler||'', whoName:o.handler||'' }; }
+      function syncPayreq(o){ if(!window.Records) return;
+        if(normSettle(o.settle)==='선결제') Records.pushRaw('md','payreq',payreqFromOrder(o));
+        else Records.del('md','payreq',o.id,dayOfOrder(o).slice(0,7));   // 선결제 아니면 제거(수정으로 바뀐 경우)
+      }
       /* 저장 = 내부 시트(Records) + 외부 구글시트 동시 반영 */
       async function commit(list){
         const pending=list.filter(o=>!o.synced); if(!pending.length) return {ok:true, sent:0, none:true};
-        if(window.Records) pending.forEach(o=>Records.pushMD(o));      // 내부 발주 기록에 즉시 반영
+        if(window.Records) pending.forEach(o=>{ Records.pushMD(o); syncPayreq(o); });   // 발주 기록 + 선결제면 결제요청 미러
         const cfg=getCfg();
         if(!cfg.sheetUrl || cfg.backup===false){ pending.forEach(o=>o.synced=true); saveOrders(); return {ok:true, sent:pending.length, internalOnly:true}; }
         return sendOrders(pending);                                    // 외부 구글시트(성공 시 synced 표시)
@@ -513,8 +525,8 @@
         renderVen();
         body.querySelector('#saveVen').onclick=()=>{ saveVendors(); dirtyVendor=false; body.querySelector('#vDirty').style.display='none'; toast('저장되었습니다'); };
         body.querySelector('#addVen').onclick=()=>{ vendors.unshift({name:'',ship:3000,policy:'',manager:'',contact:'',email:'',note:''}); markVendorDirty(); renderVen(); };
-        body.querySelector('#expVen').onclick=()=>{ const cols=['입점사명','정산구분','배송비','무료배송조건','담당자','연락처','발주메일','특이사항'];
-          const rows=vendors.map(v=>[v.name,v.settle||'',v.ship||'',v.policy||'',v.manager||'',v.contact||'',v.email||'',v.note||'']);
+        body.querySelector('#expVen').onclick=()=>{ const cols=['입점사명','정산구분','배송비','무료배송조건','담당자','연락처','발주메일','계좌정보','특이사항'];
+          const rows=vendors.map(v=>[v.name,v.settle||'',v.ship||'',v.policy||'',v.manager||'',v.contact||'',v.email||'',v.account||'',v.note||'']);
           downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`입점사정보_${todayStr()}.csv`); toast('CSV 저장'); };
         const vf=body.querySelector('#venFile');
         body.querySelector('#impVenFile').onclick=()=>vf.click();
@@ -545,7 +557,7 @@
           settle:['정산구분','정산'], ship:['배송비','배송비(vat포함)','배송비vat포함'],
           policy:['무료배송조건','배송조건','배송비정책','무료배송기준','배송조건/무료배송조건'],
           manager:['담당자','담당자명','담당'], contact:['연락처','전화','전화번호','연락처1'],
-          email:['발주메일','발주 메일','이메일','메일','발주이메일'], note:['특이사항','비고','메모'] };
+          email:['발주메일','발주 메일','이메일','메일','발주이메일'], account:['계좌정보','계좌','입금계좌','발주계좌','계좌번호'], note:['특이사항','비고','메모'] };
         // 헤더 행 자동 탐색 — 실제 시트는 상단에 안내/빈 행이 섞여 있어 첫 8행 중 헤더가 가장 많이 잡히는 행을 헤더로 인정
         let headerRow=0, best=0;
         for(let i=0;i<Math.min(rows.length,8);i++){ const h=(rows[i]||[]).map(norm); let sc=0;
@@ -579,7 +591,7 @@
           let ship=g(r,ci.ship).replace(/[^\d]/g,'');
           ship = ship!=='' ? Number(ship) : (parseShipFromPolicy(policy) ?? 0);
           const rec={ name, settle:normSettle(g(r,ci.settle))||defaultSettle||'', ship, policy,
-            manager:g(r,ci.manager), contact:g(r,ci.contact), email:g(r,ci.email), note:g(r,ci.note) };
+            manager:g(r,ci.manager), contact:g(r,ci.contact), email:g(r,ci.email), account:g(r,ci.account), note:g(r,ci.note) };
           const ex=vendors.find(v=>v.name===name);
           if(ex){ Object.assign(ex,rec); updated++; } else { vendors.push(rec); added++; } });
         if(!silent){ markVendorDirty(); renderVen();
@@ -591,9 +603,9 @@
         t.innerHTML=`<thead><tr><th style="min-width:140px">입점사명</th><th style="width:78px">정산</th>
           <th class="num" style="width:112px">배송비(vat포함)</th><th class="num" style="width:88px">공급가</th><th class="num" style="width:72px">부가세</th>
           <th style="min-width:180px">무료배송조건</th><th style="min-width:110px">담당자</th><th style="min-width:150px">연락처</th>
-          <th style="min-width:180px">발주메일</th><th style="min-width:120px">특이사항</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
+          <th style="min-width:180px">발주메일</th><th style="min-width:190px">계좌정보 <span style="font-weight:500;color:var(--muted);font-size:11px">(선결제 결제요청 자동)</span></th><th style="min-width:120px">특이사항</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
-        if(!vendors.length){ tb.innerHTML=`<tr><td colspan="11" class="muted" style="text-align:center;padding:16px">입점사가 없습니다. “행 추가” 또는 CSV 불러오기.</td></tr>`; return; }
+        if(!vendors.length){ tb.innerHTML=`<tr><td colspan="12" class="muted" style="text-align:center;padding:16px">입점사가 없습니다. “행 추가” 또는 CSV 불러오기.</td></tr>`; return; }
         vendors.forEach((v,i)=>{ const s=vat(v.ship); const tr=el('tr');
           const jasa = v.name==='자사';
           tr.innerHTML=`<td>${jasa?'<span class="vbadge jasa">자사</span> ':''}<input type="text" data-k="name" value="${esc(v.name)}" style="width:${jasa?'88px':'100%'}"></td>
@@ -604,6 +616,7 @@
             <td><input type="text" data-k="manager" value="${esc(v.manager||'')}"></td>
             <td><input type="text" data-k="contact" value="${esc(v.contact||'')}"></td>
             <td><input type="text" data-k="email" value="${esc(v.email||'')}"></td>
+            <td><input type="text" data-k="account" value="${esc(v.account||'')}" placeholder="은행 / 계좌번호 / 예금주"></td>
             <td><input type="text" data-k="note" value="${esc(v.note||'')}"></td>
             <td><button class="btn ghost sm">${icon('x')}</button></td>`;
           tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value;

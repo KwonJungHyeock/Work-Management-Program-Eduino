@@ -1,0 +1,146 @@
+/* ===========================================================================
+   MD · 결제요청 — 선결제 발주 매일 결제요청 집계
+   - 입점사 발주에서 정산구분=선결제로 저장하면 이 시트에 자동으로 한 번 더 올라옴
+     (발주 기록에도 그대로 남음 · 중복 기록 허용)
+   - 택배운임·환불 등은 [수동 항목 추가]로 직접 등록
+   - 항목: 날짜 · 구분 · 주문자명 · 업체명 · 내용 · 금액 · 계좌정보
+   - 수정/삭제는 파트장·관리자만
+   ========================================================================= */
+(function(){
+  const meU=()=>(Auth.user&&Auth.user())||{};
+  const isAdmin=()=>!!(Auth.isAdmin&&Auth.isAdmin());
+  const canEdit=()=>{ const u=meU(); return isAdmin()||u.role==='lead'; };   // 파트장·관리자만 수정
+  const won=n=>Number(n||0).toLocaleString();
+  const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
+  const ym=d=>String(d||'').slice(0,7);
+  const KIND=['택배운임','환불','기타'];
+  const kindColor=k=>({'발주':['var(--info)','var(--info-bg)'],'택배운임':['var(--warn)','var(--warn-bg)'],'환불':['var(--danger)','var(--danger-soft)']}[k]||['var(--muted)','var(--panel-2)']);
+  const kindBadge=k=>{ if(!k) return ''; const [c,bg]=kindColor(k); return `<span style="display:inline-block;font-weight:800;font-size:11.5px;padding:2px 8px;border-radius:6px;color:${c};background:${bg}">${esc(k)}</span>`; };
+
+  MODULES['md.payreq']={
+    title:'결제요청', icon:'stamp',
+    render(root){
+      const editable=canEdit();
+      let date=todayStr(), all=[], editId=null;
+      const blank=()=>({ id:'', kind:'택배운임', orderer:'', vendor:'', content:'', amount:'', account:'' });
+      let form=blank();
+      root.innerHTML=`
+      <style>
+        .pq-wrap{border:1px solid var(--line);border-radius:12px;overflow:auto;background:var(--panel);box-shadow:var(--sh-sm)}
+        table.pq{border-collapse:separate;border-spacing:0;width:100%;font-size:13px;min-width:920px}
+        table.pq th{position:sticky;top:0;z-index:2;background:var(--panel-2);color:var(--ink-2);font-size:11.5px;font-weight:800;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+        table.pq td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+        table.pq tr:nth-child(even) td{background:var(--zebra)}
+        table.pq td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+        table.pq td.wrap{white-space:pre-wrap;word-break:break-word;min-width:200px;line-height:1.45}
+        table.pq tfoot td{background:var(--panel-2);font-weight:800;border-top:2px solid var(--line-2)}
+        .pq-in{height:34px;font:inherit;border:1px solid var(--line-2);border-radius:7px;padding:0 9px;background:var(--panel);width:100%;min-width:90px}
+        .pq-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:14px 16px;margin-bottom:16px}
+        .pq-hdrow{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;margin-bottom:12px}
+        .pq-grid{display:grid;grid-template-columns:120px 150px 150px 1fr 120px 1.2fr auto;gap:9px;align-items:end}
+        @media(max-width:900px){.pq-grid{grid-template-columns:1fr 1fr}}
+        .pq-f{display:flex;flex-direction:column;gap:5px}
+        .pq-f label{font-size:11px;font-weight:700;color:var(--muted)}
+        .pq-empty{padding:40px;text-align:center;color:var(--muted);font-size:14px}
+      </style>
+      <div class="mhead pad"><div class="mhead-row">
+        <div><div class="tt">결제요청</div><div class="ds">입점사 발주를 <b>선결제</b>로 저장하면 여기에 자동 집계됩니다(발주 기록에도 남음). 택배운임·환불은 수동 추가하세요.${editable?'':' <b>수정·삭제는 파트장·관리자</b>만 가능합니다.'}</div></div>
+        <div class="mhead-act"><label class="fld" style="margin:0">기준일 <input type="date" id="pqDate" value="${date}"></label></div>
+      </div></div>
+      <div class="mbody wide" id="pqBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
+      const body=root.querySelector('#pqBody'), dateEl=root.querySelector('#pqDate');
+
+      function addFormHtml(){
+        if(!editable) return '';
+        return `<div class="pq-card"><div class="pq-hdrow">${icon('plus')}수동 항목 추가 <span class="muted" style="font-weight:500;font-size:12.5px">· 택배운임 · 환불 등</span></div>
+          <div class="pq-grid">
+            <div class="pq-f"><label>구분</label><select class="pq-in" id="pfKind">${KIND.map(k=>`<option ${k===form.kind?'selected':''}>${k}</option>`).join('')}</select></div>
+            <div class="pq-f"><label>주문자명</label><input class="pq-in" id="pfOrderer" value="${esc(form.orderer)}" placeholder="예: 스팜 김은정"></div>
+            <div class="pq-f"><label>업체명</label><input class="pq-in" id="pfVendor" value="${esc(form.vendor)}" placeholder="예: 롯데택배"></div>
+            <div class="pq-f"><label>내용</label><input class="pq-in" id="pfContent" value="${esc(form.content)}" placeholder="예: 쿠팡 반품 배송비"></div>
+            <div class="pq-f"><label>금액</label><input class="pq-in" id="pfAmount" value="${esc(form.amount)}" placeholder="예: 3,200" inputmode="numeric" style="text-align:right"></div>
+            <div class="pq-f"><label>계좌정보</label><input class="pq-in" id="pfAccount" value="${esc(form.account)}" placeholder="은행 / 계좌번호 / 예금주"></div>
+            <div class="pq-f"><label>&nbsp;</label><button class="btn pri" id="pfAdd">${icon('check')}추가</button></div>
+          </div></div>`;
+      }
+      function rowView(r){
+        return `<tr>
+          <td style="white-space:nowrap">${esc(String(r.day||r.date||'').slice(5))}</td>
+          <td>${kindBadge(r.kind||'발주')}</td>
+          <td style="white-space:nowrap">${esc(r.orderer||'')}</td>
+          <td style="white-space:nowrap;font-weight:600;color:var(--ink)">${esc(r.vendor||'')}</td>
+          <td class="wrap">${esc(r.content||'')}</td>
+          <td class="num">${won(parseAmt(r.amount))}원</td>
+          <td class="wrap" style="min-width:170px;font-size:12.5px">${esc(r.account||'')}</td>
+          ${editable?`<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
+            <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
+            <button class="btn ghost sm" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button></span></td>`:''}
+        </tr>`;
+      }
+      function rowEdit(r){
+        return `<tr>
+          <td style="white-space:nowrap">${esc(String(r.day||r.date||'').slice(5))}</td>
+          <td><select class="pq-in" data-k="kind" style="min-width:90px">${['발주',...KIND].map(k=>`<option ${k===(r.kind||'발주')?'selected':''}>${k}</option>`).join('')}</select></td>
+          <td><input class="pq-in" data-k="orderer" value="${esc(r.orderer||'')}" style="min-width:110px"></td>
+          <td><input class="pq-in" data-k="vendor" value="${esc(r.vendor||'')}" style="min-width:110px"></td>
+          <td><input class="pq-in" data-k="content" value="${esc(r.content||'')}" style="min-width:150px"></td>
+          <td><input class="pq-in" data-k="amount" value="${esc(r.amount||'')}" style="width:100px;text-align:right"></td>
+          <td><input class="pq-in" data-k="account" value="${esc(r.account||'')}" style="min-width:150px"></td>
+          <td style="white-space:nowrap"><span style="display:flex;gap:4px"><button class="btn pri sm" data-a="save" data-id="${esc(r.id)}">${icon('check')}</button><button class="btn ghost sm" data-a="cancel">취소</button></span></td>
+        </tr>`;
+      }
+      function paint(){
+        if(!root.isConnected) return;
+        const rows=all.slice().sort((a,b)=>String(a.kind==='발주'?0:1).localeCompare(String(b.kind==='발주'?0:1)) || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+        const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
+        const cols=editable?8:7;
+        body.innerHTML=`${addFormHtml()}
+          <div class="bd-meta" style="font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600">${esc(date)} · 결제요청 ${rows.length}건 · 합계 <b style="color:var(--red)">${won(total)}원</b></div>
+          <div class="pq-wrap"><table class="pq">
+            <thead><tr><th>날짜</th><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th style="text-align:right">금액</th><th>계좌정보</th>${editable?'<th></th>':''}</tr></thead>
+            <tbody>${rows.length?rows.map(r=>editId===r.id?rowEdit(r):rowView(r)).join(''):`<tr><td class="pq-empty" colspan="${cols}">${esc(date)}에 결제요청 내역이 없습니다.${editable?' 선결제 발주를 저장하거나 위에서 수동 추가하세요.':''}</td></tr>`}</tbody>
+            ${rows.length?`<tfoot><tr><td colspan="5">합계</td><td class="num">${won(total)}원</td><td ${editable?'colspan="2"':''}></td></tr></tfoot>`:''}
+          </table></div>`;
+        wire();
+      }
+      function wire(){
+        const add=body.querySelector('#pfAdd');
+        if(add){ ['pfKind','pfOrderer','pfVendor','pfContent','pfAmount','pfAccount'].forEach(id=>{ const el2=body.querySelector('#'+id); if(el2) el2.oninput=el2.onchange=e=>{ form[id.replace('pf','').toLowerCase()==='kind'?'kind':({pfOrderer:'orderer',pfVendor:'vendor',pfContent:'content',pfAmount:'amount',pfAccount:'account'})[id]]=e.target.value; }; });
+          add.onclick=async()=>{
+            if(!form.vendor.trim() && !form.content.trim()){ toast('업체명 또는 내용을 입력하세요'); return; }
+            const rec={ id:uuid(), day:date, date:date, kind:form.kind, orderer:form.orderer.trim(), vendor:form.vendor.trim(),
+              content:form.content.trim(), amount:parseAmt(form.amount), account:form.account.trim(),
+              whoName:meU().name||'', who:meU().loginId||meU().name||'', createdAt:nowISO() };
+            all.push(rec); form=blank(); paint();
+            if(window.Records) await Records.pushRaw('md','payreq',rec);
+            toast('결제요청에 추가했습니다');
+          }; }
+        body.querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
+        body.querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
+        body.querySelectorAll('[data-a=save]').forEach(b=>b.onclick=async(e)=>{
+          const tr=e.currentTarget.closest('tr'); const old=all.find(x=>x.id===editId); if(!old) return;
+          const rec={...old}; tr.querySelectorAll('[data-k]').forEach(inp=>{ rec[inp.dataset.k]= inp.dataset.k==='amount'?parseAmt(inp.value):inp.value; });
+          e.currentTarget.disabled=true; Object.assign(old,rec); editId=null; paint();
+          if(window.Records) await Records.pushRaw('md','payreq',rec); toast('수정했습니다');
+        });
+        body.querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
+          if(!confirm('이 결제요청 항목을 삭제할까요?')) return;
+          const r=all.find(x=>x.id===b.dataset.id); if(!r) return;
+          all=all.filter(x=>x.id!==b.dataset.id); paint();
+          if(window.Records) await Records.del('md','payreq',r.id,String(r.day||r.date||date).slice(0,7),r.who,r.day||r.date);
+          toast('삭제했습니다');
+        });
+      }
+      async function load(){
+        date=dateEl.value||todayStr();
+        body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
+        const recs=window.Records?await Records.month('md','payreq',ym(date)):null;
+        if(!root.isConnected) return;
+        if(recs===null){ body.innerHTML=`<div class="empty">${icon('alert')}<div>서버에 연결되지 않았습니다. (배포 환경에서 동작)</div></div>`; return; }
+        all=recs.filter(r=>String(r.day||r.date||'').slice(0,10)===date);
+        editId=null; paint();
+      }
+      dateEl.onchange=load; load();
+    }
+  };
+})();
