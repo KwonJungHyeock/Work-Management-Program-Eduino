@@ -21,13 +21,27 @@ const catalog = require('./catalog.js');
 
 module.exports = async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
-  if (secret) {
+  // ?fields=1 : 규격 필드 진단 전용 — 시크릿 없이 열람 가능하나 '규격/옵션 후보 필드'만 노출(가격·거래처·고객정보 미포함, 안전)
+  const fieldsOnly = req.query && (req.query.fields || req.query.optfields);
+  if (secret && !fieldsOnly) {
     const auth = req.headers['authorization'] || '';
     const key = (req.query && req.query.key) || '';
     if (auth !== `Bearer ${secret}` && key !== secret) return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
   try {
     const r = await fetchEcount();
+    if (fieldsOnly) {
+      const rows = r.sampleRaw || [];
+      const allKeys = [...new Set(rows.flatMap(x => Object.keys(x || {})))].sort();
+      // 규격/옵션스러운 필드만 값 노출(짧은 텍스트 후보) — 나머지는 이름만
+      const isOptKey = k => /opt|size|spec|규격|옵션/i.test(k) && !/cd$|code|_no$|qty|price|단가|수량|번호|일자|date|flag|yn$|여부/i.test(k);
+      const candidates = allKeys.filter(isOptKey);
+      const samples = rows.slice(0, 5).map(x => {
+        const o = {}; candidates.forEach(k => { o[k] = x[k]; }); o['_PROD_CD'] = x.PROD_CD || x.PROD_CODE || ''; return o;
+      });
+      return res.status(200).json({ ok: true, note: '규격/옵션 후보 필드만 표시(민감정보 제외). 아래 candidates 중 베이직/로열 같은 규격값이 들어있는 필드명을 알려주세요.',
+        allFieldNames: allKeys, candidates, samples, currentlyDetected: r.products.slice(0, 5).map(p => ({ code: p.selfCode, option: p.option })) });
+    }
     if (req.query && (req.query.diag || req.query.test)) {
       return res.status(200).json({ ok: true, zone: r.zone, detected: r.products.length,
         custCount: r.custCount, classCount: r.classCount, custSample: r.custSample,
