@@ -405,7 +405,9 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="cdbSave">${icon('check')}저장</button>
                 <button class="btn" id="cdbTest">${icon('cloud')}연결 테스트</button>
+                <button class="btn" id="cdbBackfill">${icon('cloudUp')}조회분 원장 백필</button>
                 <span class="muted" id="cdbStat" style="font-size:13px"></span></div>
+              <div class="note" style="margin-top:10px;font-size:12px"><b>백필</b>: 지금 <b>조회된 기간</b>의 기록을 원장으로 한 번에 전송합니다(과거 입력분 이관용). 기간을 넓게(예: 30일) 잡고 누르세요. id 기준이라 <b>중복 없음</b> · 전송 후 고객DB에서 <b>[재집계]</b> 실행.</div>
             </div></div>`:''}`;
           if(cfg.ledger){
             panel.querySelector('#cdbCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-customerdb.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('고객DB Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script-customerdb.gs 사용'); } };
@@ -413,6 +415,20 @@
             panel.querySelector('#cdbTest').onclick=async()=>{ const url=panel.querySelector('#cdbUrl').value.trim(), st=panel.querySelector('#cdbStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
               try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent(cfg.ledger.tab)); let d=null; try{d=await res.json();}catch(e){}
                 st.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공 · 원장 <b>"${esc(cfg.ledger.tab)}"</b>${d&&typeof d.rows==='number'?` (${d.rows}행)`:''}</span>`:`<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`; }catch(e){ st.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(e.message)}</span>`; } };
+            // 백필: 현재 조회된(기간 필터된) 기록을 원장으로 일괄 전송(id upsert · 배치)
+            panel.querySelector('#cdbBackfill').onclick=async()=>{
+              const st=panel.querySelector('#cdbStat'); if(!custDbUrl()){ st.textContent='먼저 URL을 저장하세요'; return; }
+              if(!all.length){ st.textContent='조회된 기록이 없습니다 — 기간을 넓혀보세요'; return; }
+              if(!confirm(`현재 조회된 ${all.length}건을 고객DB 원장(${cfg.ledger.tab})으로 전송할까요?\nid 기준이라 여러 번 눌러도 중복되지 않습니다.\n전송 후 고객DB에서 [재집계]를 실행하세요.`)) return;
+              const recs=all.map(cfg.ledger.map); const B=150; let sent=0, fail=0;
+              const btn=panel.querySelector('#cdbBackfill'); btn.disabled=true;
+              for(let i=0;i<recs.length;i+=B){ st.textContent=`전송 중… (${Math.min(i+B,recs.length)}/${recs.length})`;
+                const r=await ledgerPost({ sheet:cfg.ledger.tab, records:recs.slice(i,i+B) });
+                if(r.ok) sent+=Math.min(B,recs.length-i); else fail+=Math.min(B,recs.length-i); }
+              btn.disabled=false;
+              st.innerHTML= fail? `<span style="color:var(--danger)">전송 ${sent}건 · 실패 ${fail}건 (다시 시도 안전)</span>` : `<span style="color:var(--ok)">✓ ${sent}건 원장 전송 완료 · 이제 고객DB [재집계] 실행</span>`;
+              toast(fail?`백필 ${sent}건 · 실패 ${fail}건`:`원장 백필 ${sent}건 완료`);
+            };
           }
           panel.querySelector('#syncClose').onclick=()=>{ panel.classList.add('hidden'); panel.innerHTML=''; };
           panel.querySelector('#syncCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 사용'); } };

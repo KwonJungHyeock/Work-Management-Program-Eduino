@@ -270,11 +270,23 @@ function writeReview_(review) {
 /* ---------- 메뉴 / 트리거 ---------- */
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('고객DB')
-    .addItem('재집계 실행 (신규 반영)', 'recalc')
+    .addItem('① 기준선 설정 (최초 1회 · 백필 전에)', 'setBaseline')
+    .addItem('② 재집계 실행 (신규 반영)', 'recalc')
     .addSeparator()
     .addItem('매일 자동 재집계 설치(00:30)', 'installDailyTrigger')
     .addItem('자동 재집계 해제', 'removeDailyTrigger')
     .addToUi();
+}
+/* 기준선 설정 — 현재 원장의 모든 행을 '이미 요약/마스터에 반영됨(집계반영=Y)'으로 표시.
+   ※ 반드시 과거 데이터만 있는 상태(백필 전)에서 1회 실행하세요. 백필 후 실행하면 백필분도 건너뜁니다. */
+function setBaseline() {
+  var led = sheet_(LEDGER); if (!led) { toast_('[' + LEDGER + '] 시트가 없습니다'); return; }
+  var hm = headerMap_(led); var lastRow = led.getLastRow(), lastCol = led.getLastColumn();
+  var mc = hm.map[MARK];
+  if (!mc) { led.getRange(1, lastCol + 1).setValue(MARK); mc = lastCol + 1; }
+  if (lastRow > 1) led.getRange(2, mc, lastRow - 1, 1).setValues(rep_('Y', lastRow - 1));
+  SpreadsheetApp.flush();
+  toast_('기준선 설정 완료 · 기존 ' + (lastRow - 1) + '행 = 집계반영(Y). 이제 백필 후 [재집계]를 실행하세요.');
 }
 function installDailyTrigger() {
   removeDailyTrigger();
