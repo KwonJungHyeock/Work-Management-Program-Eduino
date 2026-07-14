@@ -1,0 +1,10 @@
+# 자격증명·로컬 환경 (절대 커밋 금지)
+.env
+.env.local
+scripts/.env.local
+**/.env.local
+
+# 로그·임시
+*.log
+node_modules/
+.DS_Store
