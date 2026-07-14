@@ -288,7 +288,8 @@
       if(window.Records && oldM && newM && oldM!==newM) await Records.del('md','orders',rec.id,oldM,old.who,old.day||old.date);
       if(window.Records) await Records.pushMD(rec);                  // 내부 발주 기록 갱신(중복 없이 덮어씀 · 송장번호 포함)
     },
-    cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80,color:true}, {k:'gubun',h:'구분',w:70,tag:true},
+    cols:[ {k:'date',h:'일자',w:104,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(0,10):(String(r.day||'').slice(0,10)||d); }},
+      {k:'whoName',h:'담당자',w:80,color:true}, {k:'gubun',h:'구분',w:70,tag:true},
       {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
       {k:'settle',h:'정산구분',w:78,tag:true}, {k:'selfCode',h:'자체상품코드',w:104},
       {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},

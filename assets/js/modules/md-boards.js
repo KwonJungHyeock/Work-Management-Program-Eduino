@@ -305,6 +305,7 @@
           $('#tbl').querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
           $('#tbl').querySelectorAll('[data-a=save]').forEach(b=>b.onclick=async(e)=>{
             const tr=e.currentTarget.closest('tr'); const old=all.find(x=>x.id===editId); if(!old) return;
+            const prevDay=String(old.day||old[cfg.dateField]||old.date||'');   // 삭제 대상(옛 달 버킷)
             const rec={...old};
             tr.querySelectorAll('[data-k]').forEach(inp=>{ const k=inp.dataset.k;
               rec[k]= inp.type==='checkbox' ? (inp.checked?(inp.dataset.on||'완료'):'') : inp.value; });
@@ -312,7 +313,12 @@
             if(cfg.dateField) rec.day = /^\d{4}-\d{2}-\d{2}$/.test(rec[cfg.dateField]||'')?rec[cfg.dateField]:rec.day;
             e.currentTarget.disabled=true;
             Object.assign(old,rec); editId=null; paintWho(); paint();
-            if(window.Records){ const oldM=String(old.day||'').slice(0,7); await Records.pushRaw(cfg.dept||'md',cfg.sheet,rec); }
+            if(window.Records){
+              const oldM=prevDay.slice(0,7), newM=String(rec.day||'').slice(0,7);
+              // 날짜(월)가 바뀌면 옛 달 버킷의 기록을 지워야 조회에 잔재가 안 남음
+              if(oldM && newM && oldM!==newM) await Records.del(cfg.dept||'md',cfg.sheet,rec.id,oldM,old.who,prevDay);
+              await Records.pushRaw(cfg.dept||'md',cfg.sheet,rec);
+            }
             backupOne(rec);   // 시트 백업도 갱신(id upsert)
             ledgerUpsert(rec);   // 고객DB 원장도 갱신(id upsert)
             toast('수정했습니다');
@@ -328,6 +334,16 @@
         function paintWho(){ if(!cfg.whoField) return; const sel=$('#fWho'); if(!sel) return;
           const names=[...new Set(all.map(r=>r.whoName||r[cfg.whoField]).filter(Boolean))].sort();
           sel.innerHTML=`<option value="">${esc((whoCfg&&whoCfg.label)||'담당자')} 전체</option>`+names.map(n=>`<option ${n===who?'selected':''}>${esc(n)}</option>`).join('');
+        }
+        // 필드값 필터 드롭다운을 실제 데이터의 고유값으로 채움(입점사명·상태 등 select가 아닌 필드도 필터 가능)
+        function paintFilterOptions(){
+          (cfg.filterFields||[]).forEach(f=>{ const sel=root.querySelector(`[data-ff="${f.k}"]`); if(!sel) return;
+            const def=cfg.fields.find(x=>x.k===f.k)||{}; const cur=ffVals[f.k]||'';
+            let vals=[...new Set(all.map(r=>String(r[f.k]==null?'':r[f.k]).trim()).filter(Boolean))];
+            if(def.options&&def.options.length) vals=[...new Set([...def.options, ...vals])]; else vals.sort();
+            if(cur && vals.indexOf(cur)<0){ ffVals[f.k]=''; }
+            sel.innerHTML=`<option value="">${esc(f.label)} 전체</option>`+vals.map(v=>`<option ${v===(ffVals[f.k]||'')?'selected':''}>${esc(v)}</option>`).join('');
+          });
         }
 
         $('#segR').querySelectorAll('button').forEach(b=>b.onclick=()=>{ preset=b.dataset.r;
@@ -453,7 +469,7 @@
           if(!root.isConnected||!$('#meta')) return;
           if(packs.some(p=>p===null)){ $('#meta').textContent='서버에서 기록을 불러오지 못했습니다.'; return; }
           const map={}; packs.forEach(p=>(p||[]).forEach(r=>{ if(r&&r.id) map[r.id]=r; }));
-          all=Object.values(map); paintWho(); paint();
+          all=Object.values(map); paintWho(); paintFilterOptions(); paint();
         }
         load();
       }
@@ -478,6 +494,7 @@
   buildBoard({ key:'md.stock', title:'품절관리 현황', icon:'box', sheet:'stockmgmt',
     desc:'제품별 판매·품절·단종 상태와 처리 내역을 팀 공유로 기록합니다. 자체코드 입력 시 제품명·입점사명이 자동 연동됩니다.',
     titleField:'name', whoField:'handler', dateField:'date', codeField:'code', nameField:'name', vendorField:'vendor',
+    filterFields:[{k:'gubun',label:'분류'},{k:'own',label:'자사/입점사'},{k:'vendor',label:'입점사명'},{k:'status',label:'상태'}],
     fields:[
       { k:'date', label:'날짜', type:'date' },
       { k:'gubun', label:'분류', type:'select', options:['판매','품절','단종'] },
@@ -502,9 +519,9 @@
       { k:'assignee', label:'담당자', type:'agent', options:['여미림','이진환'] },
       { k:'code', label:'상품코드', type:'code', ph:'예: C-19' },
       { k:'name', label:'제품명', type:'text', ph:'상품코드 입력 시 자동' },
-      { k:'func', label:'동작 기능', type:'select', options:['O','-','🔺'] },
-      { k:'appear', label:'외관 및 구성품', type:'select', options:['O','🔺'] },
-      { k:'detail', label:'상세페이지 수정', type:'select', options:['완료','O','요청'] },
+      { k:'func', label:'동작 기능', type:'select', options:['O','X'] },
+      { k:'appear', label:'외관 및 구성품', type:'select', options:['O','X'] },
+      { k:'detail', label:'상세페이지 수정', type:'select', options:['O','X'] },
       { k:'remark', label:'특이사항', type:'textarea', ph:'특이사항' },
     ] });
 

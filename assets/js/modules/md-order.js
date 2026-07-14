@@ -216,7 +216,7 @@
 
       /* ---------------- 발주 입력 ---------------- */
       const meName=((Auth.user&&Auth.user())||{}).name||'';
-      let form={ code:'', name:'', qty:1, orderer:'', route:'', gubun:'직배', settle:'', shipInfo:'', handler:meName, date:todayStr().slice(5).replace('-','/') };
+      let form={ code:'', name:'', qty:1, orderer:'', route:'', gubun:'직배', settle:'', shipInfo:'', handler:meName, date:todayStr() };   // 일자 = YYYY-MM-DD(발주 기록과 통일)
       // 담당자 셀렉트 채우기 — MD 구성원(+관리자 본인). 팀원은 본인으로 기본 고정
       async function fetchRoster(){ try{ const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})}); const d=await r.json(); return (d&&d.roster)||[]; }catch{ return []; } }
       function fillHandler(sel){ if(!sel) return;
@@ -247,7 +247,7 @@
                 <label class="fld">주문자명<input type="text" id="fOrderer" value="${esc(form.orderer)}"></label>
                 <label class="fld">주문경로<input type="text" id="fRoute" value="${esc(form.route)}" placeholder="예: 사이트"></label>
                 <label class="fld">구분<input type="text" id="fGubun" value="${esc(form.gubun)}" placeholder="예: 직배"></label>
-                <label class="fld">일자<input type="text" id="fDate" value="${esc(form.date)}" placeholder="7/7"></label>
+                <label class="fld">일자<input type="date" id="fDate" value="${esc(form.date)}"></label>
               </div>
               <label class="fld" style="margin-top:14px">배송정보/비고<textarea id="fShipInfo" rows="2" placeholder="수령인 · 연락처 · 주소 · 요청사항">${esc(form.shipInfo)}</textarea></label>
               <div style="display:flex;gap:10px;margin-top:14px">
@@ -263,16 +263,7 @@
             <button class="btn sm" id="clearOrders">${icon('trash')}비우기</button>
             <button class="btn pri" id="saveOrders">${icon('save')}저장 <span style="opacity:.75;font-weight:500;font-size:11.5px">내부+시트</span></button>
           </div>
-          <div class="out-tbl" style="max-height:none;margin-bottom:22px"><table class="tbl" id="ordTable"></table></div>
-
-          <div class="fieldset fs-green">
-            <div class="fs-hd"><span class="step" style="background:#0f9d58">1</span>구글시트 미리보기 (입점사명·정산구분·품명 자동) · <b>[저장]</b>으로 함께 전송됩니다
-              <span class="hint" style="display:flex;gap:6px">
-                <button class="btn sm" id="sheetCopy">${icon('copy')}복사</button>
-                <button class="btn sm" id="sheetCsv">${icon('download')}CSV</button></span></div>
-            <div class="fs-bd"><div class="out-tbl"><table class="tbl" id="sheetTable"></table></div>
-              <div class="note" style="margin-top:10px"><b>출고송장/입고</b> 칸은 비워둡니다 — 실제 출고 시 담당자가 <b>송장번호를 직접 기입</b>합니다. (배송비는 <b>입점사 정보</b>에서 관리)</div></div>
-          </div>`;
+          <div class="out-tbl" style="max-height:none;margin-bottom:22px"><table class="tbl" id="ordTable"></table></div>`;
 
         const $f=id=>body.querySelector(id);
         let curProd=null;   // 현재 자동조회된 상품(수량 변경 시 총주문금액 재계산용)
@@ -391,8 +382,8 @@
         body.querySelector('.card-bd').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='fCode'){ e.preventDefault(); addOrder(); }});
         $f('#clearOrders').onclick=()=>{ if(orders.length&&confirm('발주 목록을 모두 비울까요?')){ orders=[]; saveOrders(); renderAll(); } };
         const rowsTSV=rows=>rows.map(r=>r.join('\t')).join('\n');
-        $f('#sheetCopy').onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; // 헤더 없이 데이터 행만
-        $f('#sheetCsv').onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); };
+        { const sc=$f('#sheetCopy'); if(sc) sc.onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; }
+        { const scsv=$f('#sheetCsv'); if(scsv) scsv.onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); }; }
         $f('#saveOrders').onclick=onSave;
         refreshLookup(); renderAll(); codeEl.focus();
       }
@@ -432,7 +423,7 @@
         if(!orders.length){ tb.innerHTML=`<tr><td colspan="12" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
         orders.forEach((o,i)=>{ const tr=el('tr');
           if(i===editIdx){
-            tr.innerHTML=`<td><input type="text" class="oe" data-k="date" value="${esc(o.date)}" placeholder="7/7" style="width:64px"></td>
+            tr.innerHTML=`<td><input type="date" class="oe" data-k="date" value="${esc(o.date)}" style="width:130px"></td>
               <td><input class="oe" data-k="gubun" value="${esc(o.gubun||'')}" style="width:64px"></td>
               <td><input class="oe" data-k="handler" value="${esc(o.handler||'')}" style="width:80px"></td>
               <td><input class="oe" data-k="orderer" value="${esc(o.orderer||'')}" style="width:88px"></td>

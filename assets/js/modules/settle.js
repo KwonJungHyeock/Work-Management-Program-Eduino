@@ -58,7 +58,27 @@
         <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
       </tbody></table></div>`;
   }
-  /* 견적·발주·후불 상세 리스트 (엑셀 결산 형식 · 견적→발주→후불 순) */
+  /* CS 상단 3열: 항목별 집계 · 담당자별(축소) · 견적/발주/후불 금액결산 */
+  function csTopHtml(dept,agg){
+    const rows=(AGG[dept]||[]).map(s=>`<tr><td>${esc(s.label)}</td><td class="stnum">${agg.byCat[s.label]||0}</td></tr>`).join('');
+    const ppl=Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]);
+    const recs=(agg.details&&agg.details.postpay)||[]; const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
+    recs.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
+    const won=n=>Number(n||0).toLocaleString(); const tc=order.reduce((a,k)=>a+g[k].c,0), ts=order.reduce((a,k)=>a+g[k].s,0);
+    return `<div class="st-top3">
+      <div><div class="st-sec-cap" style="margin-top:0">항목별 집계</div>
+        <table class="st-tbl"><tbody>${rows}<tr class="st-tot"><td>합계</td><td class="stnum">${agg.total}</td></tr></tbody></table></div>
+      <div><div class="st-sec-cap" style="margin-top:0">담당자별</div>
+        <div class="st-ppl-col">${ppl.length?ppl.map(([n,v])=>`<span class="st-chip">${esc(n)} <b>${v}</b></span>`).join(''):'<span class="muted" style="font-size:12.5px">기록 없음</span>'}</div></div>
+      <div><div class="st-sec-cap" style="margin-top:0">견적·발주·후불 결산 (금액)</div>
+        <table class="st-tbl"><tbody>
+          <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
+          ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
+          <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
+        </tbody></table></div>
+    </div>`;
+  }
+  /* 견적·발주·후불 상세 리스트 (엑셀 결산 형식 · 견적→발주→후불 순 · 메모 포함) */
   function payListHtml(recs){
     recs=(recs||[]).slice(); if(!recs.length) return '';
     const ord={'견적':0,'발주':1,'후불':2,'결제요청':3,'기타':4};
@@ -66,9 +86,9 @@
     const cell=v=>esc(v==null?'':String(v)); const won=v=>{ const n=parseAmt(v); return n?n.toLocaleString()+'원':cell(v); };
     return `<div class="st-sec-cap">견적·발주·후불 상세 · ${recs.length}건 (견적→발주→후불 순)</div>
       <div style="overflow-x:auto"><table class="st-dtl"><thead><tr>
-        <th>구분</th><th>고객유형</th><th>거래처명</th><th>이름</th><th>금액</th><th>내용</th><th>담당자</th></tr></thead><tbody>
+        <th>구분</th><th>고객유형</th><th>거래처명</th><th>이름</th><th>금액</th><th>내용</th><th>메모</th><th>담당자</th></tr></thead><tbody>
         ${recs.map(r=>`<tr><td>${r.gubun?((typeof tagBadge==='function')?tagBadge(r.gubun,'st-dt-badge'):cell(r.gubun)):''}</td><td>${cell(r.custType||r.target)}</td><td>${cell(r.vendor)}</td><td>${cell(r.name)}</td>
-          <td class="stnum">${won(r.amount)}</td><td class="st-dt-wrap">${cell(r.content)}</td><td>${cell(r.agent||r.whoName||r.who)}</td></tr>`).join('')}
+          <td class="stnum">${won(r.amount)}</td><td class="st-dt-wrap">${cell(r.content)}</td><td class="st-dt-wrap" style="min-width:140px">${cell(r.memo)}</td><td>${cell(r.agent||r.whoName||r.who)}</td></tr>`).join('')}
       </tbody></table></div>`;
   }
   const catLine=agg=>Object.entries(agg.byCat).map(([k,v])=>`${k} ${v}`).join(' · ');
@@ -87,6 +107,10 @@
   const STYLE=`<style>
     .st-agg{display:grid;grid-template-columns:minmax(220px,1fr) 1.4fr;gap:16px;align-items:start}
     @media(max-width:760px){.st-agg{grid-template-columns:1fr}}
+    .st-top3{display:grid;grid-template-columns:minmax(190px,1fr) auto minmax(270px,1.15fr);gap:18px;align-items:start}
+    @media(max-width:900px){.st-top3{grid-template-columns:1fr 1fr}}
+    @media(max-width:560px){.st-top3{grid-template-columns:1fr}}
+    .st-ppl-col{display:flex;flex-direction:column;gap:6px;min-width:110px}
     .st-tbl{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden}
     .st-tbl td{padding:9px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
     .st-tbl tr:last-child td{border-bottom:none}
@@ -151,8 +175,8 @@
             <div class="st-card">
               <div class="st-hd"><div class="st-t">${esc(date)} · ${DEPT_LABEL[dept]} 파트 집계</div>
                 <span class="st-badge" style="color:${st.c};background:${st.bg}">${st.l}</span></div>
-              ${aggCard(dept,agg)}
-              ${dept==='cs'?payMoneyHtml((agg.details&&agg.details.postpay)||[])+payListHtml((agg.details&&agg.details.postpay)||[]):''}
+              ${dept==='cs'?csTopHtml(dept,agg):aggCard(dept,agg)}
+              ${dept==='cs'?payListHtml((agg.details&&agg.details.postpay)||[]):''}
               <div class="st-sec-cap">전달한 담당자 · ${(doc.contributors||[]).length}명</div>
               <div class="st-contribs" id="stContribs">${contribHtml(doc)}</div>
               <div class="st-sec-cap">① 내 특이사항 (담당자) ${mine?'<span style="color:var(--ok);font-weight:700;text-transform:none">✓ 전달함</span>':''}</div>

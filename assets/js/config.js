@@ -185,9 +185,9 @@ const NAV = [
       { key:'md.records',   name:'발주 기록',          icon:'sheet' },
       { key:'md.payreq',    name:'결제요청',           icon:'stamp' },
       { key:'md.vendorchg', name:'입점사 신규/변동',   icon:'truck' },
+      { key:'md.prodmgmt',  name:'상품관리 현황',      icon:'grid' },
       { key:'md.stock',     name:'품절관리 현황',      icon:'box' },
       { key:'md.inspect',   name:'제품검수 현황',      icon:'check' },
-      { key:'md.prodmgmt',  name:'상품관리 현황',      icon:'grid' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
       { key:'md.tsrecords', name:'TS상담 기록',        icon:'sheet' },
       { key:'md.settle',    name:'일일결산',           icon:'check2' },
@@ -205,7 +205,7 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsrecords',
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
   'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.settle'];
 
 const STORE = {
