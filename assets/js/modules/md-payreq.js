@@ -10,6 +10,13 @@
   const meU=()=>(Auth.user&&Auth.user())||{};
   const isAdmin=()=>!!(Auth.isAdmin&&Auth.isAdmin());
   const canEdit=()=>{ const u=meU(); return isAdmin()||u.role==='lead'; };   // 파트장·관리자만 수정
+  const canSubmit=()=>canEdit();                                             // 결제 상신도 파트장급
+  // 결재 문서(결제요청 상신) — 일일결산과 동일 컬렉션 재사용, id 로 구분
+  const COLL='settlements';
+  const payDocId=date=>`payreq:md:${date}`;
+  const PAYSTATUS={ none:{l:'미상신',c:'var(--muted)',bg:'var(--panel-2)'}, submitted:{l:'결제 상신됨',c:'var(--info)',bg:'var(--info-bg)'}, paid:{l:'결제 완료',c:'var(--ok)',bg:'var(--ok-bg)'} };
+  async function collGetAll(){ try{ const r=await fetch('/api/store?type=coll&coll='+COLL); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
+  async function collPush(item){ try{ return await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:COLL,item})}).then(r=>r.json()); }catch(e){ return null; } }
   const won=n=>Number(n||0).toLocaleString();
   const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
   const ym=d=>String(d||'').slice(0,7);
@@ -21,7 +28,7 @@
     title:'결제요청', icon:'stamp',
     render(root){
       const editable=canEdit();
-      let date=todayStr(), all=[], editId=null;
+      let date=todayStr(), all=[], editId=null, apDoc=null;
       const blank=()=>({ id:'', kind:'택배운임', orderer:'', vendor:'', content:'', amount:'', account:'' });
       let form=blank();
       root.innerHTML=`
@@ -42,6 +49,9 @@
         .pq-f{display:flex;flex-direction:column;gap:5px}
         .pq-f label{font-size:11px;font-weight:700;color:var(--muted)}
         .pq-empty{padding:40px;text-align:center;color:var(--muted);font-size:14px}
+        .pq-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:12px 16px;margin-bottom:16px}
+        .pq-status .pq-sp{flex:1}
+        .pq-st-badge{font-size:12px;font-weight:800;border-radius:7px;padding:4px 11px}
       </style>
       <div class="mhead pad"><div class="mhead-row">
         <div><div class="tt">결제요청</div><div class="ds">입점사 발주를 <b>선결제</b>로 저장하면 여기에 자동 집계됩니다(발주 기록에도 남음). 택배운임·환불은 수동 추가하세요.${editable?'':' <b>수정·삭제는 파트장·관리자</b>만 가능합니다.'}</div></div>
@@ -94,7 +104,16 @@
         const rows=all.slice().sort((a,b)=>String(a.kind==='발주'?0:1).localeCompare(String(b.kind==='발주'?0:1)) || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
         const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
         const cols=editable?8:7;
-        body.innerHTML=`${addFormHtml()}
+        const st=PAYSTATUS[(apDoc&&apDoc.status)||'none']||PAYSTATUS.none;
+        const paid=apDoc&&apDoc.status==='paid', submitted=apDoc&&apDoc.status==='submitted';
+        const statusBar=`<div class="pq-status">
+          <span class="pq-st-badge" style="color:${st.c};background:${st.bg}">${st.l}</span>
+          ${submitted?`<span class="muted" style="font-size:12px">상신 ${esc(apDoc.submittedByName||'')} · ${esc((apDoc.submittedAt||'').slice(0,16).replace('T',' '))}</span>`:''}
+          ${paid?`<span style="color:var(--ok);font-size:12.5px;font-weight:700">✓ 대표 결제완료 · ${esc(apDoc.paidByName||'')} · ${esc((apDoc.paidAt||'').slice(0,16).replace('T',' '))}</span>`:''}
+          <span class="pq-sp"></span>
+          ${canSubmit()&&!paid?`<button class="btn ok" id="pqSubmit"${rows.length?'':' disabled'}>${icon('stamp')}${submitted?'재상신(목록 갱신)':'결제 상신 → 대표 결재함'}</button>`:''}
+          <span class="muted" id="pqSubMsg" style="font-size:12.5px"></span></div>`;
+        body.innerHTML=`${statusBar}${addFormHtml()}
           <div class="bd-meta" style="font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600">${esc(date)} · 결제요청 ${rows.length}건 · 합계 <b style="color:var(--red)">${won(total)}원</b></div>
           <div class="pq-wrap"><table class="pq">
             <thead><tr><th>날짜</th><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th style="text-align:right">금액</th><th>계좌정보</th>${editable?'<th></th>':''}</tr></thead>
@@ -104,6 +123,15 @@
         wire();
       }
       function wire(){
+        // 결제 상신(파트장급) — 그 날짜 결제요청 목록을 스냅샷해 대표 결재함으로 올림
+        const sub=body.querySelector('#pqSubmit');
+        if(sub) sub.onclick=async()=>{ const msg=body.querySelector('#pqSubMsg'); sub.disabled=true; if(msg) msg.textContent='상신 중…';
+          const total=all.reduce((s,r)=>s+parseAmt(r.amount),0);
+          const doc={ id:payDocId(date), type:'payreq', dept:'md', date, status:'submitted',
+            items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,amount:parseAmt(r.amount),account:r.account})),
+            count:all.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
+          const r=await collPush(doc); apDoc=doc;
+          if(msg) msg.textContent=''; toast(r?'결제 상신 완료 — 대표 결재함으로 전송됐습니다':'상신 실패 — 서버 확인'); paint(); };
         const add=body.querySelector('#pfAdd');
         if(add){ ['pfKind','pfOrderer','pfVendor','pfContent','pfAmount','pfAccount'].forEach(id=>{ const el2=body.querySelector('#'+id); if(el2) el2.oninput=el2.onchange=e=>{ form[id.replace('pf','').toLowerCase()==='kind'?'kind':({pfOrderer:'orderer',pfVendor:'vendor',pfContent:'content',pfAmount:'amount',pfAccount:'account'})[id]]=e.target.value; }; });
           add.onclick=async()=>{
@@ -134,10 +162,11 @@
       async function load(){
         date=dateEl.value||todayStr();
         body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
-        const recs=window.Records?await Records.month('md','payreq',ym(date)):null;
+        const [recs, coll]=await Promise.all([ window.Records?Records.month('md','payreq',ym(date)):null, collGetAll() ]);
         if(!root.isConnected) return;
         if(recs===null){ body.innerHTML=`<div class="empty">${icon('alert')}<div>서버에 연결되지 않았습니다. (배포 환경에서 동작)</div></div>`; return; }
         all=recs.filter(r=>String(r.day||r.date||'').slice(0,10)===date);
+        apDoc=(coll||[]).find(d=>d.id===payDocId(date))||null;   // 결제 상신/완료 상태
         editId=null; paint();
       }
       dateEl.onchange=load; load();

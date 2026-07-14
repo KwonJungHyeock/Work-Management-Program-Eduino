@@ -252,8 +252,10 @@
         if(all===null){ body.innerHTML=`<div class="empty">${icon('alert')}<div>서버에 연결되지 않았습니다.</div></div>`; return; }
         const docs=['cs','md'].map(dp=>all.find(d=>d.id===docId(dp,date))).filter(Boolean);
         const actionable=docs.filter(d=>d.status==='submitted'||d.status==='approved');
-        if(!actionable.length){ body.innerHTML=`<div class="empty">${icon('inbox')}<div style="margin-top:6px">${esc(date)}에 상신된 일일결산이 없습니다.</div><div class="muted" style="font-size:12.5px;margin-top:4px">파트장이 상신하면 여기에 표시됩니다.</div></div>`; return; }
+        const payDocs=(all||[]).filter(d=>d&&d.type==='payreq'&&d.id===`payreq:md:${date}`&&(d.status==='submitted'||d.status==='paid'));
+        if(!actionable.length && !payDocs.length){ body.innerHTML=`<div class="empty">${icon('inbox')}<div style="margin-top:6px">${esc(date)}에 상신된 결재 건이 없습니다.</div><div class="muted" style="font-size:12.5px;margin-top:4px">파트장이 일일결산·결제요청을 상신하면 여기에 표시됩니다.</div></div>`; return; }
         body.innerHTML='';
+        for(const doc of payDocs){ body.appendChild(payreqCard(doc, load)); }
         for(const doc of actionable){ body.appendChild(await approvalCard(doc, load)); }
       }
       async function approvalCard(doc, after){
@@ -287,6 +289,29 @@
           toast('결재 완료 — 통합 일일결산 저장'); setTimeout(after,900); };
         const rs=card.querySelector('[data-a=resheet]'); if(rs) rs.onclick=async()=>{ rs.disabled=true; msg.textContent='재전송 중…';
           const r=await pushSheet(doc,m); msg.innerHTML=r.ok?`<span style="color:var(--ok)">시트 재전송 완료</span>`:`<span style="color:var(--danger)">실패: ${esc(r.error||'URL 미설정')}</span>`; };
+        return card;
+      }
+      /* 결제요청(선결제) 결재 카드 — 선결제 목록 확인 후 [결제완료] */
+      function payreqCard(doc, after){
+        const paid=doc.status==='paid'; const items=doc.items||[]; const won=n=>Number(n||0).toLocaleString();
+        const card=el('div','st-card st-approve'+(paid?' done':''));
+        card.innerHTML=`
+          <div class="st-hd"><div class="st-t">${icon('stamp')} 결제요청(선결제) · ${esc(doc.date)}</div>
+            <span class="st-badge" style="color:${paid?'var(--ok)':'var(--info)'};background:${paid?'var(--ok-bg)':'var(--info-bg)'}">${paid?'결제 완료':'결제 대기'}</span></div>
+          <div class="st-sec-cap">선결제 결제요청 · ${items.length}건 · 합계 <b style="color:var(--ink)">${won(doc.total||0)}원</b></div>
+          <div style="overflow-x:auto"><table class="st-dtl"><thead><tr><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th>금액</th><th>계좌정보</th></tr></thead><tbody>
+            ${items.length?items.map(r=>`<tr><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td style="font-weight:600">${esc(r.vendor||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td><td class="st-dt-wrap" style="min-width:150px;font-size:11.5px">${esc(r.account||'')}</td></tr>`).join(''):`<tr><td colspan="6" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`}
+          </tbody></table></div>
+          <div class="st-cr" style="margin-top:10px"><div class="at" style="margin:0">상신 ${esc(doc.submittedByName||'')} · ${esc((doc.submittedAt||'').slice(0,16).replace('T',' '))}</div></div>
+          <div class="st-actions">
+            ${paid?`<span class="st-meta" style="color:var(--ok);font-weight:700">✓ ${esc(doc.paidByName||'')} 결제완료 · ${esc((doc.paidAt||'').slice(0,16).replace('T',' '))}</span>`
+                  :`<button class="btn ok" data-a="pay">${icon('check')}결제완료 처리</button>`}
+            <span class="st-meta" data-msg></span></div>`;
+        const msg=card.querySelector('[data-msg]');
+        const pb=card.querySelector('[data-a=pay]'); if(pb) pb.onclick=async()=>{ pb.disabled=true; msg.textContent='처리 중…';
+          const u=meU(); const cur={ ...doc, status:'paid', paidBy:u.loginId||u.name, paidByName:u.name||'관리자', paidAt:nowISO() };
+          const r=await collPush(cur); msg.innerHTML=r?'<span style="color:var(--ok)">결제완료 저장</span>':'<span style="color:var(--danger)">저장 실패</span>';
+          toast('결제완료 처리 — 결제요청에 연동됩니다'); setTimeout(after,800); };
         return card;
       }
       root.querySelector('#apCfg').onclick=()=>cfgDialog(root);
