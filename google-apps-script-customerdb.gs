@@ -224,7 +224,7 @@ function syncTargetSheets_(mVals, mMap, quoteDelta) {
       var sh = sheet_(sn); if (!sh) return; var hm = headerMap_(sh), map = hm.map;
       var lr = sh.getLastRow(); if (lr < 2) return;
       var vals = sh.getRange(2, 1, lr - 1, hm.lastCol).getValues();
-      var nC = map['거래처명'], cC = map['구매건수'], aC = map['총구매액(원)'] || map['총구매액'], fC = map['최초구매일'], lC = map['최근구매일'], qC = map['견적문의수'];
+      var nC = map['거래처명'], cC = map['구매건수'], aC = map['총구매액(원)'] || map['총구매액'], fC = map['최초구매일'], lC = map['최근구매일'], qC = map['견적문의수'], bC = map['구매여부'];
       if (!nC) return;
       for (var i = 0; i < vals.length; i++) {
         var k = normKey_(vals[i][nC - 1]); var m = byKey[k];
@@ -234,6 +234,7 @@ function syncTargetSheets_(mVals, mMap, quoteDelta) {
         if (aC && m.amt !== '') vals[i][aC - 1] = m.amt;
         if (fC && m.first !== '') vals[i][fC - 1] = m.first;
         if (lC && m.last !== '') vals[i][lC - 1] = m.last;
+        if (bC && num_(vals[i][cC ? cC - 1 : -1]) > 0) vals[i][bC - 1] = '구매';   // 구매 발생 시 구매여부 갱신
       }
       sh.getRange(2, 1, vals.length, hm.lastCol).setValues(vals);
     });
