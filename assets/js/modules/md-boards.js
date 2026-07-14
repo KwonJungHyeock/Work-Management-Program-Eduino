@@ -400,6 +400,7 @@
               <span class="muted" style="font-weight:600;font-size:12.5px;margin-left:6px">· 저장 시 <b>${esc(cfg.ledger.tab)}</b> 시트에 자동 누적 · 관리자 전용</span></div>
             <div class="bd-bd">
               <div class="note" style="margin-bottom:12px">후불·발주·견적 저장 건이 <b>고객 데이터베이스</b> 원장(<b>${esc(cfg.ledger.tab)}</b>)에 자동으로 쌓여 타겟별·구분별 집계가 최신화됩니다. 아래에 <b>고객DB 스프레드시트</b>에 배포한 Apps Script 웹앱 URL을 넣으세요. (백업 시트와 <b>다른</b> 스프레드시트입니다)</div>
+              <div style="margin-bottom:10px"><button class="btn sm" id="cdbCopyCode">${icon('copy')}고객DB Apps Script 코드 복사</button> <span class="muted" style="font-size:12px">· 고객DB 스프레드시트의 Apps Script에 붙여넣고 배포</span></div>
               <label class="fld" style="margin-bottom:12px">고객DB 웹 앱 URL<input type="text" id="cdbUrl" value="${esc(custDbUrl())}" placeholder="https://script.google.com/macros/s/……/exec"></label>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button class="btn pri" id="cdbSave">${icon('check')}저장</button>
@@ -407,6 +408,7 @@
                 <span class="muted" id="cdbStat" style="font-size:13px"></span></div>
             </div></div>`:''}`;
           if(cfg.ledger){
+            panel.querySelector('#cdbCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-customerdb.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('고객DB Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script-customerdb.gs 사용'); } };
             panel.querySelector('#cdbSave').onclick=()=>{ store(STORE.custDbCfg).set({ sheetUrl:panel.querySelector('#cdbUrl').value.trim() }); panel.querySelector('#cdbStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('고객DB 연동 저장'); };
             panel.querySelector('#cdbTest').onclick=async()=>{ const url=panel.querySelector('#cdbUrl').value.trim(), st=panel.querySelector('#cdbStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
               try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent(cfg.ledger.tab)); let d=null; try{d=await res.json();}catch(e){}
