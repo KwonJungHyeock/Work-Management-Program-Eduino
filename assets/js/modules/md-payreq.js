@@ -126,11 +126,16 @@
         // 결제 상신(파트장급) — 그 날짜 결제요청 목록을 스냅샷해 대표 결재함으로 올림
         const sub=body.querySelector('#pqSubmit');
         if(sub) sub.onclick=async()=>{ const msg=body.querySelector('#pqSubMsg'); sub.disabled=true; if(msg) msg.textContent='상신 중…';
+          // 서버 최신 상태 재확인 — 화면을 열어둔 사이 대표가 이미 결제완료했으면 되돌리지 않음(lost-update 방지)
+          const fresh=await collGetAll();
+          if(!root.isConnected) return;
+          const cur=(fresh||[]).find(d=>d.id===payDocId(date));
+          if(cur && cur.status==='paid'){ apDoc=cur; if(msg) msg.textContent=''; toast('이미 대표 결제완료된 건입니다 — 재상신할 수 없습니다'); paint(); return; }
           const total=all.reduce((s,r)=>s+parseAmt(r.amount),0);
           const doc={ id:payDocId(date), type:'payreq', dept:'md', date, status:'submitted',
             items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,amount:parseAmt(r.amount),account:r.account})),
             count:all.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
-          const r=await collPush(doc); apDoc=doc;
+          const r=await collPush(doc); if(r) apDoc=doc;   // 저장 성공 시에만 상태 반영(실패 시 이전 상태 유지)
           if(msg) msg.textContent=''; toast(r?'결제 상신 완료 — 대표 결재함으로 전송됐습니다':'상신 실패 — 서버 확인'); paint(); };
         const add=body.querySelector('#pfAdd');
         if(add){ ['pfKind','pfOrderer','pfVendor','pfContent','pfAmount','pfAccount'].forEach(id=>{ const el2=body.querySelector('#'+id); if(el2) el2.oninput=el2.onchange=e=>{ form[id.replace('pf','').toLowerCase()==='kind'?'kind':({pfOrderer:'orderer',pfVendor:'vendor',pfContent:'content',pfAmount:'amount',pfAccount:'account'})[id]]=e.target.value; }; });

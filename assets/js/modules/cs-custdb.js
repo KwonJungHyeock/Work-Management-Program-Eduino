@@ -74,7 +74,7 @@
           ['담당자', c.manager||'—'], ['연락처', c.phone||'—'], ['이메일', c.email||'—'],
           ['타겟', c.target||'—'], ['최초구매일', c.first||'—'], ['주소', c.addr||'—'],
         ];
-        const tx=(c.txns||[]).slice(0,40);
+        const txAll=c.txns||[]; const tx=txAll.slice(0,40);
         return `<div class="cd-card">
           <div class="cd-top">
             <div><div class="nm">${esc(c.name)}</div>
@@ -90,7 +90,7 @@
             </div>
           </div>
           <div class="cd-info">${info.map(([k,v])=>`<div class="cell"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join('')}</div>
-          <div class="cd-txhd">거래 이력 ${c.txns.length}건${c.txns.length>40?' (최근 40건 표시)':''}</div>
+          <div class="cd-txhd">거래 이력 ${txAll.length}건${txAll.length>40?' (최근 40건 표시)':''}</div>
           <div style="overflow:auto"><table class="cd-tx">
             <thead><tr><th>날짜</th><th>구분</th><th>품목/내용</th><th style="text-align:right">금액</th><th>담당자</th><th>메모</th></tr></thead>
             <tbody>${tx.length?tx.map(t=>`<tr>
@@ -124,7 +124,12 @@
           const cors=/failed to fetch|networkerror|load failed|cors/i.test(err.message||'');
           list.innerHTML=`<div class="cd-empty bad">${icon('alert')}<div>조회에 실패했습니다. ${esc(err.message||'')}${cors?'<br><span style="font-size:12px">고객DB Apps Script를 최신 코드로 재배포(액세스: 모든 사용자)했는지 확인하세요.</span>':''}</div></div>`;
           hint.textContent='';
-        }finally{ busy=false; }
+        }finally{
+          busy=false;
+          // 검색 중 입력이 더 들어왔으면(최신어≠직전 검색어) 최신어로 재검색 — 오래된 결과가 남는 경쟁조건 방지
+          const cur=q.value.trim();
+          if(cur && cur!==last) search();
+        }
       }
       q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); last=''; search(); } });
       let t=null; q.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>{ if(q.value.trim().length>=2) search(); },500); });

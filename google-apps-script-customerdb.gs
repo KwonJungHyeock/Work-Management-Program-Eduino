@@ -132,10 +132,11 @@ function searchCustomers_(q, limit) {
         if (mc('연락처') >= 0 && mrow[mc('연락처')]) g2.phone = g2.phone || String(mrow[mc('연락처')]).trim();
         if (mc('이메일') >= 0 && mrow[mc('이메일')]) g2.email = g2.email || String(mrow[mc('이메일')]).trim();
         if (mc('주소') >= 0 && mrow[mc('주소')]) g2.addr = g2.addr || String(mrow[mc('주소')]).trim();
-        if (cntC >= 0 && mrow[cntC] !== '') g2.cnt = num_(mrow[cntC]);
-        if (amtC >= 0 && mrow[amtC] !== '') g2.amount = num_(mrow[amtC]);
-        if (mc('최초구매일') >= 0 && mrow[mc('최초구매일')]) g2.first = ymd_(mrow[mc('최초구매일')]) || g2.first;
-        if (mc('최근구매일') >= 0 && mrow[mc('최근구매일')]) g2.last = ymd_(mrow[mc('최근구매일')]) || g2.last;
+        // 숫자 요약은 마스터(과거 누적)와 원장(당일 포함 최신) 중 큰 값을 사용 — 마스터 재집계 지연으로 당일 구매가 KPI에서 누락되던 문제 방지
+        if (cntC >= 0 && mrow[cntC] !== '') g2.cnt = Math.max(num_(g2.cnt), num_(mrow[cntC]));
+        if (amtC >= 0 && mrow[amtC] !== '') g2.amount = Math.max(num_(g2.amount), num_(mrow[amtC]));
+        if (mc('최초구매일') >= 0) { var mf = ymd_(mrow[mc('최초구매일')]); if (mf && (!g2.first || mf < g2.first)) g2.first = mf; }
+        if (mc('최근구매일') >= 0) { var ml = ymd_(mrow[mc('최근구매일')]); if (ml && (!g2.last || ml > g2.last)) g2.last = ml; }
         if (mc('구매여부') >= 0) g2.status = String(mrow[mc('구매여부')] || '').trim();
         g2.inMaster = true;
       }
@@ -259,7 +260,6 @@ function recalc() {
         var b = review[key] || (review[key] = { name: String(name).replace(/[\r\n]+/g, ' ').trim(), target: row[tCol0], cnt: 0, sum: 0, quote: 0, first: '', last: '' });
         if (purchase) { b.cnt++; b.sum += amt; } else { b.quote++; }
         if (date) { if (!b.first || date < b.first) b.first = date; if (!b.last || date > b.last) b.last = date; }
-        if (!(key in review)) newcust++;
       }
       data[pending[p]][markCol0] = 'Y';
     }
