@@ -20,14 +20,14 @@
     return list.map(o=>ORDER_SHEET_COLS.map(c=>({
       '일자':o.date,'구분':o.gubun,'주문경로':o.route,'주문자명':o.orderer,'입점사명':o.vendor,
       '정산구분':o.settle,'자체상품코드':o.selfCode||o.code,'품명':o.name,'수량':o.qty,
-      '출고송장/입고':'',   // 배송비 연동 제거 — 실제 출고 시 담당자가 송장번호를 직접 기입
+      '출고송장/입고':o.invoice||'',   // 발주 등록 시 비움 — 출고 후 담당자가 발주 기록에서 송장번호 수기 입력
       '발주':'O','배송정보/비고':o.shipInfo })[c] ?? ''));
   }
   /* 발주 → 구글시트 전송 레코드 (CS와 동일한 records+id upsert 방식 · 중복 없이 갱신) */
   function ordSheetRecord(o){ return {
     id:o.id, '일자':o.date||o.day||'', '구분':o.gubun||'', '주문경로':o.route||'', '주문자명':o.orderer||'', '입점사명':o.vendor||'',
     '정산구분':o.settle||'', '자체상품코드':o.selfCode||o.code||'', '품명':o.name||'', '수량':(o.qty!=null?o.qty:''),
-    '출고송장/입고':'', '발주':'O', '배송정보/비고':o.shipInfo||'' }; }   // 출고송장/입고는 비워둠(담당자가 송장번호 직접 기입)
+    '출고송장/입고':o.invoice||'', '발주':'O', '배송정보/비고':o.shipInfo||'' }; }   // 출고송장/입고 = 송장번호(발주 기록에서 수기 입력)
   /* 저장 실패로 미전송된 발주 자동 재시도 (주기적 + 재접속) — 내부는 멱등 재반영, 외부는 구글시트 */
   async function ordRetry(){
     try{
@@ -364,7 +364,7 @@
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
-            qty:Number($f('#fQty').value)||1, ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
+            qty:Number($f('#fQty').value)||1, ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
           orders.push(rec); saveOrders();
           // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지 (정산 선택도 초기화 — 다음 상품은 자동판정)
           form.code=''; form.name=''; form.settle=''; curSettle=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }

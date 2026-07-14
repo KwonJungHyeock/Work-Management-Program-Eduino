@@ -98,6 +98,11 @@
           return {rows,from,to};
         }
         function cell(r,c){
+          // 계산 컬럼(예: 처리현황) — 저장값이 아니라 다른 칸으로부터 파생 표시
+          if(c.compute){ const cv=c.compute(r);
+            if(c.badge){ const okc=/완료/.test(cv); const col=okc?'var(--ok)':'var(--danger)', bg=okc?'var(--ok-bg)':'var(--danger-soft)';
+              return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;color:${col};background:${bg}">${esc(cv)}</span></td>`; }
+            return `<td style="white-space:nowrap">${esc(cv)}</td>`; }
           let v=r[c.k]; if(c.money) v=fmtNum(v)+'원'; else if(c.num) v=fmtNum(v); else v=v==null?'':String(v);
           if(c.wrap) v=v.replace(/[ \t]*\n[ \t]*(?:\n[ \t]*)+/g,'\n');   // 빈 줄 접어 1·2번 줄이 이어지게(행 높이 절약)
           // 담당자 컬러 배지(상담사별 색 구분)
@@ -111,6 +116,7 @@
           return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||180}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
         }
         function editCell(r,c){
+          if(c.compute) return cell(r,c);   // 계산 컬럼은 편집 불가 — 그대로 표시(저장 후 자동 갱신)
           const v=r[c.k]==null?'':String(r[c.k]);
           const inp = c.wrap
             ? `<textarea data-k="${esc(c.k)}" rows="2" style="width:100%;min-width:${(c.w||160)}px;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">${esc(v)}</textarea>`
@@ -186,7 +192,7 @@
           if(!isAdmin){ toast('시트 다운로드는 관리자만 가능합니다'); return; }
           const {rows,from,to}=filtered();
           const header=cfg.cols.map(c=>c.h);
-          const lines=[header, ...rows.map(r=>cfg.cols.map(c=>{ let v=r[c.k]; if(c.money) v=fmtNum(v); return v==null?'':String(v); }))];
+          const lines=[header, ...rows.map(r=>cfg.cols.map(c=>{ let v=c.compute?c.compute(r):r[c.k]; if(c.money) v=fmtNum(v); return v==null?'':String(v); }))];
           const csv='﻿'+lines.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\r\n');
           downloadBlob(new Blob([csv],{type:'text/csv'}), `${cfg.title}_${from}_${to}.csv`);
           toast('CSV로 저장했습니다');
@@ -267,15 +273,25 @@
       {k:'answerSummary',h:'답변요약',w:200,wrap:true}, {k:'answer',h:'답변원본',w:240,wrap:true}, {k:'remark',h:'비고',w:120,wrap:true} ] });
 
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
-    desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
+    desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 모든 MD 담당자·대표가 열람·수정할 수 있으며 구글시트는 백업으로 병행됩니다.',
+    editable:true, whoLabel:'담당자',
     // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · CS와 동일 records+id upsert(중복 없음)
     sheetPush:{ tab:'입점사발주', urlKey:STORE.mdOrderCfg,
       row:r=>({ id:r.id, '일자':r.date||r.day||'', '구분':r.gubun||'', '주문경로':r.route||'', '주문자명':r.orderer||'', '입점사명':r.vendor||'',
         '정산구분':r.settle||'', '자체상품코드':r.selfCode||r.code||'', '품명':r.name||'', '수량':(r.qty!=null?r.qty:''),
-        '출고송장/입고':'', '발주':'O', '배송정보/비고':r.shipInfo||'' }) },
+        '출고송장/입고':r.invoice||'', '발주':'O', '배송정보/비고':r.shipInfo||'' }) },
+    onSave: async(rec, old)=>{
+      rec.handler = rec.whoName || rec.handler;                      // 담당자 편집 반영(귀속도 이 담당자로)
+      const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
+      if(window.Records && oldM && newM && oldM!==newM) await Records.del('md','orders',rec.id,oldM,old.who,old.day||old.date);
+      if(window.Records) await Records.pushMD(rec);                  // 내부 발주 기록 갱신(중복 없이 덮어씀 · 송장번호 포함)
+    },
     cols:[ {k:'date',h:'일자',w:96}, {k:'whoName',h:'담당자',w:80,color:true}, {k:'gubun',h:'구분',w:70,tag:true},
       {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
       {k:'settle',h:'정산구분',w:78,tag:true}, {k:'selfCode',h:'자체상품코드',w:104},
       {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},
-      {k:'ship',h:'배송비',w:78,num:true,money:true}, {k:'shipInfo',h:'배송정보/비고',w:180,wrap:true} ] });
+      {k:'ship',h:'배송비',w:78,num:true,money:true},
+      {k:'invoice',h:'송장번호',w:120},                              // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
+      {k:'shipInfo',h:'배송정보/비고',w:180,wrap:true},
+      {k:'__pstatus',h:'처리현황',w:118,compute:r=>((r.invoice||'').toString().trim()?'송장번호 입력완료':'송장번호 입력필요'),badge:true} ] });
 })();

@@ -520,9 +520,7 @@
             content:rec.content, agent:rec.agent, createdAt:rec.createdAt, done:false, assignee:'', assigneeName:'', note:'' }); }
           // 폼 초기화 (분류·상담사·날짜 유지 · 고객유형/상품분류/주문경로/텍스트는 비움)
           form.customerType=''; form.prodCategory=''; form.route='';
-          renderChoice('#custGroup', CS_CUSTOMER_TYPES, 'customerType');
-          renderChoice('#prodGroup', CS_PRODUCT_CATEGORIES, 'prodCategory');
-          renderChoice('#routeGroup', CS_ORDER_ROUTES, 'route');
+          renderChoice('cust'); renderChoice('prod'); renderChoice('route');   // OPT_GROUPS 키로 호출(예전 3-인자 호출은 TypeError로 초기화/목록갱신 중단됨)
           ['fContent','fAnswer','fContact','fName','fProdCode'].forEach(id=>body.querySelector('#'+id).value='');
           body.querySelector('#fCallback').checked=false;
           body.querySelector('#fContent').focus();
