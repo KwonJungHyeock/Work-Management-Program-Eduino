@@ -60,10 +60,94 @@ function headerMap_(sh) {
 
 /* ---------- 웹앱 진입점 ---------- */
 function doGet(e) {
-  var name = (e && e.parameter && e.parameter.sheet) || LEDGER;
+  var p = (e && e.parameter) || {};
+  // 고객 검색 — CS 상담 중 거래처명/연락처로 고객DB 이력 조회
+  if (p.q != null || p.phone != null) {
+    try { return json_(searchCustomers_(p.q || p.phone || '', p.limit)); }
+    catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
+  }
+  var name = p.sheet || LEDGER;
   var sh = sheet_(name);
   var rows = sh ? Math.max(0, sh.getLastRow() - 1) : 0;
   return json_({ ok: true, sheet: name, rows: rows });
+}
+
+/* ---------- 고객 검색 (거래처명 / 연락처) ----------
+   원장[21_거래내역]에서 거래처명·연락처가 검색어를 포함하는 건을 거래처(normKey)별로 묶어
+   거래 이력 + 요약을 돌려준다. 고객마스터에 있으면 마스터 요약(담당자·타겟·구매여부 등)으로 보강. */
+function searchCustomers_(q, limit) {
+  q = String(q || '').trim();
+  var out = { ok: true, q: q, customers: [] };
+  if (!q) return out;
+  var qKey = normKey_(q);                                  // 이름 정규화 매칭
+  var qDigit = q.replace(/[^\d]/g, '');                    // 연락처 숫자만
+  var led = sheet_(LEDGER); if (!led) { out.error = '원장 시트 없음'; return out; }
+  var hm = headerMap_(led), map = hm.map, lr = led.getLastRow();
+  if (lr < 2) return out;
+  var C = function (n) { return map[n] ? map[n] - 1 : -1; };
+  var iName = C('거래처명'), iPhone = C('연락처'), iDate = C('날짜'), iGubun = C('구분'),
+      iItem = C('품목/내용'), iAmt = C('금액'), iMgr = C('담당자'), iMemo = C('메모'),
+      iEmail = C('이메일'), iTgt = C('타겟'), iAddr = C('주소');
+  var vals = led.getRange(2, 1, lr - 1, hm.lastCol).getValues();
+  var groups = {};                                          // normKey → 고객
+  for (var i = 0; i < vals.length; i++) {
+    var row = vals[i], name = String(row[iName] || '');
+    if (!name) continue;
+    var nKey = normKey_(name);
+    var phoneDigit = iPhone >= 0 ? String(row[iPhone] || '').replace(/[^\d]/g, '') : '';
+    var hitName = qKey && nKey.indexOf(qKey) >= 0;
+    var hitPhone = qDigit.length >= 4 && phoneDigit && phoneDigit.indexOf(qDigit) >= 0;
+    if (!hitName && !hitPhone) continue;
+    var g = groups[nKey] || (groups[nKey] = {
+      name: name.replace(/[\r\n]+/g, ' ').trim(), key: nKey, target: iTgt >= 0 ? row[iTgt] : '',
+      phone: '', email: '', addr: '', manager: '', cnt: 0, amount: 0, first: '', last: '', txns: []
+    });
+    var gubun = iGubun >= 0 ? String(row[iGubun] || '') : '';
+    var amt = iAmt >= 0 ? num_(row[iAmt]) : 0;
+    var date = iDate >= 0 ? ymd_(row[iDate]) : '';
+    if (isPurchase_(gubun)) { g.cnt++; g.amount += amt; }
+    if (date) { if (!g.first || date < g.first) g.first = date; if (!g.last || date > g.last) g.last = date; }
+    if (iPhone >= 0 && row[iPhone] && !g.phone) g.phone = String(row[iPhone]).trim();
+    if (iEmail >= 0 && row[iEmail] && !g.email) g.email = String(row[iEmail]).trim();
+    if (iAddr >= 0 && row[iAddr] && !g.addr) g.addr = String(row[iAddr]).trim();
+    if (iMgr >= 0 && row[iMgr] && !g.manager) g.manager = String(row[iMgr]).trim();
+    g.txns.push({
+      date: date, gubun: gubun, item: iItem >= 0 ? String(row[iItem] || '') : '',
+      amount: amt, manager: iMgr >= 0 ? String(row[iMgr] || '') : '', memo: iMemo >= 0 ? String(row[iMemo] || '') : ''
+    });
+  }
+  // 고객마스터로 요약 보강(있으면 우선)
+  var mst = sheet_(MASTER);
+  if (mst) {
+    var mhm = headerMap_(mst), mMap = mhm.map, mlr = mst.getLastRow();
+    if (mlr > 1 && mMap['거래처명']) {
+      var mv = mst.getRange(2, 1, mlr - 1, mhm.lastCol).getValues();
+      var mc = function (n) { return mMap[n] ? mMap[n] - 1 : -1; };
+      var idx = {}; for (var r = 0; r < mv.length; r++) { var k = normKey_(mv[r][mc('거래처명')]); if (k && !(k in idx)) idx[k] = r; }
+      for (var key in groups) {
+        if (!(key in idx)) continue; var mrow = mv[idx[key]], g2 = groups[key];
+        var cntC = mc('구매건수'), amtC = mMap['총구매액(원)'] ? mMap['총구매액(원)'] - 1 : mc('총구매액');
+        if (mc('타겟') >= 0 && mrow[mc('타겟')]) g2.target = mrow[mc('타겟')];
+        if (mc('담당자') >= 0 && mrow[mc('담당자')]) g2.manager = String(mrow[mc('담당자')]).trim();
+        if (mc('연락처') >= 0 && mrow[mc('연락처')]) g2.phone = g2.phone || String(mrow[mc('연락처')]).trim();
+        if (mc('이메일') >= 0 && mrow[mc('이메일')]) g2.email = g2.email || String(mrow[mc('이메일')]).trim();
+        if (mc('주소') >= 0 && mrow[mc('주소')]) g2.addr = g2.addr || String(mrow[mc('주소')]).trim();
+        if (cntC >= 0 && mrow[cntC] !== '') g2.cnt = num_(mrow[cntC]);
+        if (amtC >= 0 && mrow[amtC] !== '') g2.amount = num_(mrow[amtC]);
+        if (mc('최초구매일') >= 0 && mrow[mc('최초구매일')]) g2.first = ymd_(mrow[mc('최초구매일')]) || g2.first;
+        if (mc('최근구매일') >= 0 && mrow[mc('최근구매일')]) g2.last = ymd_(mrow[mc('최근구매일')]) || g2.last;
+        if (mc('구매여부') >= 0) g2.status = String(mrow[mc('구매여부')] || '').trim();
+        g2.inMaster = true;
+      }
+    }
+  }
+  var arr = [];
+  for (var kk in groups) { var g = groups[kk]; g.txns.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); }); arr.push(g); }
+  arr.sort(function (a, b) { return String(b.last).localeCompare(String(a.last)) || b.amount - a.amount; });
+  var lim = Math.max(1, Math.min(50, num_(limit) || 20));
+  out.total = arr.length;
+  out.customers = arr.slice(0, lim);
+  return out;
 }
 function doPost(e) {
   try {

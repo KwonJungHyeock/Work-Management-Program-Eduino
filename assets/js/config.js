@@ -178,6 +178,7 @@ const NAV = [
       { key:'cs.templates', name:'답변 템플릿', icon:'chat' },
       { key:'cs.mailtpl',   name:'메일 템플릿', icon:'mail' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
+      { key:'cs.custdb',    name:'고객 정보 검색', icon:'search' },
       { key:'cs.settle',    name:'일일결산',    icon:'check2' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
@@ -205,7 +206,7 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
   'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.settle'];
 
 const STORE = {
