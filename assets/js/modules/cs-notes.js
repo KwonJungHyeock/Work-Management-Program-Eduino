@@ -263,6 +263,7 @@
         <div class="ds">통화 중 분류·고객유형·상품분류를 바로 누르고 내용을 적으면(Ctrl+Enter 저장) <b>내부 상담 기록과 구글시트에 동시에 저장</b>됩니다.</div>
         <div class="mtabs">
           <div class="t" data-t="memo">상담 메모</div>
+          <div class="t" data-t="records">상담 기록</div>
           <div class="t" data-t="pending">처리 대기 <span class="tab-cnt" id="pendCnt" style="display:none"></span></div>
           <div class="t" data-t="summary">일일 결산</div>
           ${isAdmin?'<div class="t" data-t="settings">연동 설정</div>':''}
@@ -274,7 +275,15 @@
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ updatePendCnt();
         if(tab==='settings' && !isAdmin) tab='memo';
-        return tab==='memo'?drawMemo(): tab==='pending'?drawPending(): tab==='summary'?drawSummary(): drawSettings(); };
+        return tab==='memo'?drawMemo(): tab==='records'?drawRecords(): tab==='pending'?drawPending(): tab==='summary'?drawSummary(): drawSettings(); };
+      // 상담 기록 탭 — 기존 cs.records 모듈(누적 상담 기록 표)을 이 탭 안에 임베드(중복 헤더 제거)
+      function drawRecords(){
+        body.innerHTML='';
+        const m=(window.MODULES||{})['cs.records'];
+        if(!m || !m.render){ body.innerHTML='<div class="muted" style="padding:18px">상담 기록을 불러오지 못했습니다.</div>'; return; }
+        const c=el('div'); body.appendChild(c); m.render(c);
+        const mh=c.querySelector('.mhead'); if(mh) mh.remove();   // 탭 안이라 중복 제목 제거
+      }
       async function updatePendCnt(){ const c=root.querySelector('#pendCnt'); if(!c) return;
         const list=await Q.list(); if(!list){ c.style.display='none'; return; }
         const n=list.filter(r=>!r.done).length;

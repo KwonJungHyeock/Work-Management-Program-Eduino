@@ -172,7 +172,6 @@ const NAV = [
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.notes',     name:'CS상담 메모',   icon:'clipboard' },
-      { key:'cs.records',   name:'CS상담 기록',   icon:'sheet' },
       { key:'cs.postpay',   name:'견적/발주/후불', icon:'truck' },
       { key:'cs.exchange',  name:'교환/반품',     icon:'refresh' },
       { key:'cs.china',     name:'중국 발주요청', icon:'box' },
