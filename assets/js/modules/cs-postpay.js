@@ -14,6 +14,7 @@
     fields:[
       { k:'rdate',    label:'접수일자',  type:'date' },
       { k:'gubun',    label:'구분',      type:'select', options:['발주','견적','후불','결제요청','기타'], req:true },
+      { k:'target',   label:'타겟(고객유형)', type:'select', options:CUSTDB_TARGETS },
       { k:'vendor',   label:'거래처명',  type:'text', ph:'학교/기관/업체명' },
       { k:'name',     label:'이름',      type:'text', ph:'담당자/주문자명' },
       { k:'contact',  label:'연락처',    type:'text', ph:'연락처' },
@@ -25,5 +26,12 @@
       { k:'address',  label:'배송주소',  type:'textarea', ph:'배송 주소' },
       { k:'memo',     label:'메모',      type:'textarea', ph:'특이사항/메모' },
     ],
+    // 저장 시 고객 데이터베이스 원장(21_거래내역)에 자동 append/upsert (구분·타겟별 집계 · 00_요약 자동 최신화)
+    ledger:{ tab:'21_거래내역', source:'CS',
+      map:(rec)=>({ id:rec.id,
+        '날짜':rec.rdate||rec.day||'', '구분':rec.gubun||'', '타겟':rec.target||'', '거래처명':rec.vendor||'',
+        '담당자':rec.name||'', '연락처':rec.contact||'', '이메일':rec.email||'', '품목/내용':rec.content||'',
+        '금액':String(rec.amount==null?'':rec.amount).replace(/[^\d.-]/g,''), '할인율':rec.discount||'',
+        '출고일':rec.shipdate||'', '주소':rec.address||'', '메모':rec.memo||'', '소스':'CS', '등록자':rec.whoName||'' }) },
   });
 })();

@@ -50,6 +50,15 @@
           catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ try{ await fetch(c.sheetUrl,{...opts,mode:'no-cors'}); return {ok:true,unconfirmed:true}; }catch(e){} } return {ok:false,error:err.message||'전송 실패'}; } }
         function backupOne(rec){ const c=getSyncCfg(); if(c.backup!==false && c.sheetUrl) sendSheet([rec]); }
 
+        // ── 고객 데이터베이스 원장(21_거래내역) 연동 — cfg.ledger 있는 보드만(후불/발주/견적) ──
+        const custDbUrl=()=> (store(STORE.custDbCfg).get({sheetUrl:''})||{}).sheetUrl||'';
+        async function ledgerPost(body){ const url=custDbUrl(); if(!url) return {ok:false,skip:true};
+          const opts={ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) };
+          try{ const res=await fetch(url,opts); if(!res.ok) throw new Error('HTTP '+res.status); let d=null; try{d=await res.json();}catch(e){} if(d&&d.ok===false) throw new Error(d.error||'원장 처리 실패'); return {ok:true}; }
+          catch(err){ if(/failed to fetch|networkerror|load failed|cors/i.test(err.message||'')){ try{ await fetch(url,{...opts,mode:'no-cors'}); return {ok:true,unconfirmed:true}; }catch(e){} } return {ok:false,error:err.message||'전송 실패'}; } }
+        function ledgerUpsert(rec){ if(!cfg.ledger || !custDbUrl()) return; ledgerPost({ sheet:cfg.ledger.tab, records:[cfg.ledger.map(rec)] }); }
+        function ledgerDelete(id){ if(!cfg.ledger || !custDbUrl()) return; ledgerPost({ sheet:cfg.ledger.tab, delIds:[id] }); }
+
         root.innerHTML=`
         <style>
           .bd-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
@@ -218,6 +227,7 @@
           all.unshift(rec); paint();
           if(window.Records) Records.pushRaw(cfg.dept||'md', cfg.sheet, rec);
           backupOne(rec);   // 구글 시트 2차 백업(설정 시)
+          ledgerUpsert(rec);   // 고객DB 원장(21_거래내역)에 append/upsert(설정 시)
           // 폼 리셋(담당자/날짜는 유지 · 기본값 있는 필드는 기본값으로)
           cfg.fields.forEach(f=>{ if(f.k===cfg.whoField) return; if(f.type==='date'){ form[f.k]=todayStr(); return; } form[f.k]=f.def||''; });
           resetInputs();
@@ -304,12 +314,14 @@
             Object.assign(old,rec); editId=null; paintWho(); paint();
             if(window.Records){ const oldM=String(old.day||'').slice(0,7); await Records.pushRaw(cfg.dept||'md',cfg.sheet,rec); }
             backupOne(rec);   // 시트 백업도 갱신(id upsert)
+            ledgerUpsert(rec);   // 고객DB 원장도 갱신(id upsert)
             toast('수정했습니다');
           });
           if(canDel) $('#tbl').querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
             if(!confirm('이 기록을 서버에서 삭제할까요? (되돌릴 수 없음)')) return;
             const r=all.find(x=>x.id===b.dataset.id); if(!r) return;
             await Records.del(cfg.dept||'md',cfg.sheet,r.id,(r.day||'').slice(0,7),r.who,r.day);
+            ledgerDelete(r.id);   // 고객DB 원장에서도 제거
             all=all.filter(x=>x.id!==r.id); paintWho(); paint(); toast('삭제했습니다');
           });
         }
@@ -382,7 +394,24 @@
                 <button class="btn" id="syncAll">${icon('cloudUp')}이번 목록 전체 전송</button>
                 <button class="btn ghost" id="syncClose">닫기</button>
                 <span class="muted" id="syncStat" style="font-size:13px"></span></div>
-            </div></div>`;
+            </div></div>
+          ${cfg.ledger?`<div class="bd-card" style="margin-top:16px">
+            <div class="bd-hd"><span class="bd-ic">${icon('grid')}</span>고객 데이터베이스(원장) 연동
+              <span class="muted" style="font-weight:600;font-size:12.5px;margin-left:6px">· 저장 시 <b>${esc(cfg.ledger.tab)}</b> 시트에 자동 누적 · 관리자 전용</span></div>
+            <div class="bd-bd">
+              <div class="note" style="margin-bottom:12px">후불·발주·견적 저장 건이 <b>고객 데이터베이스</b> 원장(<b>${esc(cfg.ledger.tab)}</b>)에 자동으로 쌓여 타겟별·구분별 집계가 최신화됩니다. 아래에 <b>고객DB 스프레드시트</b>에 배포한 Apps Script 웹앱 URL을 넣으세요. (백업 시트와 <b>다른</b> 스프레드시트입니다)</div>
+              <label class="fld" style="margin-bottom:12px">고객DB 웹 앱 URL<input type="text" id="cdbUrl" value="${esc(custDbUrl())}" placeholder="https://script.google.com/macros/s/……/exec"></label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button class="btn pri" id="cdbSave">${icon('check')}저장</button>
+                <button class="btn" id="cdbTest">${icon('cloud')}연결 테스트</button>
+                <span class="muted" id="cdbStat" style="font-size:13px"></span></div>
+            </div></div>`:''}`;
+          if(cfg.ledger){
+            panel.querySelector('#cdbSave').onclick=()=>{ store(STORE.custDbCfg).set({ sheetUrl:panel.querySelector('#cdbUrl').value.trim() }); panel.querySelector('#cdbStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('고객DB 연동 저장'); };
+            panel.querySelector('#cdbTest').onclick=async()=>{ const url=panel.querySelector('#cdbUrl').value.trim(), st=panel.querySelector('#cdbStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
+              try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent(cfg.ledger.tab)); let d=null; try{d=await res.json();}catch(e){}
+                st.innerHTML=res.ok?`<span style="color:var(--ok)">연결 성공 · 원장 <b>"${esc(cfg.ledger.tab)}"</b>${d&&typeof d.rows==='number'?` (${d.rows}행)`:''}</span>`:`<span style="color:var(--danger)">응답 오류 HTTP ${res.status}</span>`; }catch(e){ st.innerHTML=`<span style="color:var(--danger)">연결 실패: ${esc(e.message)}</span>`; } };
+          }
           panel.querySelector('#syncClose').onclick=()=>{ panel.classList.add('hidden'); panel.innerHTML=''; };
           panel.querySelector('#syncCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 사용'); } };
           panel.querySelector('#syncSave').onclick=()=>{ setSyncCfg({ sheetUrl:panel.querySelector('#syncUrl').value.trim(), backup:panel.querySelector('#syncBackup').checked }); panel.querySelector('#syncStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('연동 설정 저장'); };

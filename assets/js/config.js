@@ -130,6 +130,8 @@ const QUICK_LINKS = [
 const CS_INQUIRY_TYPES = ['후불','견적','대량견적','상품/재고','주문/배송','기타'];   // 시트 '분류'
 const CS_CUSTOMER_TYPES = ['유치원','초등학교','중학교','고등학교','대학교','기관','개인','업체','입점사','파트너사']; // 시트 '고객유형' (학교 세분화)
 const CS_PRODUCT_CATEGORIES = ['자사키트','자사부품','입점사키트','입점사부품']; // 시트 '상품분류'
+/* 고객 데이터베이스(원장) 타겟 = 고객유형. 값은 데이터시트 00_요약 집계(COUNTIF)와 정확히 일치해야 함(가운뎃점 · 포함) */
+const CUSTDB_TARGETS = ['대학','고등','중등','초등','유아','공공기관','기업·학원','개인','파트너·입점사','미분류'];
 const CS_ORDER_ROUTES = ['사이트','스팜','후불','발주'];                     // 시트 '주문경로'
 const CS_AGENTS = ['함인영','신아름','송민희','박정길'];                      // 시트 '상담사'
 /* 상담 메모 내부필드 → 구글시트 헤더 이름 매핑 (Apps Script가 헤더 이름으로 칸을 맞춤) */
@@ -225,6 +227,7 @@ const STORE = {
   catMap:   'eduino.md.catmap',      // 이카운트 코드→이름표 { vendor:{코드:구매처명}, category:{코드:분류명} }
   optSets:  'eduino.optsets',        // 시트별 옵션칩 오버라이드 { '<setKey>':[...] } — 관리자 편집·팀 공유
   settleCfg:'eduino.settle.cfg',     // 일일결산 구글시트 연동 { sheetUrl } — 팀 공유
+  custDbCfg:'eduino.custdb.cfg',     // 고객 데이터베이스(원장) 연동 { sheetUrl } — 후불/발주/견적이 21_거래내역으로 append · 팀 공유
 };
 
 /* 옵션칩 레지스트리 — 시트별 선택 버튼(고객유형·상품분류·주문경로 등)을 관리자가 편집하면
@@ -259,6 +262,7 @@ const SHARE_DEFAULT = {
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
   [STORE.optSets]:'all',             // 옵션칩 오버라이드 = 전사 공유(모두 같은 버튼을 봄)
   [STORE.settleCfg]:'all',           // 일일결산 시트 URL = 전사 공유
+  [STORE.custDbCfg]:'all',           // 고객DB 원장 URL = 전사 공유
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
 function shareScopeOf(key){
@@ -279,7 +283,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
-  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg,
+  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg,
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
