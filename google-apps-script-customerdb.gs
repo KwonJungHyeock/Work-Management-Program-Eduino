@@ -267,11 +267,80 @@ function writeReview_(review) {
   return Math.max(0, sh.getLastRow() - 1);
 }
 
+/* ---------- 신규 승격: [신규_확인] → 고객마스터 + 타겟별 자동 추가 ---------- */
+// 거래처명으로 타겟 자동 추론(타겟 열이 비어있을 때)
+function inferTarget_(name) {
+  var s = String(name || '');
+  if (/대학교|대학원|산학협력단|캠퍼스/.test(s)) return '대학';
+  if (/고등학교|고교/.test(s)) return '고등';
+  if (/중학교/.test(s)) return '중등';
+  if (/초등학교/.test(s)) return '초등';
+  if (/유치원|어린이집/.test(s)) return '유아';
+  if (/교육청|교육지원청|시청|도청|구청|군청|주민센터|행정복지센터|공단|공사|재단|법인|협회|진흥원|과학관|도서관|박물관|연구원|연구소/.test(s)) return '공공기관';
+  if (/주식회사|㈜|\(주\)|유한회사|학원|에듀|스튜디오|컴퍼니|company|corp|inc|co\.,|co\.,ltd/i.test(s)) return '기업·학원';
+  return '미분류';
+}
+// 원장에서 거래처별 속성(담당자·연락처·이메일·주소) 최초 비어있지 않은 값 인덱스
+function ledgerAttrIndex_() {
+  var led = sheet_(LEDGER); if (!led) return {}; var hm = headerMap_(led), map = hm.map;
+  var lr = led.getLastRow(); var out = {}; if (lr < 2 || !map['거래처명']) return out;
+  var v = led.getRange(2, 1, lr - 1, hm.lastCol).getValues();
+  var fields = ['담당자', '연락처', '이메일', '주소'];
+  for (var i = 0; i < v.length; i++) {
+    var k = normKey_(v[i][map['거래처명'] - 1]); if (!k) continue;
+    var o = out[k] || (out[k] = {});
+    fields.forEach(function (f) { if (map[f]) { var val = v[i][map[f] - 1]; if (val !== '' && val != null && !o[f]) o[f] = val; } });
+  }
+  return out;
+}
+function appendRowByHeader_(sh, values) {
+  var map = headerMap_(sh).map, lastCol = sh.getLastColumn();
+  var row = new Array(lastCol).fill('');
+  for (var name in values) { var c = map[name] || (name === '총구매액(원)' ? map['총구매액'] : 0); if (c) row[c - 1] = values[name]; }
+  if (map['No']) row[map['No'] - 1] = Math.max(0, sh.getLastRow()); // 대략적 순번
+  sh.appendRow(row);
+}
+function promoteReview() {
+  var rev = sheet_(REVIEW); if (!rev) { toast_('[' + REVIEW + '] 탭이 없습니다'); return; }
+  var hm = headerMap_(rev), map = hm.map, lr = rev.getLastRow();
+  if (lr < 2) { toast_('승격할 신규 거래처가 없습니다'); return; }
+  var vals = rev.getRange(2, 1, lr - 1, hm.lastCol).getValues();
+  var attr = ledgerAttrIndex_();
+  var mst = sheet_(MASTER); if (!mst) { toast_('[' + MASTER + '] 시트가 없습니다'); return; }
+  var mMap = headerMap_(mst).map, mLast = mst.getLastRow();
+  var exist = {}; if (mLast > 1) { var mn = mst.getRange(2, mMap['거래처명'], mLast - 1, 1).getValues(); for (var i = 0; i < mn.length; i++) { var k = normKey_(mn[i][0]); if (k) exist[k] = true; } }
+  var C = function (n) { return (map[n] || 0) - 1; };
+  var iName = C('거래처명'), iTgt = (map['타겟(추정)'] || map['타겟'] || 2) - 1, iCnt = C('구매건수'), iAmt = C('총구매액'), iQ = C('견적문의수'), iF = C('최초'), iL = C('최근'), iS = (map['상태'] || 8) - 1;
+  var promoted = 0;
+  for (var r = 0; r < vals.length; r++) {
+    if (String(vals[r][iS] || '') === '승격완료') continue;
+    var name = vals[r][iName]; var key = normKey_(name); if (!key) continue;
+    var target = String(vals[r][iTgt] || '').trim() || inferTarget_(name);
+    var cnt = num_(vals[r][iCnt]), amt = num_(vals[r][iAmt]), quote = num_(vals[r][iQ]);
+    var first = vals[r][iF], last = vals[r][iL], a = attr[key] || {};
+    var base = { '거래처명': name, '타겟': target, '담당자': a['담당자'] || '', '연락처': a['연락처'] || '', '이메일': a['이메일'] || '', '주소': a['주소'] || '', '구매건수': cnt, '총구매액(원)': amt, '최초구매일': first, '최근구매일': last };
+    if (!exist[key]) { appendRowByHeader_(mst, base); exist[key] = true; }
+    var tsheets = TARGET_SHEETS[target];
+    if (tsheets) {
+      var tbase = {}; for (var kk in base) tbase[kk] = base[kk];
+      tbase['견적문의수'] = quote; tbase['구매여부'] = (cnt > 0 ? '구매' : '견적/미구매');
+      appendRowByHeader_(sheet_(tsheets[0]), tbase);                 // _전체
+      if (cnt > 0) appendRowByHeader_(sheet_(tsheets[1]), tbase);    // _구매
+    }
+    vals[r][iTgt] = target; vals[r][iS] = '승격완료';
+    promoted++;
+  }
+  rev.getRange(2, 1, vals.length, hm.lastCol).setValues(vals);
+  SpreadsheetApp.flush();
+  toast_('신규 승격 완료 · ' + promoted + '곳을 고객마스터/타겟별에 추가(상태=승격완료). 타겟은 비어있던 행만 자동추론했습니다.');
+}
+
 /* ---------- 메뉴 / 트리거 ---------- */
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('고객DB')
     .addItem('① 기준선 설정 (최초 1회 · 백필 전에)', 'setBaseline')
     .addItem('② 재집계 실행 (신규 반영)', 'recalc')
+    .addItem('③ 신규 승격 (신규_확인 → 마스터/타겟별)', 'promoteReview')
     .addSeparator()
     .addItem('매일 자동 재집계 설치(00:30)', 'installDailyTrigger')
     .addItem('자동 재집계 해제', 'removeDailyTrigger')
