@@ -10,7 +10,18 @@
   const ordDB =()=>store('eduino.md.orders');
   const cfgDB =()=>store(STORE.mdOrderCfg);
   const getProducts=()=>prodDB().get(DEFAULT_MD_PRODUCTS.map(p=>({...p})));
-  const getVendors =()=>venDB().get(DEFAULT_MD_VENDORS.map(v=>({...v})));
+  // 입점사 정규화(괄호주석·(주)·공백 제거) — 병합 키
+  const venNorm=s=>String(s||'').replace(/[(（[][^)）\]]*[)）\]]/g,'').replace(/㈜|주식회사|유한회사|재단법인/g,'').replace(/\s/g,'').toLowerCase();
+  // 저장/동기화된 입점사 데이터가 불완전해도 번들 기본값(전체 배송정보)이 빈틈을 채우도록 "병합"
+  // (저장값이 우선 · 번들에만 있는 입점사는 추가) → 어느 직원 기기에서든 정산구분·배송비가 동일하게 잡힘
+  const getVendors =()=>{
+    const base=DEFAULT_MD_VENDORS.map(v=>({...v}));
+    const stored=venDB().get(null);
+    if(!Array.isArray(stored)||!stored.length) return base;
+    const map={}; base.forEach(v=>{ const k=venNorm(v.name); if(k) map[k]=v; });
+    stored.forEach(v=>{ const k=venNorm(v.name); if(!k){ return; } map[k]={ ...(map[k]||{}), ...v }; });
+    return Object.values(map);
+  };
   const getOrders  =()=>ordDB().get([]);
   const getCfg     =()=>cfgDB().get({sheetUrl:'', autoSend:true});
   const vat=g=>{ const gross=Number(g)||0; const tax=Math.round(gross/11); return {gross,tax,supply:gross-tax}; };

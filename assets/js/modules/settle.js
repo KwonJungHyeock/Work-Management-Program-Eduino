@@ -58,6 +58,19 @@
         <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
       </tbody></table></div>`;
   }
+  /* 견적·발주·후불 상세 리스트 (엑셀 결산 형식 · 견적→발주→후불 순) */
+  function payListHtml(recs){
+    recs=(recs||[]).slice(); if(!recs.length) return '';
+    const ord={'견적':0,'발주':1,'후불':2,'결제요청':3,'기타':4};
+    recs.sort((a,b)=>((ord[a.gubun]==null?9:ord[a.gubun])-(ord[b.gubun]==null?9:ord[b.gubun])) || String(a.rdate||'').localeCompare(String(b.rdate||'')));
+    const cell=v=>esc(v==null?'':String(v)); const won=v=>{ const n=parseAmt(v); return n?n.toLocaleString()+'원':cell(v); };
+    return `<div class="st-sec-cap">견적·발주·후불 상세 · ${recs.length}건 (견적→발주→후불 순)</div>
+      <div style="overflow-x:auto"><table class="st-dtl"><thead><tr>
+        <th>구분</th><th>고객유형</th><th>거래처명</th><th>이름</th><th>금액</th><th>내용</th><th>담당자</th></tr></thead><tbody>
+        ${recs.map(r=>`<tr><td>${r.gubun?((typeof tagBadge==='function')?tagBadge(r.gubun,'st-dt-badge'):cell(r.gubun)):''}</td><td>${cell(r.custType||r.target)}</td><td>${cell(r.vendor)}</td><td>${cell(r.name)}</td>
+          <td class="stnum">${won(r.amount)}</td><td class="st-dt-wrap">${cell(r.content)}</td><td>${cell(r.agent||r.whoName||r.who)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
   const catLine=agg=>Object.entries(agg.byCat).map(([k,v])=>`${k} ${v}`).join(' · ');
   const personLine=agg=>Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}건`).join(', ');
 
@@ -139,7 +152,7 @@
               <div class="st-hd"><div class="st-t">${esc(date)} · ${DEPT_LABEL[dept]} 파트 집계</div>
                 <span class="st-badge" style="color:${st.c};background:${st.bg}">${st.l}</span></div>
               ${aggCard(dept,agg)}
-              ${dept==='cs'?payMoneyHtml((agg.details&&agg.details.postpay)||[]):''}
+              ${dept==='cs'?payMoneyHtml((agg.details&&agg.details.postpay)||[])+payListHtml((agg.details&&agg.details.postpay)||[]):''}
               <div class="st-sec-cap">전달한 담당자 · ${(doc.contributors||[]).length}명</div>
               <div class="st-contribs" id="stContribs">${contribHtml(doc)}</div>
               <div class="st-sec-cap">① 내 특이사항 (담당자) ${mine?'<span style="color:var(--ok);font-weight:700;text-transform:none">✓ 전달함</span>':''}</div>
