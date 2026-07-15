@@ -50,6 +50,9 @@
           .sv-del:hover{background:var(--danger-soft);color:var(--danger)}
           .sv-empty{padding:44px;text-align:center;color:var(--muted);font-size:14px}
           .sv-note{font-size:12px;color:var(--faint);margin-top:10px}
+          table.sv tr.sv-grp td:first-child{box-shadow:inset 3px 0 0 var(--info)}
+          .sv-mv{border:1px solid var(--line-2);background:var(--panel);color:var(--muted);cursor:pointer;border-radius:5px;padding:2px 6px;font-size:11px;line-height:1}
+          .sv-mv:hover{background:var(--hover);color:var(--ink)}
         </style>
         <div class="mhead pad">
           <div class="tt">${esc(cfg.title)}</div>
@@ -80,7 +83,10 @@
         const fvals={};   // 컬럼 필터 값 { 컬럼키: 선택값 }
         const myDept=(Auth.user&&Auth.user()||{}).dept;
         const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
+        const canReorder=!!cfg.reorderable && canEdit;
         const hasActions=canDel||canEdit;
+        const dayOf=r=>String(r.day||r.date||'').slice(0,10);
+        const ordOf=r=> r.ord!=null ? Number(r.ord) : (r.createdAt ? (Date.parse(r.createdAt)||0) : 0);
 
         function range(){ const to=todayStr();
           if(preset==='today') return {from:to,to};
@@ -95,8 +101,15 @@
           if(who) rows=rows.filter(r=>(r.whoName||r.agent||'')===who);
           (cfg.filters||[]).forEach(f=>{ const v=fvals[f.k]; if(v) rows=rows.filter(r=>String(r[f.k]??'').trim()===v); });
           if(q){ const s=q.toLowerCase(); rows=rows.filter(r=>cfg.cols.some(c=>String(r[c.k]??'').toLowerCase().includes(s))); }
-          rows.sort((a,b)=>String(b.day||b.date||'').localeCompare(String(a.day||a.date||''))
-            || String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+          if(cfg.ordKey){
+            // 발주 기록: 날짜 내림차순 + 같은 주문서(orderGroup) 인접 + 입력순(ord) 오름차순
+            const gkey=r=>cfg.groupKey?String(r[cfg.groupKey]||r.id):r.id;
+            const gmin={}; rows.forEach(r=>{ const g=gkey(r), o=ordOf(r); if(gmin[g]==null||o<gmin[g]) gmin[g]=o; });
+            rows.sort((a,b)=> dayOf(b).localeCompare(dayOf(a)) || (gmin[gkey(a)]-gmin[gkey(b)]) || (ordOf(a)-ordOf(b)));
+          } else {
+            rows.sort((a,b)=>String(b.day||b.date||'').localeCompare(String(a.day||a.date||''))
+              || String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+          }
           return {rows,from,to};
         }
         function cell(r,c){
@@ -120,7 +133,9 @@
         function editCell(r,c){
           if(c.compute) return cell(r,c);   // 계산 컬럼은 편집 불가 — 그대로 표시(저장 후 자동 갱신)
           const v=r[c.k]==null?'':String(r[c.k]);
-          const inp = c.wrap
+          const inp = c.options
+            ? `<select data-k="${esc(c.k)}" style="font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">${c.options.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`
+            : c.wrap
             ? `<textarea data-k="${esc(c.k)}" rows="2" style="width:100%;min-width:${(c.w||160)}px;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">${esc(v)}</textarea>`
             : `<input data-k="${esc(c.k)}" type="${c.k==='date'?'date':(c.num?'number':'text')}" value="${esc(v)}" style="width:${(c.w||90)}px;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px">`;
           return `<td style="white-space:nowrap">${inp}</td>`;
@@ -131,7 +146,8 @@
               <button class="btn pri sm" data-a="save">${icon('check')}</button>
               <button class="btn ghost sm" data-a="cancel">취소</button></span></td>`;
           }
-          return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
+          return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
+            ${canReorder?`<button class="sv-mv" data-a="up" data-id="${esc(r.id)}" title="위로 이동">▲</button><button class="sv-mv" data-a="down" data-id="${esc(r.id)}" title="아래로 이동">▼</button>`:''}
             ${canEdit?`<button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>`:''}
             ${canDel?`<button class="sv-del" data-id="${esc(r.id)}" data-day="${esc(r.day||r.date||'')}" data-who="${esc(r.who||'')}" title="삭제">${icon('trash')}</button>`:''}
           </span></td>`;
@@ -142,9 +158,11 @@
           $('#meta').textContent=`${from} ~ ${to} · 총 ${rows.length.toLocaleString()}건`;
           const CAP=2000; const show=rows.slice(0,CAP);
           const head=`<thead><tr>${cfg.cols.map(c=>`<th>${esc(c.h)}</th>`).join('')}${hasActions?'<th></th>':''}</tr></thead>`;
-          const body=show.length? `<tbody>${show.map(r=>`<tr>${
-            cfg.cols.map(c=>(editId===r.id?editCell(r,c):cell(r,c))).join('')}${hasActions?actionCell(r):''
-          }</tr>`).join('')}</tbody>` : '';
+          // 같은 주문서(orderGroup)가 2건 이상이면 그룹 표시(왼쪽 강조선)
+          const grpCnt={}; if(cfg.groupKey) show.forEach(r=>{ const g=r[cfg.groupKey]; if(g) grpCnt[g]=(grpCnt[g]||0)+1; });
+          const body=show.length? `<tbody>${show.map(r=>{ const g=cfg.groupKey&&r[cfg.groupKey]; const grouped=g&&grpCnt[g]>1;
+            return `<tr${grouped?' class="sv-grp"':''}>${cfg.cols.map(c=>(editId===r.id?editCell(r,c):cell(r,c))).join('')}${hasActions?actionCell(r):''}</tr>`;
+          }).join('')}</tbody>` : '';
           $('#tbl').innerHTML=head+body;
           if(!show.length){ $('#tbl').innerHTML=`<tbody><tr><td class="sv-empty" colspan="${cfg.cols.length+1}">해당 기간의 기록이 없습니다.</td></tr></tbody>`; }
           if(rows.length>CAP) $('#meta').textContent+=` (앞 ${CAP}건 표시 · 기간을 좁혀 보세요)`;
@@ -165,6 +183,21 @@
             const day=b.dataset.day; await Records.del(cfg.dept,cfg.sheet,b.dataset.id,(day||'').slice(0,7),b.dataset.who,day);
             all=all.filter(x=>x.id!==b.dataset.id); paintWho(); paint(); toast('삭제했습니다');
           });
+          if(canReorder){
+            $('#tbl').querySelectorAll('[data-a=up]').forEach(b=>b.onclick=()=>move(b.dataset.id,-1));
+            $('#tbl').querySelectorAll('[data-a=down]').forEach(b=>b.onclick=()=>move(b.dataset.id,1));
+          }
+        }
+        // 발주 기록 항목 이동(순서 변경) — 같은 날짜 안에서 인접 행과 입력순(ord)을 맞바꿔 저장
+        async function move(id,dir){
+          const {rows}=filtered(); const i=rows.findIndex(r=>r.id===id); if(i<0) return;
+          const j=i+dir; if(j<0||j>=rows.length) return;
+          const a=rows[i], b=rows[j];
+          if(dayOf(a)!==dayOf(b)){ toast('같은 날짜 안에서만 이동할 수 있습니다'); return; }
+          const ao=ordOf(a), bo=ordOf(b); a.ord=(bo===ao?bo-1:bo); b.ord=ao;   // 동일값이면 살짝 벌려 순서 확정
+          paint();
+          try{ if(cfg.onSave){ await cfg.onSave(a,a); await cfg.onSave(b,b); } }
+          catch(err){ toast('순서 저장 실패 — 새로고침 후 다시 시도'); }
         }
         function paintWho(){
           const names=[...new Set(all.map(r=>r.whoName||r.agent).filter(Boolean))].sort();
@@ -275,8 +308,8 @@
       {k:'answerSummary',h:'답변요약',w:200,wrap:true}, {k:'answer',h:'답변원본',w:240,wrap:true}, {k:'remark',h:'비고',w:120,wrap:true} ] });
 
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
-    desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 모든 MD 담당자·대표가 열람·수정할 수 있으며 구글시트는 백업으로 병행됩니다.',
-    editable:true, whoLabel:'담당자',
+    desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 같은 주문서는 묶여서 입력순으로 표시되며, ▲▼로 순서를 바꿀 수 있습니다. 구글시트는 백업으로 병행됩니다.',
+    editable:true, whoLabel:'담당자', reorderable:true, ordKey:'ord', groupKey:'orderGroup',
     // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · CS와 동일 records+id upsert(중복 없음)
     sheetPush:{ tab:'입점사발주', urlKey:STORE.mdOrderCfg,
       row:r=>({ id:r.id, '일자':r.date||r.day||'', '구분':r.gubun||'', '주문경로':r.route||'', '주문자명':r.orderer||'', '입점사명':r.vendor||'',
@@ -294,6 +327,7 @@
       {k:'settle',h:'정산구분',w:78,tag:true}, {k:'selfCode',h:'자체상품코드',w:104},
       {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},
       {k:'ship',h:'배송비',w:78,num:true,money:true},
+      {k:'orderStatus',h:'발주 진행여부',w:96,tag:true,options:['발주전','발주완료']},   // 입점사에 발주 넣었는지
       {k:'invoice',h:'송장번호',w:120},                              // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
       {k:'shipInfo',h:'배송정보/비고',w:180,wrap:true},
       {k:'__pstatus',h:'처리현황',w:118,compute:r=>((r.invoice||'').toString().trim()?'송장번호 입력완료':'송장번호 입력필요'),badge:true} ] });

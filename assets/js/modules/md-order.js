@@ -24,6 +24,9 @@
   };
   const getOrders  =()=>ordDB().get([]);
   const getCfg     =()=>cfgDB().get({sheetUrl:'', autoSend:true});
+  // 발주 입력 순서 보존용 시퀀스(입력한 순서대로 발주 기록 정렬 · 시각 기반이라 담당자 간에도 시간순 유지)
+  let __ordSeq = Date.now();
+  const nextOrd = ()=> (__ordSeq += 1);
   const vat=g=>{ const gross=Number(g)||0; const tax=Math.round(gross/11); return {gross,tax,supply:gross-tax}; };
 
   /* 발주 → 구글시트 행 매핑 (미리보기 표/CSV용 · 포지셔널) */
@@ -368,7 +371,8 @@
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
             qty:Number($f('#fQty').value)||1, amount:(Number(p&&p.inPrice)||0)*(Number($f('#fQty').value)||1),
-            ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(), synced:false, unregistered:!p };
+            ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(),
+            ord:nextOrd(), orderStatus:'발주전', synced:false, unregistered:!p };   // ord=입력순 · orderStatus=발주 진행여부
           orders.push(rec); saveOrders();
           // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지 (정산 선택도 초기화 — 다음 상품은 자동판정)
           form.code=''; form.name=''; form.settle=''; curSettle=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
@@ -475,6 +479,9 @@
       /* 저장 = 내부 시트(Records) + 외부 구글시트 동시 반영 */
       async function commit(list){
         const pending=list.filter(o=>!o.synced); if(!pending.length) return {ok:true, sent:0, none:true};
+        // 같은 입점사·주문자·일자의 상품을 '하나의 주문서(orderGroup)'로 자동 묶음 → 발주 기록에서 인접 표시
+        // (자동저장으로 한 건씩 올려도 같은 주문건이면 같은 그룹이 되도록 결정적 키 사용)
+        pending.forEach(o=>{ if(!o.orderGroup){ o.orderGroup='g:'+venNorm(o.vendor)+'|'+String(o.orderer||'').trim()+'|'+String(o.date||o.day||'').slice(0,10); } if(o.ord==null) o.ord=nextOrd(); });
         if(window.Records) pending.forEach(o=>{ Records.pushMD(o); syncPayreq(o); });   // 발주 기록 + 선결제면 결제요청 미러
         const cfg=getCfg();
         if(!cfg.sheetUrl || cfg.backup===false){ pending.forEach(o=>o.synced=true); saveOrders(); return {ok:true, sent:pending.length, internalOnly:true}; }
