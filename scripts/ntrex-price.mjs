@@ -105,16 +105,18 @@ if(DEBUG){
 }
 
 const day = new Date().toISOString().slice(0,10);
-const diffs=[]; let checked=0, failed=0, noprice=0;
+const diffs=[]; let checked=0, failed=0, noprice=0, consecFail=0;
 for(const p of items){
-  try{ const html=await getHtml(siteUrl(p.ntx)); const cur=extractPrice(html); checked++;
+  try{ const html=await getHtml(siteUrl(p.ntx)); const cur=extractPrice(html); checked++; consecFail=0;
     if(checked%50===0) console.log(`... ${checked}/${items.length} (changed ${diffs.length})`);   // 진행 표시
     if(!cur){ noprice++; }
     else if(p.basePrice>0 && cur!==p.basePrice){
       diffs.push({ ntx:p.ntx, ed:p.ed, name:p.name, oldPrice:p.basePrice, newPrice:cur });
       console.log(`CHANGED ${p.ed}/${p.ntx}: ${won(p.basePrice)} -> ${won(cur)}`);
     }
-  }catch(e){ failed++; }
+  }catch(e){ failed++; consecFail++;
+    if(consecFail>=20){ console.log(`\n연속 ${consecFail}건 실패 — 사이트 차단/장애로 보고 조기 종료(수집분 업로드).`); break; }
+  }
   await sleep(DELAY);
 }
 console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${diffs.length}`);
