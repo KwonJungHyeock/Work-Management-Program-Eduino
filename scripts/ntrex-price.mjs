@@ -22,7 +22,8 @@ try { for (const line of readFileSync(new URL('./.env', import.meta.url),'utf8')
 
 const arg = k => { const a=process.argv.find(x=>x.startsWith('--'+k)); return a?(a.includes('=')?a.split('=')[1]:true):false; };
 const DEBUG=arg('debug'), DRY=arg('dry'), LIMIT=Number(arg('limit'))||0, ONE=arg('code');
-const DELAY=Number(E.NTREX_DELAY_MS)||400;
+const DELAY=Number(E.NTREX_DELAY_MS)||2000;   // 기본 간격 넉넉히(차단 위험↓) · .env로 조정
+const jitter=()=>Math.floor(Math.random()*800);   // 요청마다 0~0.8초 무작위 추가(봇 티 줄임)
 const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36';
 const siteUrl = no => `https://www.devicemart.co.kr/goods/view?no=${encodeURIComponent(no)}`;
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
@@ -97,7 +98,7 @@ if(DEBUG){
       uniq.slice(0,14).forEach(c=>console.log(`   - [${c.tag}] ${won(c.val)}   context: ${htmlContext(html,c.raw)}`));
       console.log(`  => picked: ${won(extractPrice(html))}`);
     }catch(e){ console.log(`[${p.ntx}] FAILED: ${e.message}`); }
-    await sleep(DELAY);
+    await sleep(DELAY+jitter());
   }
   console.log('\nNote: tell me which candidate is the real sale price (with its [tag] + context).');
   console.log('If none matches, the price is JS-rendered -> switch to a headless-browser fetch.');
@@ -117,7 +118,7 @@ for(const p of items){
   }catch(e){ failed++; consecFail++;
     if(consecFail>=20){ console.log(`\n연속 ${consecFail}건 실패 — 사이트 차단/장애로 보고 조기 종료(수집분 업로드).`); break; }
   }
-  await sleep(DELAY);
+  await sleep(DELAY+jitter());
 }
 console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${diffs.length}`);
 
