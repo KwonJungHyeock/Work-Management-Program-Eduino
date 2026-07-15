@@ -54,12 +54,10 @@ function extractPrice(html){
   if(E.NTREX_PRICE_REGEX){ try{ const m=html.match(new RegExp(E.NTREX_PRICE_REGEX)); if(m){ const n=num(m[1]||m[0]); if(n) return n; } }catch{} }
   const c=priceCandidates(html);
   const by=t=>c.find(x=>x.tag===t);
-  // VAT 포함(sellvat/total/vatincl) 우선 → 없으면 판매가 요소(sell) → 구조화/라벨
+  // 판매가 요소만 신뢰: VAT 포함(sellvat/total/vatincl) 우선 → 판매가 요소(sell) → 구조화/라벨
+  // 못 찾으면 0 반환 → 비교 건너뜀(엉뚱한 최댓값으로 오탐하지 않음)
   const pick = by('sellvat') || by('total') || by('vatincl') || by('sell') || by('jsonld') || by('meta') || by('label');
-  if(pick) return pick.val;
-  // 마지막 폴백: 원단위 후보 중 최댓값(상품가는 보통 최대 · 배송비/적립 등 소액 제외)
-  const nums=c.filter(x=>x.tag==='won').map(x=>x.val);
-  return nums.length?Math.max(...nums):0;
+  return pick?pick.val:0;
 }
 function htmlContext(html, raw){ const i=html.indexOf(raw); if(i<0) return ''; return ascii(html.slice(Math.max(0,i-140), i+20)); }
 function title(html){ const m=html.match(/<title[^>]*>([^<]+)</i); return ascii(m?m[1]:''); }
