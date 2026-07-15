@@ -30,9 +30,10 @@ const won = n => Number(n||0).toLocaleString('en-US');
 const ascii = s => String(s||'').replace(/[^\x20-\x7E]/g,'.').replace(/\s+/g,' ').trim();  // strip non-ASCII (no broken glyphs)
 
 async function getHtml(url){
-  const r=await fetch(url,{headers:{'User-Agent':UA,'Accept-Language':'ko-KR,ko;q=0.9'}});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return await r.text();
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), Number(E.NTREX_TIMEOUT_MS)||15000);
+  try{ const r=await fetch(url,{headers:{'User-Agent':UA,'Accept-Language':'ko-KR,ko;q=0.9'},signal:ctl.signal});
+    if(!r.ok) throw new Error('HTTP '+r.status); return await r.text();
+  } finally{ clearTimeout(t); }
 }
 function num(s){ const n=parseInt(String(s).replace(/[^\d]/g,''),10); return isNaN(n)?0:n; }
 function priceCandidates(html){
@@ -104,17 +105,19 @@ if(DEBUG){
 }
 
 const day = new Date().toISOString().slice(0,10);
-const diffs=[]; let checked=0, failed=0;
+const diffs=[]; let checked=0, failed=0, noprice=0;
 for(const p of items){
   try{ const html=await getHtml(siteUrl(p.ntx)); const cur=extractPrice(html); checked++;
-    if(cur>0 && p.basePrice>0 && cur!==p.basePrice){
+    if(checked%50===0) console.log(`... ${checked}/${items.length} (changed ${diffs.length})`);   // 진행 표시
+    if(!cur){ noprice++; }
+    else if(p.basePrice>0 && cur!==p.basePrice){
       diffs.push({ ntx:p.ntx, ed:p.ed, name:p.name, oldPrice:p.basePrice, newPrice:cur });
       console.log(`CHANGED ${p.ed}/${p.ntx}: ${won(p.basePrice)} -> ${won(cur)}`);
     }
   }catch(e){ failed++; }
   await sleep(DELAY);
 }
-console.log(`\nchecked ${checked} · failed ${failed} · changed ${diffs.length}`);
+console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${diffs.length}`);
 
 if(DRY){ console.log('[dry-run] skip upload'); process.exit(0); }
 if(!E.STORE_URL){ console.log('STORE_URL not set -> skip upload (add STORE_URL to .env)'); process.exit(0); }
