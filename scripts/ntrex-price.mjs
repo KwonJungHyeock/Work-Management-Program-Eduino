@@ -38,7 +38,10 @@ function num(s){ const n=parseInt(String(s).replace(/[^\d]/g,''),10); return isN
 function priceCandidates(html){
   const out=[]; let m;
   const push=(tag,v)=>{ const n=num(v); if(n>=100&&n<100000000) out.push({tag,val:n,raw:String(v)}); };
-  // ★ 최우선: '총 상품금액 … VAT 포함 … 금액' (디바이스마트 최종 판매가 · 우리 기준가와 동일 기준=VAT포함)
+  // ★ 디바이스마트 판매가 요소: <strong class="sell_price ...">462,000원</strong> (508,200원)
+  //   괄호 안 = VAT 포함(우리 공급가표 기준과 동일) → 이 값을 최우선으로 사용
+  const reSV=/sell_price[\s\S]{0,400}?\(\s*([\d]{1,3}(?:,[\d]{3})+)/g; while((m=reSV.exec(html))) push('sellvat',m[1]);
+  const reS=/class="[^"]*sell_price[^"]*"[^>]*>[\s\S]{0,60}?([\d]{1,3}(?:,[\d]{3})+)/g; while((m=reS.exec(html))) push('sell',m[1]);
   const reT=/총\s*상품금액[\s\S]{0,120}?VAT\s*포함[\s\S]{0,40}?([\d]{1,3}(?:,[\d]{3})+)/g; while((m=reT.exec(html))) push('total',m[1]);
   const reV=/VAT\s*포함[^0-9]{0,20}?([\d]{1,3}(?:,[\d]{3})+)/g; while((m=reV.exec(html))) push('vatincl',m[1]);
   const re1=/"(?:price|lowPrice|highPrice|salePrice|sellPrice)"\s*:\s*"?([\d,]+)"?/gi; while((m=re1.exec(html))) push('jsonld',m[1]);
@@ -51,7 +54,8 @@ function extractPrice(html){
   if(E.NTREX_PRICE_REGEX){ try{ const m=html.match(new RegExp(E.NTREX_PRICE_REGEX)); if(m){ const n=num(m[1]||m[0]); if(n) return n; } }catch{} }
   const c=priceCandidates(html);
   const by=t=>c.find(x=>x.tag===t);
-  const pick = by('total') || by('vatincl') || by('jsonld') || by('meta') || by('label');
+  // VAT 포함(sellvat/total/vatincl) 우선 → 없으면 판매가 요소(sell) → 구조화/라벨
+  const pick = by('sellvat') || by('total') || by('vatincl') || by('sell') || by('jsonld') || by('meta') || by('label');
   if(pick) return pick.val;
   // 마지막 폴백: 원단위 후보 중 최댓값(상품가는 보통 최대 · 배송비/적립 등 소액 제외)
   const nums=c.filter(x=>x.tag==='won').map(x=>x.val);
