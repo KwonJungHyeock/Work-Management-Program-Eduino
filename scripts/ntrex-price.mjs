@@ -58,10 +58,17 @@ function priceCandidates(html){
 }
 function title(html){ const m=html.match(/<title[^>]*>([^<]+)</i); return m?m[1].trim():''; }
 
-const list = JSON.parse(readFileSync(new URL('./ntrex-list.json', import.meta.url),'utf8'));
-let items = list.filter(p=>p.ntx);
-if(ONE) items = items.filter(p=>String(p.ntx)===String(ONE));
-if(LIMIT) items = items.slice(0,LIMIT);
+// --code 로 특정 코드만 볼 땐 리스트 파일이 없어도 바로 크롤(진단용). 그 외엔 ntrex-list.json 필요.
+let items;
+if(ONE){
+  items=[{ ntx:String(ONE), ed:'', name:'', basePrice:0 }];
+}else{
+  let list;
+  try{ list=JSON.parse(readFileSync(new URL('./ntrex-list.json', import.meta.url),'utf8')); }
+  catch(e){ console.error('ntrex-list.json 을 찾을 수 없습니다. 같은 폴더에 두세요. (특정 코드 확인은 --code=번호 로 파일 없이 가능)'); process.exit(1); }
+  items=list.filter(p=>p.ntx);
+  if(LIMIT) items=items.slice(0,LIMIT);
+}
 
 if(DEBUG){
   console.log('== 판매가 후보 진단 ==');
