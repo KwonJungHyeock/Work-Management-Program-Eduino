@@ -57,7 +57,8 @@
       <div class="mbody">
         <div class="card" style="margin-bottom:18px">
           <div class="card-hd">${icon('plus')}<b>계정 발급 / 수정</b>
-            <span class="muted" id="editHint" style="margin-left:auto;font-size:12.5px"></span></div>
+            <span class="muted" id="editHint" style="margin-left:auto;font-size:12.5px"></span>
+            <button type="button" class="btn sm" id="newUser" style="margin-left:10px">${icon('plus')}신규 계정</button></div>
           <div class="card-bd">
             <div class="u-form">
               <label class="fld">아이디<input type="text" id="fId" placeholder="cs.kim" autocomplete="off"></label>
@@ -98,12 +99,14 @@
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
       $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur]); };
       function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true;
-        renderPerms(deptDefault('cs')); $('#fId').disabled=false; $('#editHint').textContent=''; $('#fId').focus(); }
+        renderPerms(deptDefault('cs')); $('#fId').disabled=false; $('#editHint').innerHTML='<b style="color:var(--ok)">신규 계정 발급</b>'; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
         $('#fDept').value=u.dept||'cs'; $('#fRole').value=u.role==='lead'?'lead':'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'));
         $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
       renderPerms(deptDefault('cs'));
+      // 신규 계정: 폼을 빈 상태로 초기화(수정 모드 해제) + 접속코드 자동 생성 → 바로 발급 가능
+      $('#newUser').onclick=()=>{ resetForm(); $('#fCode').value=randCode(); $('#admStat').textContent=''; root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
 
       $('#saveUser').onclick=async()=>{
         const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value, role:$('#fRole').value,
