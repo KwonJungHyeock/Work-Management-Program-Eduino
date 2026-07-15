@@ -187,6 +187,7 @@ const NAV = [
       { key:'md.payreq',    name:'결제요청',           icon:'stamp' },
       { key:'md.vendorchg', name:'입점사 신규/변동',   icon:'truck' },
       { key:'md.prodhub',   name:'상품·품질 관리',     icon:'grid' },
+      { key:'md.ntrex',     name:'엔티렉스 가격비교',  icon:'chart' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
       { key:'md.settle',    name:'일일결산',           icon:'check2' },
       { key:'md.extra',     name:'부가기능',           icon:'grid' },
@@ -204,7 +205,7 @@ const NAV = [
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
 const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
-  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.settle'];
+  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.ntrex', 'md.settle'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }
@@ -234,6 +235,15 @@ const STORE = {
   optSets:  'eduino.optsets',        // 시트별 옵션칩 오버라이드 { '<setKey>':[...] } — 관리자 편집·팀 공유
   settleCfg:'eduino.settle.cfg',     // 일일결산 구글시트 연동 { sheetUrl } — 팀 공유
   custDbCfg:'eduino.custdb.cfg',     // 고객 데이터베이스(원장) 연동 { sheetUrl } — 후불/발주/견적이 21_거래내역으로 append · 팀 공유
+  ntrexMailCfg:'eduino.ntrex.mailcfg', // 엔티렉스 공급가 요청 메일 양식 { to, toName, subject, body } · 관리자 편집 · 팀 공유
+};
+
+/* 엔티렉스 공급가 요청 메일 기본 양식 (담당자 제공 · 관리자가 [엔티렉스 가격비교]에서 편집)
+   치환 토큰: {ntx}=엔티렉스 상품코드 · {name}=엔티렉스 상품명 · {ed}=에듀이노코드 · {link}=상품링크 */
+const NTREX_MAIL_DEFAULT = {
+  to:'n4812@ntrex.co.kr', toName:'유명한',
+  subject:'[(주)로보다인시스템/에듀이노] 상품 공급가 문의드립니다',
+  body:'안녕하세요.\n(주)로보다인시스템의 에듀이노 입니다.\n\n하기 상품 가격변동이 확인되어 공급가 요청드립니다.\n\n*상품정보\n{ntx}\n{name}\n\n*상품링크\n{link}\n\n감사합니다.',
 };
 
 /* 옵션칩 레지스트리 — 시트별 선택 버튼(고객유형·상품분류·주문경로 등)을 관리자가 편집하면
@@ -269,6 +279,7 @@ const SHARE_DEFAULT = {
   [STORE.optSets]:'all',             // 옵션칩 오버라이드 = 전사 공유(모두 같은 버튼을 봄)
   [STORE.settleCfg]:'all',           // 일일결산 시트 URL = 전사 공유
   [STORE.custDbCfg]:'all',           // 고객DB 원장 URL = 전사 공유
+  [STORE.ntrexMailCfg]:'md',         // 엔티렉스 공급가 요청 메일 양식 = MD 공유
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
 function shareScopeOf(key){
@@ -289,7 +300,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
-  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg,
+  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg,
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
@@ -319,6 +330,8 @@ const SHARED_LABELS = {
   'eduino.board.prodmgmt.cfg':'상품관리 시트 연동 URL',
   [STORE.shareMap]:'공유 범위 규칙',
   [STORE.catMap]:'이카운트 구매처·분류 이름표',
+  [STORE.custDbCfg]:'고객DB 원장 URL',
+  [STORE.ntrexMailCfg]:'엔티렉스 공급가 요청 메일 양식',
 };
 
 /* 이카운트 코드→이름 치환 헬퍼 (구매처명·분류명) — 카탈로그엔 코드만, 이름은 팀 공유 이름표에서 */
