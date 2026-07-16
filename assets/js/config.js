@@ -198,6 +198,7 @@ const NAV = [
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.approvals', name:'결재함', icon:'inbox' },
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
+      { key:'admin.sales', name:'매출 데이터', icon:'chart' },
       { key:'admin.users', name:'팀원 계정', icon:'users' },
       { key:'admin.share', name:'공유 범위', icon:'share' },
       { key:'admin.audit', name:'감사 로그', icon:'clipboard' },
