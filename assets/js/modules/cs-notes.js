@@ -187,7 +187,7 @@
         .q-hd .kbd b{background:var(--panel);border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
         /* 빠른 입력 2단 레이아웃 (오른쪽 메타 패널로 공간 활용) */
-        .q-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:22px;align-items:start}
+        .q-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start}
         @media(max-width:920px){.q-grid{grid-template-columns:1fr}}
         .q-main{display:flex;flex-direction:column;gap:17px}
         /* 섹션 라벨 (정제된 엔터프라이즈 톤) */
@@ -196,6 +196,8 @@
         .q-sec-cap .opt{font-size:11px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
         /* 칩(토글) — 선택 시 소프트 틴트 + 컬러 보더 */
         .chips{display:flex;gap:7px;flex-wrap:wrap}
+        .chips.col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+        .chips.col2 .chip{justify-content:center}
         .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);
           font-size:13.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:border-color .12s,background .12s,box-shadow .12s,transform .12s;user-select:none;line-height:1.2}
         .chip:hover{border-color:var(--faint);background:var(--panel-2);transform:translateY(-1px)}
@@ -321,7 +323,7 @@
                     <div>
                       <div class="q-sec-cap">고객유형 <span class="opt">선택 · 다시 누르면 해제</span>
                         ${isAdmin?'<button type="button" class="sec-edit" data-oe="cust">편집</button>':''}</div>
-                      <div class="chips" id="custGroup"></div>
+                      <div class="chips col2" id="custGroup"></div>
                     </div>
                     <div>
                       <div class="q-sec-cap">상품분류 <span class="opt">선택 · 다시 누르면 해제</span>

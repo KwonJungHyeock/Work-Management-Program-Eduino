@@ -144,6 +144,7 @@
         const formOrder=[...cfg.fields].sort((a,b)=>(a.type==='textarea'?1:0)-(b.type==='textarea'?1:0));
         formOrder.forEach(f=>{
           const wrap=el('div','bd-f'+((f.type==='textarea')?' wide':''));
+          if(f.newRow) wrap.style.gridColumnStart='1';   // 이 필드부터 새 줄에서 시작
           const lab=`<label>${esc(f.label)}${f.req?'<span class="req">*</span>':''}</label>`;
           if(f.type==='agent' || (f.type==='select' && f.k===cfg.whoField)){
             // 담당자/처리자 — 드롭다운(공간 효율) · 관리자는 목록에서 직접 추가 가능

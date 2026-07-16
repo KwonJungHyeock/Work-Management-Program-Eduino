@@ -18,7 +18,7 @@
       { k:'agent',    label:'담당자',    type:'agent',  options:['신아름','함인영'] },
       { k:'route',    label:'경로',      type:'select', options:['게시판','메일','전화','카톡','톡톡','대표님소개','업무폰','학교장터','연구비카드'] },
       { k:'custType', label:'고객유형',  type:'select', options:CS_CUSTOMER_TYPES },
-      { k:'vendor',   label:'거래처명',  type:'text', ph:'학교/기관/업체명' },
+      { k:'vendor',   label:'거래처명',  type:'text', ph:'학교/기관/업체명', newRow:true },  // 거래처명·이름·연락처는 둘째 줄
       { k:'name',     label:'이름',      type:'text', ph:'담당자/주문자명' },
       { k:'contact',  label:'연락처',    type:'text', ph:'연락처' },
       { k:'email',    label:'이메일',    type:'text', ph:'이메일' },
