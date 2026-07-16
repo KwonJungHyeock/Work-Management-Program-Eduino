@@ -84,7 +84,7 @@
       </style>
       <div class="mhead">
         <div class="tt">매출 데이터</div>
-        <div class="ds">견적/발주/후불(구분별)·입점사 발주(정산구분별) 매출을 기간별로 집계합니다.</div>
+        <div class="ds">견적/발주/후불(구분별) 매출 · 입점사 발주(정산구분별) 매입을 기간별로 집계합니다.</div>
       </div>
       <div class="mbody wide" id="slBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#slBody');
@@ -142,13 +142,13 @@
             <div class="sl-card cs"><div class="hd"><h3>${icon('truck')} 견적/발주/후불 매출</h3>
               <div class="sub">CS · 구분별 · ${csAll.length}건</div><div class="tot">${won(csAgg.total)}<small> 원</small></div></div>
               <div class="bd">${csAgg.total||csAll.length?barRows(csAgg):'<div class="sl-empty">이 기간의 기록이 없습니다.</div>'}</div></div>
-            <div class="sl-card md"><div class="hd"><h3>${icon('box')} 입점사 발주 매출</h3>
+            <div class="sl-card md"><div class="hd"><h3>${icon('box')} 입점사 발주 매입</h3>
               <div class="sub">MD · 정산구분별(발주금액 기준) · ${mdAll.length}건</div><div class="tot">${won(mdAgg.total)}<small> 원</small></div></div>
               <div class="bd">${mdAgg.total||mdAll.length?barRows(mdAgg):'<div class="sl-empty">이 기간의 기록이 없습니다.</div>'}</div></div>
           </div>
           <div class="sl-trend"><h3>${icon('chart')} 월별 매출 추이</h3><div class="sub">${esc(rangeLabel)} · 파랑=CS · 보라=MD</div>
             ${trendChart(months,csT,mdT)}</div>
-          <div class="sl-note">※ 입점사 발주 '매출'은 발주(입고)금액 기준(수량×입고단가)입니다. CS 매출은 견적/발주/후불 기록의 '금액' 합계입니다.</div>`;
+          <div class="sl-note">※ 입점사 발주 '매입'은 발주(입고)금액 기준(수량×입고단가)입니다. CS 매출은 견적/발주/후불 기록의 '금액' 합계입니다.</div>`;
 
         body.querySelectorAll('.sl-period .seg button').forEach(b=>b.onclick=()=>{ preset=b.dataset.p;
           if(preset!=='custom'){ [from,to]=presetRange(preset,cym); } else { [from,to]=presetRange('m1',cym); }
