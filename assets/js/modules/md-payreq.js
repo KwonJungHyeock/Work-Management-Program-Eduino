@@ -3,7 +3,7 @@
    - 입점사 발주에서 정산구분=선결제로 저장하면 이 시트에 자동으로 한 번 더 올라옴
      (발주 기록에도 그대로 남음 · 중복 기록 허용)
    - 택배운임·환불 등은 [수동 항목 추가]로 직접 등록
-   - 항목: 날짜 · 구분 · 주문자명 · 업체명 · 내용 · 금액 · 계좌정보
+   - 항목: 날짜 · 구분 · 주문자명 · 업체명 · 내용 · 수량 · 금액 · 계좌정보
    - 수정/삭제는 파트장·관리자만
    ========================================================================= */
 (function(){
@@ -29,7 +29,7 @@
     render(root){
       const editable=canEdit();
       let date=todayStr(), all=[], editId=null, apDoc=null;
-      const blank=()=>({ id:'', kind:'택배운임', orderer:'', vendor:'', content:'', amount:'', account:'' });
+      const blank=()=>({ id:'', kind:'택배운임', orderer:'', vendor:'', content:'', qty:'', amount:'', account:'' });
       let form=blank();
       root.innerHTML=`
       <style>
@@ -44,7 +44,7 @@
         .pq-in{height:34px;font:inherit;border:1px solid var(--line-2);border-radius:7px;padding:0 9px;background:var(--panel);width:100%;min-width:90px}
         .pq-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:14px 16px;margin-bottom:16px}
         .pq-hdrow{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;margin-bottom:12px}
-        .pq-grid{display:grid;grid-template-columns:120px 150px 150px 1fr 120px 1.2fr auto;gap:9px;align-items:end}
+        .pq-grid{display:grid;grid-template-columns:120px 150px 150px 1fr 84px 120px 1.2fr auto;gap:9px;align-items:end}
         @media(max-width:900px){.pq-grid{grid-template-columns:1fr 1fr}}
         .pq-f{display:flex;flex-direction:column;gap:5px}
         .pq-f label{font-size:11px;font-weight:700;color:var(--muted)}
@@ -68,6 +68,7 @@
             <div class="pq-f"><label>주문자명</label><input class="pq-in" id="pfOrderer" value="${esc(form.orderer)}" placeholder="예: 스팜 김은정"></div>
             <div class="pq-f"><label>업체명</label><input class="pq-in" id="pfVendor" value="${esc(form.vendor)}" placeholder="예: 롯데택배"></div>
             <div class="pq-f"><label>내용</label><input class="pq-in" id="pfContent" value="${esc(form.content)}" placeholder="예: 쿠팡 반품 배송비"></div>
+            <div class="pq-f"><label>수량</label><input class="pq-in" id="pfQty" value="${esc(form.qty)}" placeholder="예: 1" inputmode="numeric" style="width:70px;text-align:right"></div>
             <div class="pq-f"><label>금액</label><input class="pq-in" id="pfAmount" value="${esc(form.amount)}" placeholder="예: 3,200" inputmode="numeric" style="text-align:right"></div>
             <div class="pq-f"><label>계좌정보</label><input class="pq-in" id="pfAccount" value="${esc(form.account)}" placeholder="은행 / 계좌번호 / 예금주"></div>
             <div class="pq-f"><label>&nbsp;</label><button class="btn pri" id="pfAdd">${icon('check')}추가</button></div>
@@ -80,6 +81,7 @@
           <td style="white-space:nowrap">${esc(r.orderer||'')}</td>
           <td style="white-space:nowrap;font-weight:600;color:var(--ink)">${esc(r.vendor||'')}</td>
           <td class="wrap">${esc(r.content||'')}</td>
+          <td class="num">${(r.qty!=null&&r.qty!=='')?esc(r.qty):''}</td>
           <td class="num">${won(parseAmt(r.amount))}원</td>
           <td class="wrap" style="min-width:170px;font-size:12.5px">${esc(r.account||'')}</td>
           ${editable?`<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
@@ -94,6 +96,7 @@
           <td><input class="pq-in" data-k="orderer" value="${esc(r.orderer||'')}" style="min-width:110px"></td>
           <td><input class="pq-in" data-k="vendor" value="${esc(r.vendor||'')}" style="min-width:110px"></td>
           <td><input class="pq-in" data-k="content" value="${esc(r.content||'')}" style="min-width:150px"></td>
+          <td><input class="pq-in" data-k="qty" value="${esc(r.qty!=null?r.qty:'')}" style="width:56px;text-align:right"></td>
           <td><input class="pq-in" data-k="amount" value="${esc(r.amount||'')}" style="width:100px;text-align:right"></td>
           <td><input class="pq-in" data-k="account" value="${esc(r.account||'')}" style="min-width:150px"></td>
           <td style="white-space:nowrap"><span style="display:flex;gap:4px"><button class="btn pri sm" data-a="save" data-id="${esc(r.id)}">${icon('check')}</button><button class="btn ghost sm" data-a="cancel">취소</button></span></td>
@@ -103,7 +106,8 @@
         if(!root.isConnected) return;
         const rows=all.slice().sort((a,b)=>String(a.kind==='발주'?0:1).localeCompare(String(b.kind==='발주'?0:1)) || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
         const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
-        const cols=editable?8:7;
+        const qtyTotal=rows.reduce((s,r)=>s+(Number(r.qty)||0),0);
+        const cols=editable?9:8;
         const st=PAYSTATUS[(apDoc&&apDoc.status)||'none']||PAYSTATUS.none;
         const paid=apDoc&&apDoc.status==='paid', submitted=apDoc&&apDoc.status==='submitted';
         const statusBar=`<div class="pq-status">
@@ -116,9 +120,9 @@
         body.innerHTML=`${statusBar}${addFormHtml()}
           <div class="bd-meta" style="font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600">${esc(date)} · 결제요청 ${rows.length}건 · 합계 <b style="color:var(--red)">${won(total)}원</b></div>
           <div class="pq-wrap"><table class="pq">
-            <thead><tr><th>날짜</th><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th style="text-align:right">금액</th><th>계좌정보</th>${editable?'<th></th>':''}</tr></thead>
+            <thead><tr><th>날짜</th><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th><th>계좌정보</th>${editable?'<th></th>':''}</tr></thead>
             <tbody>${rows.length?rows.map(r=>editId===r.id?rowEdit(r):rowView(r)).join(''):`<tr><td class="pq-empty" colspan="${cols}">${esc(date)}에 결제요청 내역이 없습니다.${editable?' 선결제 발주를 저장하거나 위에서 수동 추가하세요.':''}</td></tr>`}</tbody>
-            ${rows.length?`<tfoot><tr><td colspan="5">합계</td><td class="num">${won(total)}원</td><td ${editable?'colspan="2"':''}></td></tr></tfoot>`:''}
+            ${rows.length?`<tfoot><tr><td colspan="5">합계</td><td class="num">${qtyTotal||''}</td><td class="num">${won(total)}원</td><td ${editable?'colspan="2"':''}></td></tr></tfoot>`:''}
           </table></div>`;
         wire();
       }
@@ -133,16 +137,16 @@
           if(cur && cur.status==='paid'){ apDoc=cur; if(msg) msg.textContent=''; toast('이미 대표 결제완료된 건입니다 — 재상신할 수 없습니다'); paint(); return; }
           const total=all.reduce((s,r)=>s+parseAmt(r.amount),0);
           const doc={ id:payDocId(date), type:'payreq', dept:'md', date, status:'submitted',
-            items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,amount:parseAmt(r.amount),account:r.account})),
+            items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,qty:r.qty,amount:parseAmt(r.amount),account:r.account})),
             count:all.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
           const r=await collPush(doc); if(r) apDoc=doc;   // 저장 성공 시에만 상태 반영(실패 시 이전 상태 유지)
           if(msg) msg.textContent=''; toast(r?'결제 상신 완료 — 대표 결재함으로 전송됐습니다':'상신 실패 — 서버 확인'); paint(); };
         const add=body.querySelector('#pfAdd');
-        if(add){ ['pfKind','pfOrderer','pfVendor','pfContent','pfAmount','pfAccount'].forEach(id=>{ const el2=body.querySelector('#'+id); if(el2) el2.oninput=el2.onchange=e=>{ form[id.replace('pf','').toLowerCase()==='kind'?'kind':({pfOrderer:'orderer',pfVendor:'vendor',pfContent:'content',pfAmount:'amount',pfAccount:'account'})[id]]=e.target.value; }; });
+        if(add){ ['pfKind','pfOrderer','pfVendor','pfContent','pfQty','pfAmount','pfAccount'].forEach(id=>{ const el2=body.querySelector('#'+id); if(el2) el2.oninput=el2.onchange=e=>{ form[id.replace('pf','').toLowerCase()==='kind'?'kind':({pfOrderer:'orderer',pfVendor:'vendor',pfContent:'content',pfQty:'qty',pfAmount:'amount',pfAccount:'account'})[id]]=e.target.value; }; });
           add.onclick=async()=>{
             if(!form.vendor.trim() && !form.content.trim()){ toast('업체명 또는 내용을 입력하세요'); return; }
             const rec={ id:uuid(), day:date, date:date, kind:form.kind, orderer:form.orderer.trim(), vendor:form.vendor.trim(),
-              content:form.content.trim(), amount:parseAmt(form.amount), account:form.account.trim(),
+              content:form.content.trim(), qty:String(form.qty||'').trim(), amount:parseAmt(form.amount), account:form.account.trim(),
               whoName:meU().name||'', who:meU().loginId||meU().name||'', createdAt:nowISO() };
             all.push(rec); form=blank(); paint();
             if(window.Records) await Records.pushRaw('md','payreq',rec);

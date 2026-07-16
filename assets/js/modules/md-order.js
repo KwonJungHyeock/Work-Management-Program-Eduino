@@ -510,7 +510,7 @@
       const dayOfOrder=o=>/^\d{4}-\d{2}-\d{2}$/.test(o.date||'')?o.date:todayStr();
       function payreqFromOrder(o){ const ven=vendorObj(o.vendor);
         return { id:o.id, day:dayOfOrder(o), date:o.date, kind:'발주',
-          orderer:[o.route,o.orderer].filter(Boolean).join(' '), vendor:o.vendor||'', content:o.name||'',
+          orderer:[o.route,o.orderer].filter(Boolean).join(' '), vendor:o.vendor||'', content:o.name||'', qty:(o.qty!=null?o.qty:''),
           amount:Number(o.amount)||0, account:(ven&&ven.account)||'', handler:o.handler||'', whoName:o.handler||'' }; }
       function syncPayreq(o){ if(!window.Records) return;
         if(normSettle(o.settle)==='선결제') Records.pushRaw('md','payreq',payreqFromOrder(o));
