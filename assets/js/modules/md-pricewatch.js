@@ -26,6 +26,11 @@
   const canEdit = ()=> isAdmin() || ((Auth.user&&Auth.user()||{}).dept==='md');
 
   async function collGet(coll){ try{ const r=await fetch('/api/store?type=coll&coll='+coll); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
+  // 메일 자동발송 서버 설정(SMTP 연결 여부·보내는이·회신주소) — 1회 조회 후 캐시
+  let _mailSvc=null;
+  async function loadMailSvc(){ if(_mailSvc) return _mailSvc;
+    try{ const r=await fetch('/api/sendmail'); _mailSvc=r.ok?await r.json():{ok:false,configured:false}; }
+    catch(e){ _mailSvc={ok:false,configured:false}; } return _mailSvc; }
 
   // 취급 상품 = 번들(공급가표) + 담당자 오버라이드(추가/수정/삭제) · ntx(엔티렉스코드) 기준
   function effectiveProducts(v){
@@ -99,9 +104,61 @@
       }
 
       /* -------- 가격 변동 알림 -------- */
-      function sendMail(v,p){ const link=v.site(p.ntx); const m=fillMail(mailCfg(v),p,link);
-        const url=`mailto:${encodeURIComponent(m.to)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
-        try{ const a=document.createElement('a'); a.href=url; a.click(); }catch(e){ location.href=url; } return m; }
+      // 메일 앱 열기(mailto) — 자동발송 미설정/실패 시 대체 경로
+      function openMailApp(m){ const url=`mailto:${encodeURIComponent(m.to)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
+        try{ const a=document.createElement('a'); a.href=url; a.click(); }catch(e){ location.href=url; } }
+      // 발송 전 확인 팝업 — 미리보기 확인 후에만 실제 발송(오발송 방지)
+      async function confirmSend(v,p){
+        const link=v.site(p.ntx); const cfg=mailCfg(v); const m=fillMail(cfg,p,link); const toName=cfg.toName||'';
+        const svc=await loadMailSvc();
+        const configured=!!(svc&&svc.configured);
+        const fromLine=configured
+          ? `${esc(svc.fromName||svc.from||'')} &lt;${esc(svc.from||'')}&gt;${svc.replyTo?` <span class="muted">· 회신 → ${esc(svc.replyTo)}</span>`:''}`
+          : `<span class="muted">메일 앱(mailto) — 로그인된 계정에서 발송</span>`;
+        const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+        ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:560px;width:96%;max-height:calc(100vh - 48px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+          <div style="padding:18px 22px 12px;border-bottom:1px solid var(--line)">
+            <div style="font-size:16px;font-weight:800">${icon('mail')} 공급가 요청 메일을 보냅니다</div>
+            <div class="muted" style="font-size:12.5px;margin-top:4px">아래 내용을 확인하고 <b>[이대로 보내기]</b>를 눌러야 실제로 발송됩니다.</div>
+          </div>
+          <div style="padding:16px 22px;overflow-y:auto">
+            <div style="display:grid;grid-template-columns:64px 1fr;gap:6px 10px;font-size:13px;margin-bottom:12px">
+              <div class="muted">받는사람</div><div><b>${esc(toName)}</b> ${esc(m.to||'(미지정)')}</div>
+              <div class="muted">보내는이</div><div>${fromLine}</div>
+              <div class="muted">대상상품</div><div><b class="mono">${esc(p.ed||'-')}</b> · ${esc(p.name||'')} <span class="muted">(${esc(v.name)} ${esc(p.ntx||'')})</span></div>
+              <div class="muted">제목</div><div>${esc(m.subject||'')}</div>
+            </div>
+            <div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:4px">본문 미리보기</div>
+            <div style="white-space:pre-wrap;font-size:12.8px;line-height:1.6;border:1px solid var(--line-2);border-radius:8px;padding:11px 13px;background:var(--panel-2);max-height:220px;overflow:auto">${esc(m.body||'')}</div>
+            ${configured?'':'<div class="nx-note" style="margin:12px 0 0">자동발송이 아직 설정되지 않아 <b>메일 앱</b>으로 엽니다. 서버에 SMTP를 설정하면 이 버튼이 <b>원클릭 자동발송</b>으로 바뀝니다.</div>'}
+            <div id="csMsg" class="muted" style="font-size:12.5px;margin-top:10px;min-height:16px"></div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)">
+            <button class="btn ghost" id="csCancel">취소</button>
+            ${configured?`<button class="btn ghost" id="csMailto">메일 앱으로 열기</button><button class="btn pri" id="csSend">${icon('mail')}이대로 보내기</button>`
+                        :`<button class="btn pri" id="csMailto">${icon('mail')}메일 앱으로 열기</button>`}
+          </div></div>`;
+        document.body.appendChild(ov);
+        const close=()=>ov.remove();
+        ov.onclick=e=>{ if(e.target===ov) close(); };
+        ov.querySelector('#csCancel').onclick=close;
+        const mailtoBtn=ov.querySelector('#csMailto'); if(mailtoBtn) mailtoBtn.onclick=()=>{ openMailApp(m); toast('메일 작성 화면을 열었습니다'); close(); };
+        const sendBtn=ov.querySelector('#csSend');
+        if(sendBtn) sendBtn.onclick=async()=>{
+          const msg=ov.querySelector('#csMsg'); sendBtn.disabled=true; ov.querySelector('#csCancel').disabled=true;
+          msg.innerHTML='<span style="color:var(--info)">발송 중…</span>';
+          try{
+            const who=(Auth.user&&Auth.user()||{}); const actor=who.name||who.loginId||'';
+            const r=await fetch('/api/sendmail',{method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({op:'send',to:m.to,toName,subject:m.subject,body:m.body,actor})});
+            let d=null; try{d=await r.json();}catch(e){}
+            if(r.ok&&d&&d.ok){ toast('공급가 요청 메일을 발송했습니다'); close(); }
+            else{ const em=(d&&d.error)||('발송 실패('+r.status+')'); msg.innerHTML=`<span style="color:var(--danger)">${esc(em)}</span> · <a href="#" id="csFallback">메일 앱으로 열기</a>`;
+              sendBtn.disabled=false; ov.querySelector('#csCancel').disabled=false;
+              const fb=ov.querySelector('#csFallback'); if(fb) fb.onclick=e=>{ e.preventDefault(); openMailApp(m); close(); }; }
+          }catch(e){ msg.innerHTML='<span style="color:var(--danger)">서버 연결 실패</span>'; sendBtn.disabled=false; ov.querySelector('#csCancel').disabled=false; }
+        };
+      }
       function diffRow(v,d,demo){ const prodMap={}; effectiveProducts(v).forEach(p=>prodMap[String(p.ntx)]=p);
         const p=prodMap[String(d.ntx)]||d; const up=(d.newPrice||0)>=(d.oldPrice||0); const link=v.site(d.ntx);
         return `<div class="nx-card${demo?' demo':''}">
@@ -129,7 +186,7 @@
           </div>
           <div>${rows.length?rows.map(d=>diffRow(v,d,demo)).join(''):`<div class="nx-empty">${icon('check2')}<div>오늘 가격 변동이 없습니다.</div></div>`}</div>`;
         const pm={}; prods.forEach(p=>pm[String(p.ntx)]=p);
-        sec.querySelectorAll('[data-a=mail]').forEach(b=>b.onclick=()=>{ sendMail(v,pm[b.dataset.ntx]||{ntx:b.dataset.ntx}); toast('메일 작성 화면을 열었습니다'); });
+        sec.querySelectorAll('[data-a=mail]').forEach(b=>b.onclick=()=>{ confirmSend(v,pm[b.dataset.ntx]||{ntx:b.dataset.ntx}); });
         sec.querySelectorAll('[data-a=copy]').forEach(b=>b.onclick=()=>{ const m=fillMail(mailCfg(v),pm[b.dataset.ntx]||{ntx:b.dataset.ntx},v.site(b.dataset.ntx)); copyText(`받는사람: ${m.to}\n제목: ${m.subject}\n\n${m.body}`); toast('메일 내용을 복사했습니다'); });
       }
 
