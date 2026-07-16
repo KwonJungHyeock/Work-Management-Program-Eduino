@@ -51,6 +51,10 @@
           .sv-empty{padding:44px;text-align:center;color:var(--muted);font-size:14px}
           .sv-note{font-size:12px;color:var(--faint);margin-top:10px}
           table.sv tr.sv-grp td:first-child{box-shadow:inset 3px 0 0 var(--info)}
+          /* 하나의 주문건 병합: 공통 셀은 상단 정렬 · 주문건 사이 구분선 · 병합셀 옅은 배경 */
+          table.sv td[data-msp]{vertical-align:top;background:var(--panel-2)}
+          table.sv tr.sv-grp-first>td{border-top:2px solid var(--line-2)}
+          table.sv tr.sv-grp-sub td{background:transparent}
           .sv-mv{border:1px solid var(--line-2);background:var(--panel);color:var(--muted);cursor:pointer;border-radius:5px;padding:2px 6px;font-size:11px;line-height:1}
           .sv-mv:hover{background:var(--hover);color:var(--ink)}
         </style>
@@ -158,11 +162,26 @@
           $('#meta').textContent=`${from} ~ ${to} · 총 ${rows.length.toLocaleString()}건`;
           const CAP=2000; const show=rows.slice(0,CAP);
           const head=`<thead><tr>${cfg.cols.map(c=>`<th>${esc(c.h)}</th>`).join('')}${hasActions?'<th></th>':''}</tr></thead>`;
-          // 같은 주문서(orderGroup)가 2건 이상이면 그룹 표시(왼쪽 강조선)
+          // 같은 주문서(orderGroup)가 2건 이상이면 하나의 주문건으로 표시
           const grpCnt={}; if(cfg.groupKey) show.forEach(r=>{ const g=r[cfg.groupKey]; if(g) grpCnt[g]=(grpCnt[g]||0)+1; });
-          const body=show.length? `<tbody>${show.map(r=>{ const g=cfg.groupKey&&r[cfg.groupKey]; const grouped=g&&grpCnt[g]>1;
-            return `<tr${grouped?' class="sv-grp"':''}>${cfg.cols.map(c=>(editId===r.id?editCell(r,c):cell(r,c))).join('')}${hasActions?actionCell(r):''}</tr>`;
-          }).join('')}</tbody>` : '';
+          const MERGE=(cfg.groupMergeKeys&&cfg.groupMergeKeys.length)?cfg.groupMergeKeys:null;   // 주문건 공통 컬럼(rowspan 병합)
+          const tdRowspan=(td,n)=> td.replace('<td', '<td data-msp="1" rowspan="'+n+'"');
+          const rowHtml=(r,extra)=>`<tr${extra||''}>${cfg.cols.map(c=>(editId===r.id?editCell(r,c):cell(r,c))).join('')}${hasActions?actionCell(r):''}</tr>`;
+          let bodyRows='';
+          for(let i=0;i<show.length;){
+            const r=show[i]; const g=cfg.groupKey&&r[cfg.groupKey]; const grouped=g&&grpCnt[g]>1;
+            if(grouped && MERGE){
+              const gr=[]; let j=i; while(j<show.length && (cfg.groupKey&&show[j][cfg.groupKey])===g){ gr.push(show[j]); j++; }
+              const editingInGroup=gr.some(x=>x.id===editId);
+              if(editingInGroup){ gr.forEach(x=>{ bodyRows+=rowHtml(x,' class="sv-grp"'); }); }
+              else gr.forEach((x,idx)=>{
+                const cells=cfg.cols.map(c=>{ if(MERGE.indexOf(c.k)>=0){ return idx===0? tdRowspan(cell(x,c), gr.length) : ''; } return cell(x,c); }).join('');
+                bodyRows+=`<tr class="${idx===0?'sv-grp sv-grp-first':'sv-grp-sub'}">${cells}${hasActions?actionCell(x):''}</tr>`;
+              });
+              i=j;
+            } else { bodyRows+=rowHtml(r, grouped?' class="sv-grp"':''); i++; }
+          }
+          const body=show.length? `<tbody>${bodyRows}</tbody>` : '';
           $('#tbl').innerHTML=head+body;
           if(!show.length){ $('#tbl').innerHTML=`<tbody><tr><td class="sv-empty" colspan="${cfg.cols.length+1}">해당 기간의 기록이 없습니다.</td></tr></tbody>`; }
           if(rows.length>CAP) $('#meta').textContent+=` (앞 ${CAP}건 표시 · 기간을 좁혀 보세요)`;
@@ -310,6 +329,8 @@
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 같은 주문서는 묶여서 입력순으로 표시되며, ▲▼로 순서를 바꿀 수 있습니다. 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자', reorderable:true, ordKey:'ord', groupKey:'orderGroup',
+    // 하나의 주문서(여러 상품)는 발주 기록에서도 주문건 공통 컬럼을 rowspan 병합해 한 건으로 표시
+    groupMergeKeys:['date','whoName','gubun','route','orderer','vendor','settle','ship','shipInfo'],
     // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · CS와 동일 records+id upsert(중복 없음)
     sheetPush:{ tab:'입점사발주', urlKey:STORE.mdOrderCfg,
       row:r=>({ id:r.id, '일자':r.date||r.day||'', '구분':r.gubun||'', '주문경로':r.route||'', '주문자명':r.orderer||'', '입점사명':r.vendor||'',
