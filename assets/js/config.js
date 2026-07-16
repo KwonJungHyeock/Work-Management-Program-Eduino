@@ -180,17 +180,20 @@ const NAV = [
       { key:'cs.templates', name:'답변·메일 템플릿', icon:'chat' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
       { key:'cs.custdb',    name:'고객 정보 검색', icon:'search' },
+      { key:'cs.partners',  name:'파트너사 관리', icon:'folder' },
       { key:'cs.settle',    name:'일일결산',    icon:'check2' },
+      { key:'cs.manual',    name:'업무 매뉴얼', icon:'clipboard' },
   ]},
   { dept:'md', name:'MD', full:'상품 기획', icon:'box', items:[
       { key:'md.order',     name:'입점사 발주',        icon:'truck' },
       { key:'md.payreq',    name:'결제요청',           icon:'stamp' },
-      { key:'md.vendorchg', name:'입점사 신규/변동',   icon:'truck' },
+      { key:'md.vendormgmt', name:'입점사 관리',        icon:'truck' },
       { key:'md.prodhub',   name:'상품·품질 관리',     icon:'grid' },
       { key:'md.pricewatch', name:'가격비교',           icon:'chart' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
       { key:'md.settle',    name:'일일결산',           icon:'check2' },
       { key:'md.extra',     name:'부가기능',           icon:'grid' },
+      { key:'md.manual',    name:'업무 매뉴얼',        icon:'clipboard' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.approvals', name:'결재함', icon:'inbox' },
@@ -204,8 +207,8 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
-  'md.vendorchg', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.settle'];
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'cs.partners', 'cs.manual', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
+  'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.settle', 'md.manual'];
 
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }
@@ -282,6 +285,8 @@ const SHARE_DEFAULT = {
   [STORE.ntrexMailCfg]:'md',         // 엔티렉스 공급가 요청 메일 양식 = MD 공유
   'eduino.ntrex.products':'md',      // 가격비교 취급상품 담당자 추가/수정 = MD 공유
   'eduino.ntrex.dismissed':'md',     // 가격 변동 알림 중 처리/삭제한 건 = MD 공유
+  'eduino.manual.cs':'cs',           // CS 업무 매뉴얼 = CS 공유
+  'eduino.manual.md':'md',           // MD 업무 매뉴얼 = MD 공유
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
 function shareScopeOf(key){
@@ -303,6 +308,7 @@ const SHARED_SETTING_KEYS = [
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
   STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed',
+  'eduino.manual.cs', 'eduino.manual.md',
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
@@ -336,6 +342,8 @@ const SHARED_LABELS = {
   [STORE.ntrexMailCfg]:'엔티렉스 공급가 요청 메일 양식',
   'eduino.ntrex.products':'가격비교 취급상품(담당자 편집)',
   'eduino.ntrex.dismissed':'가격비교 처리/삭제한 알림',
+  'eduino.manual.cs':'CS 업무 매뉴얼',
+  'eduino.manual.md':'MD 업무 매뉴얼',
 };
 
 /* 이카운트 코드→이름 치환 헬퍼 (구매처명·분류명) — 카탈로그엔 코드만, 이름은 팀 공유 이름표에서 */
