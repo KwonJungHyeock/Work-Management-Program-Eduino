@@ -130,8 +130,24 @@
       }
       const shipFor=p=>baseShipFor(p);   // 하위호환(수량 미고려 기본 배송비)
       const shipPillHtml=si=> si.free
-        ? `배송비 <b style="color:var(--ok)">무료</b> <span class="muted" style="font-weight:600">(조건충족 · 원래 ${fmtNum(si.base)}원)</span>`
-        : `배송비 <b>${fmtNum(si.ship)}원</b>`;
+        ? `배송비 <b style="color:var(--ok)">무료</b> <span class="muted" style="font-weight:600">(조건충족${si.grouped?' · 주문서 합산':''} · 원래 ${fmtNum(si.base)}원)</span>`
+        : `배송비 <b>${fmtNum(si.ship)}원</b>${si.grouped?' <span class="muted" style="font-weight:600">· 주문서 합산</span>':''}`;
+      // 하나의 주문서(같은 입점사·주문자·일자) 키 — commit 의 orderGroup 과 동일 규칙
+      const groupKeyOf=o=> o.orderGroup || ('g:'+venNorm(o.vendor)+'|'+String(o.orderer||'').trim()+'|'+String(o.date||o.day||'').slice(0,10));
+      // 배송비 재계산 — 무료조건을 '주문서 합계(금액/수량)' 기준으로 판정하고, 배송비는 주문서당 1회만 부과
+      function recalcGroupShipping(){
+        const groups={};
+        orders.forEach(o=>{ const k=groupKeyOf(o); (groups[k]=groups[k]||[]).push(o); });
+        Object.values(groups).forEach(items=>{
+          const amt=items.reduce((s,o)=>s+(Number(o.amount)||0),0);
+          const qty=items.reduce((s,o)=>s+(Number(o.qty)||0),0);
+          const ven=vendorObj(items[0].vendor); const th=freeThreshold(ven&&ven.policy);
+          const base=Math.max(0,...items.map(o=> o.baseShip!=null?(Number(o.baseShip)||0):(vendorShip(o.vendor)||Number(o.ship)||0)));
+          const free=(th.amount!=null && amt>=th.amount) || (th.qty!=null && qty>=th.qty);
+          const sorted=items.slice().sort((a,b)=>(Number(a.ord)||0)-(Number(b.ord)||0));   // 입력순 첫 항목이 배송비 대표
+          sorted.forEach((o,i)=>{ const ns=free?0:(i===0?base:0); if((Number(o.ship)||0)!==ns){ o.ship=ns; o.synced=false; } });   // 변경 시 재동기화 표시
+        });
+      }
 
       root.innerHTML=`
       <style>
@@ -271,6 +287,14 @@
           <div class="out-tbl" style="max-height:none;margin-bottom:22px"><table class="tbl" id="ordTable"></table></div>`;
 
         const $f=id=>body.querySelector(id);
+        // 입력 중 미리보기 배송비 — 같은 주문서(주문자·입점사·일자)로 이미 담긴 항목 금액/수량까지 합산해 무료조건 판정
+        const groupShipPreview=(p,thisAmt,thisQty)=>{
+          const on=(($f('#fOrderer')&&$f('#fOrderer').value)||'').trim(), dt=(($f('#fDate')&&$f('#fDate').value)||form.date||'').slice(0,10);
+          const gk='g:'+venNorm(vendorName(p))+'|'+on+'|'+dt;
+          const grp=orders.filter(o=>groupKeyOf(o)===gk);
+          const ea=grp.reduce((s,o)=>s+(Number(o.amount)||0),0), eq=grp.reduce((s,o)=>s+(Number(o.qty)||0),0);
+          const si=shipInfoFor(p, thisAmt+ea, thisQty+eq); si.grouped=grp.length>0; return si;
+        };
         let curProd=null;   // 현재 자동조회된 상품(수량 변경 시 총주문금액 재계산용)
         let curSettle='';   // 자동조회로 판정된 정산구분(월정산/선결제) — 사용자가 직접 고르면 form.settle 이 우선
         // 정산구분(월정산/선결제) 선택 드롭다운 — 구글시트 정산구분 칸으로 들어감
@@ -315,7 +339,7 @@
           const settle=normSettle((ven&&ven.settle)||p.settle||'');   // 배송정보 리스트(월정산/선결제) 우선
           curSettle=settle;                                            // 자동조회 기준값(사용자가 미선택 시 사용)
           const unit=Number(p.inPrice)||0, qty=Number(form.qty)||1;   // 이카운트 금액합계 = 입고단가 × 수량
-          const si=shipInfoFor(p, unit*qty, qty);
+          const si=groupShipPreview(p, unit*qty, qty);   // 이미 담긴 같은 주문서 항목까지 합산해 무료조건 판정
           box.className='lookup ok';
           box.innerHTML=`<div class="lk">
             <div class="lk-top"><span class="lk-vn">${esc(vendorName(p)||'입점사 미지정')}</span>
@@ -331,7 +355,7 @@
         ['fQty','fOrderer','fRoute','fGubun','fDate'].forEach(id=>$f('#'+id).oninput=e=>{ form[id.slice(1).toLowerCase()==='qty'?'qty':({fOrderer:'orderer',fRoute:'route',fGubun:'gubun',fDate:'date'})[id]]=e.target.value;
           if(id==='fQty' && curProd){ const u=Number(curProd.inPrice)||0, q=Number(form.qty)||1; const tot=u*q;
             const amt=$f('#lkAmt'); if(amt) amt.innerHTML=`총주문금액 <b>${fmtNum(tot)}원</b> <span class="muted">= 입고단가 ${fmtNum(u)}원 × ${q}${u?'':' · 단가 미등록'}</span>`;
-            const shp=$f('#lkShip'); if(shp) shp.innerHTML=shipPillHtml(shipInfoFor(curProd, tot, q)); } });
+            const shp=$f('#lkShip'); if(shp) shp.innerHTML=shipPillHtml(groupShipPreview(curProd, tot, q)); } });
         $f('#fShipInfo').oninput=e=>form.shipInfo=e.target.value;
         $f('#fHandler').onchange=e=>form.handler=e.target.value;
         fillHandler($f('#fHandler'));
@@ -372,16 +396,17 @@
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
             qty:Number($f('#fQty').value)||1, amount:(Number(p&&p.inPrice)||0)*(Number($f('#fQty').value)||1),
+            baseShip:p?baseShipFor(p):0,   // 무료조건 미충족 시 부과할 기본 배송비(주문서 재계산용)
             ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(),
             ord:nextOrd(), orderStatus:'발주전', synced:false, unregistered:!p };   // ord=입력순 · orderStatus=발주 진행여부
-          orders.push(rec); saveOrders();
+          orders.push(rec); recalcGroupShipping(); saveOrders();   // 주문서 합계 기준으로 배송비 재계산
           // 상품(코드·품명·수량)만 비우고 주문자·배송정보·구분·경로·일자 유지 → 같은 주문서에 여러 상품 연속 추가
           // (정산 선택도 초기화 — 다음 상품은 자동판정 · 다른 주문자는 [새 주문서]로 고객정보 비움)
           form.code=''; form.name=''; form.settle=''; curSettle=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
           $f('#fQty').value=1;
           refreshLookup(); renderAll(); updateOrderHint(); codeEl.focus();
-          // 자동 저장이면 추가 즉시 내부+시트 동시 저장, 아니면 [저장] 대기
-          if(getCfg().autoSend){ commit([rec]).then(r=>{ renderAll();
+          // 자동 저장이면 추가 즉시 내부+시트 동시 저장(같은 주문서 형제 항목도 배송비 변경분 재동기화), 아니면 [저장] 대기
+          if(getCfg().autoSend){ const grp=orders.filter(o=>groupKeyOf(o)===groupKeyOf(rec)); commit(grp).then(r=>{ renderAll();
             toast(r.internalOnly?'저장됨 (내부 시트)':(r.ok?(r.unconfirmed?SHEET_MSG.unconf(1):SHEET_MSG.ok(1)):SHEET_MSG.fail(r.error))); }); }
           else toast('발주 목록에 추가 · [저장]으로 반영');
         }
@@ -493,6 +518,7 @@
       }
       /* 저장 = 내부 시트(Records) + 외부 구글시트 동시 반영 */
       async function commit(list){
+        recalcGroupShipping();   // 저장 직전 주문서 합계 기준 배송비 확정
         const pending=list.filter(o=>!o.synced); if(!pending.length) return {ok:true, sent:0, none:true};
         // 같은 입점사·주문자·일자의 상품을 '하나의 주문서(orderGroup)'로 자동 묶음 → 발주 기록에서 인접 표시
         // (자동저장으로 한 건씩 올려도 같은 주문건이면 같은 그룹이 되도록 결정적 키 사용)
