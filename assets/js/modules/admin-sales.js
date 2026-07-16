@@ -1,8 +1,9 @@
 /* ===========================================================================
-   [관리자] 매출 데이터 — 월 단위 집계 + 그래프
-   - CS 견적/발주/후불(sheet cs/postpay): 구분(견적·발주·후불)별 금액 합계
+   [관리자] 매출 데이터 — 기간 집계 + 그래프
+   - CS 견적/발주/후불(sheet cs/postpay): 구분별 금액 합계
    - MD 입점사 발주(sheet md/orders): 정산구분(선결제·월정산)별 발주금액 합계
-   - 월 선택 + 최근 6개월 추이 그래프. (모두 서버 시트 기록 기반)
+   - 기간 옵션(이번 달·3/6/12개월·올해·직접설정) + 월별 추이 그래프
+   - 색상 규칙: CS=파랑 계열 · MD=보라 계열 (카드·막대·추이 동일색 → 직관적 연결)
    ========================================================================= */
 (function(){
   const won = n => Number(n||0).toLocaleString();
@@ -10,65 +11,80 @@
   const pad = n => String(n).padStart(2,'0');
   const ymOf = d => d.getFullYear()+'-'+pad(d.getMonth()+1);
   const addMonth = (ym,delta)=>{ const [y,m]=ym.split('-').map(Number); return ymOf(new Date(y,(m-1)+delta,1)); };
-  const lastMonths = (ym,n)=>{ const a=[]; for(let i=n-1;i>=0;i--) a.push(addMonth(ym,-i)); return a; };
+  const rangeMonths = (from,to)=>{ const a=[]; let c=from; let guard=0; while(c<=to && guard++<60){ a.push(c); c=addMonth(c,1); } return a.length?a:[from]; };
   const monthRecs = async (dept,sheet,ym)=>{ try{ return (window.Records&&Records.month)?((await Records.month(dept,sheet,ym))||[]):[]; }catch(e){ return []; } };
-
-  // 정산구분 옛 표기 정규화 (원/월 → 월정산, 선 → 선결제)
   const normSettle = s=>{ s=String(s||'').trim(); if(s==='원'||s==='월'||s==='월정산') return '월정산'; if(s==='선'||s==='선결제') return '선결제'; return s||'기타'; };
-
-  const CS_GROUPS=[{k:'견적',c:'#1f6feb'},{k:'발주',c:'#1a9d5a'},{k:'후불',c:'#e8833a'},{k:'기타',c:'#8a94a6'}];
-  const MD_GROUPS=[{k:'선결제',c:'#7a5af8'},{k:'월정산',c:'#12a5a5'},{k:'기타',c:'#8a94a6'}];
-
-  // CS 구분 → 그룹 매핑 (견적/발주/후불은 그대로, 결제요청/기타 등은 '기타')
   const csGroup = g=>{ g=String(g||'').trim(); return (g==='견적'||g==='발주'||g==='후불')?g:'기타'; };
 
+  // CS=파랑 계열 · MD=보라 계열 (같은 계열=같은 파트)
+  const CS_GROUPS=[{k:'견적',c:'#1f6feb'},{k:'발주',c:'#4d9bff'},{k:'후불',c:'#86bbff'},{k:'기타',c:'#c2d9f5'}];
+  const MD_GROUPS=[{k:'선결제',c:'#7a5af8'},{k:'월정산',c:'#a58bff'},{k:'기타',c:'#d3c8ff'}];
+  const CS_COLOR='#1f6feb', MD_COLOR='#7a5af8';
+
   function aggregate(recs, kind){
-    // returns { total, byGroup:{k:{amount,count}}, groups:[...] }
     const groups = kind==='cs'?CS_GROUPS:MD_GROUPS;
     const by={}; groups.forEach(g=>by[g.k]={amount:0,count:0});
     let total=0;
-    recs.forEach(r=>{
-      const amt = parseNum(r.amount);
-      const key = kind==='cs'?csGroup(r.gubun):normSettle(r.settle);
-      if(!by[key]) by[key]={amount:0,count:0};
-      by[key].amount+=amt; by[key].count++; total+=amt;
-    });
+    (recs||[]).forEach(r=>{ const amt=parseNum(r.amount); const key=kind==='cs'?csGroup(r.gubun):normSettle(r.settle);
+      if(!by[key]) by[key]={amount:0,count:0}; by[key].amount+=amt; by[key].count++; total+=amt; });
     return { total, by, groups };
+  }
+
+  const PRESETS=[['m1','이번 달'],['m3','최근 3개월'],['m6','최근 6개월'],['m12','최근 12개월'],['ytd','올해'],['custom','직접설정']];
+  function presetRange(p, cym){
+    const y=cym.slice(0,4);
+    if(p==='m1') return [cym,cym];
+    if(p==='m3') return [addMonth(cym,-2),cym];
+    if(p==='m6') return [addMonth(cym,-5),cym];
+    if(p==='m12') return [addMonth(cym,-11),cym];
+    if(p==='ytd') return [y+'-01',cym];
+    return [cym,cym];
   }
 
   MODULES['admin.sales']={
     title:'매출 데이터', icon:'chart',
     render(root){
-      let ym = ymOf(new Date());
+      const cym=ymOf(new Date());
+      let preset='m1', from=cym, to=cym;
       root.innerHTML=`
       <style>
-        .sl-nav{display:flex;align-items:center;gap:10px;margin-bottom:18px}
-        .sl-nav .m{font-size:18px;font-weight:800;min-width:120px;text-align:center}
-        .sl-nav button{border:1px solid var(--line-2);background:var(--panel);border-radius:9px;width:36px;height:36px;font-size:16px;cursor:pointer;color:var(--ink-2)}
-        .sl-nav button:hover{background:var(--panel-2)}
-        .sl-nav .today{width:auto;padding:0 12px;font-size:13px;font-weight:700}
+        .sl-period{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+        .sl-period .seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
+        .sl-period .seg button{border:0;background:var(--panel);padding:8px 13px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+        .sl-period .seg button:first-child{border-left:0}
+        .sl-period .seg button.on{background:var(--active-bg);color:var(--red)}
+        .sl-period input[type=month]{font:inherit;font-size:12.5px;border:1px solid var(--line-2);border-radius:8px;padding:6px 9px}
+        .sl-period .rng{display:flex;align-items:center;gap:6px}
+        .sl-period .tot{margin-left:auto;font-size:12.5px;color:var(--muted)} .sl-period .tot b{color:var(--ink)}
         .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
         @media(max-width:820px){.sl-grid{grid-template-columns:1fr}}
-        .sl-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--sh-sm);padding:18px 20px}
-        .sl-card h3{margin:0 0 2px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
-        .sl-card .sub{font-size:12px;color:var(--muted);margin-bottom:14px}
-        .sl-total{font-size:27px;font-weight:800;color:var(--ink);margin-bottom:2px}
-        .sl-total small{font-size:14px;color:var(--muted);font-weight:700}
-        .sl-row{display:grid;grid-template-columns:66px 1fr 120px;gap:10px;align-items:center;margin:9px 0;font-size:13px}
-        .sl-row .lbl{font-weight:700;color:var(--ink-2)}
-        .sl-bar{height:12px;background:var(--zebra);border-radius:7px;overflow:hidden}
-        .sl-bar i{display:block;height:100%;border-radius:7px}
+        .sl-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
+        .sl-card .hd{padding:14px 18px 12px;color:#fff}
+        .sl-card.cs .hd{background:linear-gradient(135deg,#1a5fd0,#3f8bff)}
+        .sl-card.md .hd{background:linear-gradient(135deg,#6b4be6,#9578ff)}
+        .sl-card .hd h3{margin:0;font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:8px}
+        .sl-card .hd .sub{font-size:11.5px;opacity:.9;margin-top:3px}
+        .sl-card .hd .tot{font-size:26px;font-weight:800;margin-top:8px}.sl-card .hd .tot small{font-size:13px;opacity:.85;font-weight:700}
+        .sl-card .bd{padding:14px 18px}
+        .sl-row{display:grid;grid-template-columns:60px 1fr 130px;gap:10px;align-items:center;margin:9px 0;font-size:13px}
+        .sl-row .lbl{font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+        .sl-row .dot{width:10px;height:10px;border-radius:3px;flex:none}
+        .sl-bar{height:14px;background:var(--zebra);border-radius:7px;overflow:hidden}
+        .sl-bar i{display:block;height:100%;border-radius:7px;transition:width .3s}
         .sl-amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
         .sl-amt small{color:var(--muted);font-weight:600;font-size:11px}
-        .sl-trend{margin-top:16px}
-        .sl-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:8px}
-        .sl-legend span{display:inline-flex;align-items:center;gap:5px}
-        .sl-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
-        .sl-empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+        .sl-trend{margin-top:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--sh-sm);padding:16px 18px}
+        .sl-trend h3{margin:0 0 2px;font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:8px}
+        .sl-trend .sub{font-size:11.5px;color:var(--muted);margin-bottom:8px}
+        .sl-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:10px}
+        .sl-legend span{display:inline-flex;align-items:center;gap:6px}
+        .sl-legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+        .sl-empty{padding:22px;text-align:center;color:var(--muted);font-size:13px}
+        .sl-note{color:var(--muted);font-size:11.5px;margin-top:12px}
       </style>
       <div class="mhead">
         <div class="tt">매출 데이터</div>
-        <div class="ds">견적/발주/후불(구분별)·입점사 발주(정산구분별) 매출을 월 단위로 집계합니다.</div>
+        <div class="ds">견적/발주/후불(구분별)·입점사 발주(정산구분별) 매출을 기간별로 집계합니다.</div>
       </div>
       <div class="mbody wide" id="slBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#slBody');
@@ -76,74 +92,70 @@
       function barRows(agg){
         const max=Math.max(1,...agg.groups.map(g=>agg.by[g.k]?agg.by[g.k].amount:0));
         return agg.groups.map(g=>{ const d=agg.by[g.k]||{amount:0,count:0};
-          return `<div class="sl-row"><div class="lbl">${g.k}</div>
-            <div class="sl-bar"><i style="width:${Math.max(d.amount?3:0,Math.round(d.amount/max*100))}%;background:${g.c}"></i></div>
+          return `<div class="sl-row"><div class="lbl"><span class="dot" style="background:${g.c}"></span>${g.k}</div>
+            <div class="sl-bar"><i style="width:${Math.max(d.amount?4:0,Math.round(d.amount/max*100))}%;background:${g.c}"></i></div>
             <div class="sl-amt">${won(d.amount)}<small>원 · ${d.count}건</small></div></div>`; }).join('');
       }
 
-      // 최근 6개월 추이 (총액) — CS/MD 두 계열 막대
+      // 월별 추이 — CS(파랑)/MD(보라) 그룹 막대 · 값축 눈금 + 상단 최댓값
       function trendChart(months, csT, mdT){
-        const W=520,H=170,padL=6,padR=6,padT=14,padB=26; const n=months.length;
+        const W=680,H=190,padL=10,padR=10,padT=22,padB=30; const n=months.length||1;
         const max=Math.max(1,...csT,...mdT);
-        const slot=(W-padL-padR)/n, bw=Math.min(20,slot/3);
-        const y=v=>padT+(H-padT-padB)*(1-v/max);
+        const slot=(W-padL-padR)/n, bw=Math.min(22,Math.max(6,slot/3));
+        const yBase=H-padB, ih=H-padT-padB;
+        const hOf=v=>ih*(v/max);
         let bars='',labels='';
+        const showEvery=Math.ceil(n/12);
         months.forEach((m,i)=>{ const cx=padL+slot*i+slot/2;
-          const cH=(H-padT-padB)*(csT[i]/max), mH=(H-padT-padB)*(mdT[i]/max);
-          bars+=`<rect x="${cx-bw-2}" y="${y(csT[i])}" width="${bw}" height="${cH}" rx="3" fill="#1f6feb"/>`;
-          bars+=`<rect x="${cx+2}" y="${y(mdT[i])}" width="${bw}" height="${mH}" rx="3" fill="#7a5af8"/>`;
-          labels+=`<text x="${cx}" y="${H-9}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(m.slice(2))}</text>`;
+          bars+=`<rect x="${(cx-bw-2).toFixed(1)}" y="${(yBase-hOf(csT[i])).toFixed(1)}" width="${bw}" height="${hOf(csT[i]).toFixed(1)}" rx="3" fill="${CS_COLOR}"/>`;
+          bars+=`<rect x="${(cx+2).toFixed(1)}" y="${(yBase-hOf(mdT[i])).toFixed(1)}" width="${bw}" height="${hOf(mdT[i]).toFixed(1)}" rx="3" fill="${MD_COLOR}"/>`;
+          if(i%showEvery===0) labels+=`<text x="${cx.toFixed(1)}" y="${H-9}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(m.slice(2))}</text>`;
         });
+        const gy=yBase-ih*0.5;
         return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
-          <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="var(--line)"/>${bars}${labels}</svg>
-          <div class="sl-legend"><span><i style="background:#1f6feb"></i>CS 견적/발주/후불</span><span><i style="background:#7a5af8"></i>MD 입점사 발주</span></div>`;
+          <text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
+          <line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-dasharray="3 3"/>
+          <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${labels}</svg>
+          <div class="sl-legend"><span><i style="background:${CS_COLOR}"></i>CS 견적/발주/후불</span><span><i style="background:${MD_COLOR}"></i>MD 입점사 발주</span></div>`;
       }
 
       async function load(){
         body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
-        const months=lastMonths(ym,6);
-        // 6개월치 두 시트 조회 (선택월 상세는 마지막 달)
+        const months=rangeMonths(from,to);
         const [csPacks, mdPacks]=await Promise.all([
           Promise.all(months.map(m=>monthRecs('cs','postpay',m))),
           Promise.all(months.map(m=>monthRecs('md','orders',m))),
         ]);
         if(!root.isConnected) return;
-        const idx=months.indexOf(ym);
-        const csAgg=aggregate(csPacks[idx]||[],'cs');
-        const mdAgg=aggregate(mdPacks[idx]||[],'md');
-        const csT=csPacks.map(p=>aggregate(p||[],'cs').total);
-        const mdT=mdPacks.map(p=>aggregate(p||[],'md').total);
-        const csCount=(csPacks[idx]||[]).length, mdCount=(mdPacks[idx]||[]).length;
+        const csAll=csPacks.flat(), mdAll=mdPacks.flat();
+        const csAgg=aggregate(csAll,'cs'), mdAgg=aggregate(mdAll,'md');
+        const csT=csPacks.map(p=>aggregate(p,'cs').total), mdT=mdPacks.map(p=>aggregate(p,'md').total);
+        const rangeLabel = from===to?from:`${from} ~ ${to} · ${months.length}개월`;
 
         body.innerHTML=`
-          <div class="sl-nav">
-            <button id="slPrev" title="이전 달">‹</button>
-            <div class="m">${esc(ym)}</div>
-            <button id="slNext" title="다음 달">›</button>
-            <button class="today" id="slToday">이번 달</button>
-            <div class="muted" style="margin-left:auto;font-size:12.5px">합계 <b style="color:var(--ink)">${won(csAgg.total+mdAgg.total)}원</b></div>
+          <div class="sl-period">
+            <div class="seg">${PRESETS.map(([p,l])=>`<button data-p="${p}" class="${preset===p?'on':''}">${l}</button>`).join('')}</div>
+            ${preset==='custom'?`<span class="rng"><input type="month" id="slFrom" value="${esc(from)}"> ~ <input type="month" id="slTo" value="${esc(to)}"></span>`:''}
+            <span class="tot">${esc(rangeLabel)} · 합계 <b>${won(csAgg.total+mdAgg.total)}원</b></span>
           </div>
           <div class="sl-grid">
-            <div class="sl-card">
-              <h3>${icon('truck')} 견적/발주/후불 매출</h3><div class="sub">CS · 구분별 · ${csCount}건</div>
-              <div class="sl-total">${won(csAgg.total)}<small> 원</small></div>
-              ${csAgg.total||csCount?barRows(csAgg):'<div class="sl-empty">이 달의 기록이 없습니다.</div>'}
-            </div>
-            <div class="sl-card">
-              <h3>${icon('box')} 입점사 발주 매출</h3><div class="sub">MD · 정산구분별(발주금액 기준) · ${mdCount}건</div>
-              <div class="sl-total">${won(mdAgg.total)}<small> 원</small></div>
-              ${mdAgg.total||mdCount?barRows(mdAgg):'<div class="sl-empty">이 달의 기록이 없습니다.</div>'}
-            </div>
+            <div class="sl-card cs"><div class="hd"><h3>${icon('truck')} 견적/발주/후불 매출</h3>
+              <div class="sub">CS · 구분별 · ${csAll.length}건</div><div class="tot">${won(csAgg.total)}<small> 원</small></div></div>
+              <div class="bd">${csAgg.total||csAll.length?barRows(csAgg):'<div class="sl-empty">이 기간의 기록이 없습니다.</div>'}</div></div>
+            <div class="sl-card md"><div class="hd"><h3>${icon('box')} 입점사 발주 매출</h3>
+              <div class="sub">MD · 정산구분별(발주금액 기준) · ${mdAll.length}건</div><div class="tot">${won(mdAgg.total)}<small> 원</small></div></div>
+              <div class="bd">${mdAgg.total||mdAll.length?barRows(mdAgg):'<div class="sl-empty">이 기간의 기록이 없습니다.</div>'}</div></div>
           </div>
-          <div class="sl-card sl-trend">
-            <h3>${icon('chart')} 최근 6개월 매출 추이</h3><div class="sub">월별 총액 (CS · MD)</div>
-            ${trendChart(months,csT,mdT)}
-          </div>
-          <div class="muted" style="font-size:11.5px;margin-top:12px">※ 입점사 발주 '매출'은 발주(입고)금액 기준(수량×입고단가)입니다. CS 매출은 견적/발주/후불 기록의 '금액' 합계입니다.</div>`;
+          <div class="sl-trend"><h3>${icon('chart')} 월별 매출 추이</h3><div class="sub">${esc(rangeLabel)} · 파랑=CS · 보라=MD</div>
+            ${trendChart(months,csT,mdT)}</div>
+          <div class="sl-note">※ 입점사 발주 '매출'은 발주(입고)금액 기준(수량×입고단가)입니다. CS 매출은 견적/발주/후불 기록의 '금액' 합계입니다.</div>`;
 
-        body.querySelector('#slPrev').onclick=()=>{ ym=addMonth(ym,-1); load(); };
-        body.querySelector('#slNext').onclick=()=>{ ym=addMonth(ym,1); load(); };
-        body.querySelector('#slToday').onclick=()=>{ ym=ymOf(new Date()); load(); };
+        body.querySelectorAll('.sl-period .seg button').forEach(b=>b.onclick=()=>{ preset=b.dataset.p;
+          if(preset!=='custom'){ [from,to]=presetRange(preset,cym); } else { [from,to]=presetRange('m1',cym); }
+          load(); });
+        const fEl=body.querySelector('#slFrom'), tEl=body.querySelector('#slTo');
+        if(fEl) fEl.onchange=()=>{ from=fEl.value||cym; if(from>to) to=from; load(); };
+        if(tEl) tEl.onchange=()=>{ to=tEl.value||cym; if(to<from) from=to; load(); };
       }
       load();
     }
