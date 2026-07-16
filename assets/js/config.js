@@ -281,6 +281,7 @@ const SHARE_DEFAULT = {
   [STORE.custDbCfg]:'all',           // 고객DB 원장 URL = 전사 공유
   [STORE.ntrexMailCfg]:'md',         // 엔티렉스 공급가 요청 메일 양식 = MD 공유
   'eduino.ntrex.products':'md',      // 가격비교 취급상품 담당자 추가/수정 = MD 공유
+  'eduino.ntrex.dismissed':'md',     // 가격 변동 알림 중 처리/삭제한 건 = MD 공유
 };
 /* 설정 키의 현재 유효 범위 = 관리자 오버라이드(shareMap) > 기본값 > all */
 function shareScopeOf(key){
@@ -301,7 +302,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
-  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products',
+  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed',
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
@@ -334,6 +335,7 @@ const SHARED_LABELS = {
   [STORE.custDbCfg]:'고객DB 원장 URL',
   [STORE.ntrexMailCfg]:'엔티렉스 공급가 요청 메일 양식',
   'eduino.ntrex.products':'가격비교 취급상품(담당자 편집)',
+  'eduino.ntrex.dismissed':'가격비교 처리/삭제한 알림',
 };
 
 /* 이카운트 코드→이름 치환 헬퍼 (구매처명·분류명) — 카탈로그엔 코드만, 이름은 팀 공유 이름표에서 */

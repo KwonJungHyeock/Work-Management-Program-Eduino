@@ -126,10 +126,11 @@
               <div class="muted">받는사람</div><div><b>${esc(toName)}</b> ${esc(m.to||'(미지정)')}</div>
               <div class="muted">보내는이</div><div>${fromLine}</div>
               <div class="muted">대상상품</div><div><b class="mono">${esc(p.ed||'-')}</b> · ${esc(p.name||'')} <span class="muted">(${esc(v.name)} ${esc(p.ntx||'')})</span></div>
-              <div class="muted">제목</div><div>${esc(m.subject||'')}</div>
             </div>
-            <div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:4px">본문 미리보기</div>
-            <div style="white-space:pre-wrap;font-size:12.8px;line-height:1.6;border:1px solid var(--line-2);border-radius:8px;padding:11px 13px;background:var(--panel-2);max-height:220px;overflow:auto">${esc(m.body||'')}</div>
+            <div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:4px">제목 <span style="font-weight:500">(수정 가능)</span></div>
+            <input id="csSubj" value="${esc(m.subject||'')}" style="width:100%;font:inherit;font-size:13px;border:1px solid var(--line-2);border-radius:8px;padding:9px 11px;margin-bottom:12px">
+            <div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:4px">본문 <span style="font-weight:500">(수정 가능 — 보내기 전에 여기서 바로 고칠 수 있어요)</span></div>
+            <textarea id="csBody" style="width:100%;min-height:200px;font:inherit;font-size:12.8px;line-height:1.6;border:1px solid var(--line-2);border-radius:8px;padding:11px 13px;background:var(--panel);resize:vertical">${esc(m.body||'')}</textarea>
             ${configured?'':'<div class="nx-note" style="margin:12px 0 0">자동발송이 아직 설정되지 않아 <b>메일 앱</b>으로 엽니다. 서버에 SMTP를 설정하면 이 버튼이 <b>원클릭 자동발송</b>으로 바뀝니다.</div>'}
             <div id="csMsg" class="muted" style="font-size:12.5px;margin-top:10px;min-height:16px"></div>
           </div>
@@ -140,22 +141,24 @@
           </div></div>`;
         document.body.appendChild(ov);
         const close=()=>ov.remove();
+        // 팝업에서 수정된 제목·본문을 실제 발송값으로 사용
+        const edited=()=>({ to:m.to, subject:(ov.querySelector('#csSubj').value||'').trim()||m.subject, body:ov.querySelector('#csBody').value });
         ov.onclick=e=>{ if(e.target===ov) close(); };
         ov.querySelector('#csCancel').onclick=close;
-        const mailtoBtn=ov.querySelector('#csMailto'); if(mailtoBtn) mailtoBtn.onclick=()=>{ openMailApp(m); toast('메일 작성 화면을 열었습니다'); close(); };
+        const mailtoBtn=ov.querySelector('#csMailto'); if(mailtoBtn) mailtoBtn.onclick=()=>{ openMailApp(edited()); toast('메일 작성 화면을 열었습니다'); close(); };
         const sendBtn=ov.querySelector('#csSend');
         if(sendBtn) sendBtn.onclick=async()=>{
           const msg=ov.querySelector('#csMsg'); sendBtn.disabled=true; ov.querySelector('#csCancel').disabled=true;
           msg.innerHTML='<span style="color:var(--info)">발송 중…</span>';
           try{
-            const who=(Auth.user&&Auth.user()||{}); const actor=who.name||who.loginId||'';
+            const who=(Auth.user&&Auth.user()||{}); const actor=who.name||who.loginId||''; const ed=edited();
             const r=await fetch('/api/sendmail',{method:'POST',headers:{'Content-Type':'application/json'},
-              body:JSON.stringify({op:'send',to:m.to,toName,subject:m.subject,body:m.body,actor})});
+              body:JSON.stringify({op:'send',to:ed.to,toName,subject:ed.subject,body:ed.body,actor})});
             let d=null; try{d=await r.json();}catch(e){}
             if(r.ok&&d&&d.ok){ toast('공급가 요청 메일을 발송했습니다'); close(); }
             else{ const em=(d&&d.error)||('발송 실패('+r.status+')'); msg.innerHTML=`<span style="color:var(--danger)">${esc(em)}</span> · <a href="#" id="csFallback">메일 앱으로 열기</a>`;
               sendBtn.disabled=false; ov.querySelector('#csCancel').disabled=false;
-              const fb=ov.querySelector('#csFallback'); if(fb) fb.onclick=e=>{ e.preventDefault(); openMailApp(m); close(); }; }
+              const fb=ov.querySelector('#csFallback'); if(fb) fb.onclick=e=>{ e.preventDefault(); openMailApp(edited()); close(); }; }
           }catch(e){ msg.innerHTML='<span style="color:var(--danger)">서버 연결 실패</span>'; sendBtn.disabled=false; ov.querySelector('#csCancel').disabled=false; }
         };
       }
@@ -172,22 +175,35 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
             <button class="btn pri sm" data-a="mail" data-ntx="${esc(d.ntx||'')}">${icon('mail')}공급가 요청</button>
-            <button class="btn ghost sm" data-a="copy" data-ntx="${esc(d.ntx||'')}">${icon('copy')}메일 복사</button></div>
+            <div style="display:flex;gap:6px">
+              <button class="btn ghost sm" data-a="copy" data-ntx="${esc(d.ntx||'')}">${icon('copy')}메일 복사</button>
+              ${demo?'':`<button class="btn ghost sm" data-a="del" data-ntx="${esc(d.ntx||'')}" title="이 알림 삭제(처리 완료 등)">${icon('trash')}</button>`}
+            </div></div>
         </div>`; }
-      function drawAlerts(sec,v){ const prods=effectiveProducts(v); const real=diffs&&diffs.length;
-        let demo=false, rows=diffs;
+      // 처리/불필요한 알림 삭제 = 팀 공유(다시 안 뜸) · 키 = 확인일|엔티렉스코드
+      const DISMISS_KEY='eduino.ntrex.dismissed';
+      const dismissedMap=()=>store(DISMISS_KEY).get({})||{};
+      const dkey=(d)=>`${apDay||''}|${String(d.ntx||'')}`;
+      function drawAlerts(sec,v){ const prods=effectiveProducts(v);
+        const dm=dismissedMap(); const liveDiffs=(diffs||[]).filter(d=>!dm[dkey(d)]);
+        const real=liveDiffs.length; const hidden=(diffs||[]).length-liveDiffs.length;
+        let demo=false, rows=liveDiffs;
         if(!real){ const s=prods.find(p=>p.price>0); demo=!!s; rows=s?[{ntx:s.ntx,name:s.name,oldPrice:s.price,newPrice:Math.round(s.price*1.05)}]:[]; }
-        sec.innerHTML=`${apDay?`<div class="nx-note">최근 확인: <b>${esc(apDay)}</b> · 변동 <b>${diffs.length}</b>건</div>`:
+        sec.innerHTML=`${apDay?`<div class="nx-note">최근 확인: <b>${esc(apDay)}</b> · 변동 <b>${(diffs||[]).length}</b>건${hidden?` · 처리/삭제 <b>${hidden}</b>건`:''}</div>`:
           `<div class="nx-note">${icon('alert')} 아직 크롤러가 연동되지 않아 <b>예시 미리보기</b>입니다. VPS 크롤러가 ${esc(v.siteName)}의 판매가를 매일 확인하면 실제 변동분이 자동 표시됩니다.</div>`}
           <div class="nx-kpi">
-            <div class="nx-k red"><div class="l">가격 변동</div><div class="v">${real?diffs.length:0}<span style="font-size:14px">건</span></div></div>
+            <div class="nx-k red"><div class="l">가격 변동</div><div class="v">${real}<span style="font-size:14px">건</span></div></div>
             <div class="nx-k"><div class="l">취급 상품</div><div class="v">${prods.length}</div></div>
             <div class="nx-k warn"><div class="l">기준가 없음(비교대기)</div><div class="v">${prods.filter(p=>!p.price).length}</div></div>
           </div>
-          <div>${rows.length?rows.map(d=>diffRow(v,d,demo)).join(''):`<div class="nx-empty">${icon('check2')}<div>오늘 가격 변동이 없습니다.</div></div>`}</div>`;
+          <div>${rows.length?rows.map(d=>diffRow(v,d,demo)).join(''):`<div class="nx-empty">${icon('check2')}<div>표시할 가격 변동이 없습니다.</div></div>`}</div>`;
         const pm={}; prods.forEach(p=>pm[String(p.ntx)]=p);
+        const diffByNtx={}; (diffs||[]).forEach(d=>diffByNtx[String(d.ntx)]=d);
         sec.querySelectorAll('[data-a=mail]').forEach(b=>b.onclick=()=>{ confirmSend(v,pm[b.dataset.ntx]||{ntx:b.dataset.ntx}); });
         sec.querySelectorAll('[data-a=copy]').forEach(b=>b.onclick=()=>{ const m=fillMail(mailCfg(v),pm[b.dataset.ntx]||{ntx:b.dataset.ntx},v.site(b.dataset.ntx)); copyText(`받는사람: ${m.to}\n제목: ${m.subject}\n\n${m.body}`); toast('메일 내용을 복사했습니다'); });
+        sec.querySelectorAll('[data-a=del]').forEach(b=>b.onclick=()=>{ const d=diffByNtx[b.dataset.ntx]||{ntx:b.dataset.ntx};
+          if(!confirm('이 가격 변동 알림을 목록에서 삭제할까요?\n(처리 완료 등 · 팀 전체에서 사라지며 되돌리려면 크롤러가 다시 감지해야 합니다)')) return;
+          const dm2=dismissedMap(); dm2[dkey(d)]=1; store(DISMISS_KEY).set(dm2); toast('알림을 삭제했습니다'); drawAlerts(sec,v); });
       }
 
       /* -------- 취급 상품(담당자 추가·수정) -------- */
