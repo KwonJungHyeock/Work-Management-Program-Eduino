@@ -487,7 +487,9 @@
       { k:'sdate', label:'시작일', type:'date' },
       { k:'edate', label:'종료(예정)일', type:'date' },
       { k:'progress', label:'진행율(%)', type:'number', max:100, ph:'0~100' },
-      { k:'note', label:'설명/비고', type:'textarea', ph:'상세 내용·이슈·조치' },
+      { k:'note', label:'결정사항', type:'textarea', ph:'무엇을 어떻게 하기로 했는지(결정 내용)' },
+      { k:'reason', label:'사유', type:'textarea', ph:'왜 그렇게 결정했는지(판단 근거)' },
+      { k:'memo', label:'메모', type:'textarea', ph:'참고·특이사항·후속 메모' },
     ] });
 
   /* ── 2) 품절관리 현황 ── */
