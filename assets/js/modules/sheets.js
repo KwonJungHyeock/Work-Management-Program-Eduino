@@ -37,14 +37,14 @@
           .sv-sp{flex:1}
           .sv-meta{font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600}
           .sv-wrap{border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100vh - 290px);background:var(--panel);box-shadow:var(--sh-sm)}
-          table.sv{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
-          table.sv th{position:sticky;top:0;z-index:2;background:var(--panel-2);color:var(--ink-2);font-size:11.5px;font-weight:800;
-            letter-spacing:.02em;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
-          table.sv td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+          table.sv{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+          table.sv th{position:sticky;top:0;z-index:2;background:var(--panel-2);color:var(--ink-2);font-size:10.5px;font-weight:800;
+            letter-spacing:0;text-align:left;padding:5px 5px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+          table.sv td{padding:4px 5px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
           table.sv tr:nth-child(even) td{background:var(--zebra)}
           table.sv tbody tr:hover td{background:var(--hover)}
           table.sv td.num{text-align:right;font-variant-numeric:tabular-nums}
-          table.sv td.wrap{white-space:pre-wrap;word-break:break-word;line-height:1.45}
+          table.sv td.wrap{white-space:pre-wrap;word-break:break-word;line-height:1.38}
           table.sv td.who{font-weight:700;color:var(--ink)}
           .sv-del{border:0;background:none;color:var(--faint);cursor:pointer;padding:2px 5px;border-radius:5px}
           .sv-del:hover{background:var(--danger-soft);color:var(--danger)}
@@ -342,14 +342,14 @@
       if(window.Records && oldM && newM && oldM!==newM) await Records.del('md','orders',rec.id,oldM,old.who,old.day||old.date);
       if(window.Records) await Records.pushMD(rec);                  // 내부 발주 기록 갱신(중복 없이 덮어씀 · 송장번호 포함)
     },
-    cols:[ {k:'date',h:'일자',w:104,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(0,10):(String(r.day||'').slice(0,10)||d); }},
-      {k:'whoName',h:'담당자',w:80,color:true}, {k:'gubun',h:'구분',w:70,tag:true},
-      {k:'route',h:'주문경로',w:88}, {k:'orderer',h:'주문자명',w:100}, {k:'vendor',h:'입점사명',w:120},
-      {k:'settle',h:'정산구분',w:78,tag:true}, {k:'selfCode',h:'자체상품코드',w:104},
-      {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},
-      {k:'ship',h:'배송비',w:78,num:true,money:true},
-      {k:'orderStatus',h:'발주 진행여부',w:96,tag:true,options:['발주전','발주완료','발주취소']},   // 입점사에 발주 넣었는지
-      {k:'invoice',h:'송장번호',w:120},                              // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
-      {k:'shipInfo',h:'배송정보/비고',w:180,wrap:true},
-      {k:'__pstatus',h:'처리현황',w:118,compute:r=>((r.invoice||'').toString().trim()?'송장번호 입력완료':'송장번호 입력필요'),badge:true} ] });
+    cols:[ {k:'date',h:'일자',w:60,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(5,10):(String(r.day||'').slice(5,10)||d); }},  // 월-일만 표시(폭 절약)
+      {k:'whoName',h:'담당자',w:52,color:true}, {k:'gubun',h:'구분',w:42,tag:true},
+      {k:'route',h:'경로',w:42,wrap:true}, {k:'orderer',h:'주문자명',w:70,wrap:true}, {k:'vendor',h:'입점사명',w:72,wrap:true},
+      {k:'settle',h:'정산',w:50,tag:true}, {k:'selfCode',h:'상품코드',w:56,wrap:true},
+      {k:'name',h:'품명',w:112,wrap:true}, {k:'qty',h:'수량',w:32,num:true},
+      {k:'ship',h:'배송비',w:52,num:true,money:true},
+      {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','발주취소']},   // 입점사에 발주 넣었는지
+      {k:'invoice',h:'송장번호',w:70,wrap:true},                     // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
+      {k:'shipInfo',h:'배송정보/비고',w:106,wrap:true},
+      {k:'__pstatus',h:'처리',w:56,compute:r=>((r.invoice||'').toString().trim()?'송장완료':'송장필요'),badge:true} ] });
 })();
