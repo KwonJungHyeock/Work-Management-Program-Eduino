@@ -181,13 +181,13 @@
         .ch-hd svg{width:13px;height:13px}
         .ch-item{font-size:12px;line-height:1.45;padding:7px 9px;border:1px solid var(--line);border-left:2px solid var(--info);border-radius:7px;background:var(--panel-2);margin-bottom:5px}
         .ch-item .ch-m{color:var(--muted);font-weight:700;margin-bottom:2px}
-        .ch-item .ch-c{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ch-item .ch-c{color:var(--ink-2);white-space:pre-wrap;word-break:break-word;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
         .ch-none{font-size:12px;color:var(--faint);padding:2px 0}
         .q-hd .kbd{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
         .q-hd .kbd b{background:var(--panel);border:1px solid var(--line-strong);border-radius:5px;padding:1px 7px;color:var(--ink-2)}
         .q-bd{padding:20px}
         /* 빠른 입력 2단 레이아웃 (오른쪽 메타 패널로 공간 활용) */
-        .q-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start}
+        .q-grid{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:22px;align-items:start}
         @media(max-width:920px){.q-grid{grid-template-columns:1fr}}
         .q-main{display:flex;flex-direction:column;gap:17px}
         /* 섹션 라벨 (정제된 엔터프라이즈 톤) */
@@ -303,7 +303,7 @@
         if(!matches.length){ el2.className='cust-hist on'; el2.innerHTML=`<div class="ch-none">이 번호의 이전 상담 기록이 없습니다.</div>`; return; }
         el2.className='cust-hist on';
         el2.innerHTML=`<div class="ch-hd">${icon('history')}이 고객 이전 문의 ${matches.length}건</div>`+
-          matches.slice(0,3).map(r=>`<div class="ch-item"><div class="ch-m">${esc(dayOf(r))} · ${esc(r.category||'-')}${r.name?' · '+esc(r.name):''}</div><div class="ch-c">${esc((r.content||'').slice(0,50)||'(내용 없음)')}</div></div>`).join('');
+          matches.slice(0,3).map(r=>`<div class="ch-item"><div class="ch-m">${esc(dayOf(r))} · ${esc(r.category||'-')}${r.name?' · '+esc(r.name):''}</div><div class="ch-c">${esc((r.content||'').slice(0,160)||'(내용 없음)')}</div></div>`).join('');
       }
       function drawMemo(){
         body.innerHTML=`

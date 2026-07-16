@@ -13,19 +13,31 @@
   async function collPush(coll,item){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll,item})}); return r.ok; }catch(e){ return false; } }
   async function collDel(coll,id){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collDel',coll,id})}); return r.ok; }catch(e){ return false; } }
 
-  // 카드 항목 — 대표님 요청(중요사항·주의사항·메모) + 인수인계 필수(담당자·결제조건)
-  const FIELDS=[
-    { k:'manager',  label:'담당자',   ph:'우리 측 / 상대 측 담당자·연락처' },
+  // 기본 카드 항목(MD 입점사) — 담당자·결제조건·중요/주의사항·메모
+  const DEFAULT_FIELDS=[
+    { k:'manager',  label:'담당자',   ph:'우리 측 / 상대 측 담당자·연락처', badge:true },
     { k:'payTerms', label:'결제조건', ph:'예: 월말마감 익월정산 / 선결제 / 위탁' },
     { k:'important',label:'중요사항', ta:1, ph:'꼭 알아야 할 핵심 정보(단가·정산·핵심 연락)' },
     { k:'caution',  label:'주의사항', ta:1, ph:'실수하기 쉬운 점·리스크·금기' },
     { k:'memo',     label:'메모',     ta:1, ph:'기타 참고·협상 이력 등' },
+  ];
+  // CS 파트너사 카드 항목 — 등급·공급율·사이트·담당자·연락처·메일·결제조건·메모
+  const PARTNER_FIELDS=[
+    { k:'grade',      label:'등급',     ph:'예: 파트너사 A / B / C · B2B', badge:true },
+    { k:'supplyRate', label:'공급율',   ph:'예: 키트·부품 20% / 보드 10% / 입점사 5%' },
+    { k:'site',       label:'사이트',   ph:'쇼핑몰/사이트 URL 또는 결제 아이디' },
+    { k:'manager',    label:'담당자명', ph:'담당자', badge:true },
+    { k:'contact',    label:'연락처',   ph:'연락처' },
+    { k:'email',      label:'메일',     ph:'이메일' },
+    { k:'payTerms',   label:'결제조건', ph:'예: 선결제 / 월정산 / 위탁' },
+    { k:'memo',       label:'메모',     ta:1, ph:'기타 참고·협상 이력 등' },
   ];
   const uid = ()=> 'v'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
   const snippet = (s,n)=>{ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n)+'…':s; };
 
   function buildHandover(cfg){
     // cfg: { key, coll, unit('입점사'|'파트너사'), dept('md'|'cs'), title, desc }
+    const FIELDS = cfg.fields || DEFAULT_FIELDS;   // 인스턴스별 카드 항목
     MODULES[cfg.key]={
       title:cfg.title, icon:'folder',
       render(root){
@@ -68,12 +80,14 @@
           body.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{ const v=list.find(x=>x.id===c.dataset.id); if(v) openCard(v); });
         }
         function cardHtml(v){
+          const badges=FIELDS.filter(f=>f.badge && String(v[f.k]||'').trim())
+            .map(f=>`<span class="hv-mgr">${icon('users')}${esc(v[f.k])}</span>`).join(' ');
+          const lines=FIELDS.filter(f=>!f.badge && String(v[f.k]||'').trim()).slice(0,4)
+            .map(f=>`<div class="hv-line"><b>${esc(f.label)}</b> ${esc(snippet(v[f.k],48))}</div>`).join('');
           return `<div class="hv-card" data-id="${esc(v.id)}">
             <div class="hv-nm">${esc(v.name||'(이름 없음)')}</div>
-            ${v.manager?`<span class="hv-mgr">${icon('users')}${esc(v.manager)}</span>`:''}
-            ${v.payTerms?`<div class="hv-line"><b>결제</b> ${esc(snippet(v.payTerms,40))}</div>`:''}
-            ${v.important?`<div class="hv-line"><b>중요</b> ${esc(snippet(v.important,60))}</div>`:''}
-            ${v.caution?`<div class="hv-line" style="color:var(--warn)"><b style="color:var(--warn)">주의</b> ${esc(snippet(v.caution,60))}</div>`:''}
+            ${badges?`<div style="margin-bottom:8px">${badges}</div>`:''}
+            ${lines}
           </div>`;
         }
         function openCard(v){
@@ -139,8 +153,8 @@
   buildHandover({ key:'md.vendorcards', coll:'handover_md', unit:'입점사', dept:'md',
     title:'입점사 관리', desc:'입점사별 담당자·결제조건·중요/주의사항·메모를 카드로 관리합니다(인수인계).' });
   // CS: 파트너사 관리 (단독 페이지)
-  buildHandover({ key:'cs.partners', coll:'handover_cs', unit:'파트너사', dept:'cs',
-    title:'파트너사 관리', desc:'파트너사별 담당자·결제조건·중요/주의사항·메모를 카드로 관리합니다(인수인계).' });
+  buildHandover({ key:'cs.partners', coll:'handover_cs', unit:'파트너사', dept:'cs', fields:PARTNER_FIELDS,
+    title:'파트너사 관리', desc:'파트너사별 등급·공급율·사이트·담당자·연락처·메일·결제조건·메모를 카드로 관리합니다.' });
 
   // MD '입점사 관리' 컨테이너 — 서브탭: 신규/변동사항(먼저) + 입점사 관리(카드)
   MODULES['md.vendormgmt']={
