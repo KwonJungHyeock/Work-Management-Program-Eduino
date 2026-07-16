@@ -13,10 +13,10 @@
     if(!d.ok) throw new Error(d.error||'요청 실패');
     return d;
   }
-  const DEPTS=[['cs','CS · 고객 상담'],['md','MD · 상품 기획']];
-  const deptLabel=d=>({cs:'CS',md:'MD'}[d]||d||'-');
-  // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD 기능에서 생성)
-  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md')
+  const DEPTS=[['cs','CS · 고객 상담'],['md','MD · 상품 기획'],['logi','물류 · 물류 관리']];
+  const deptLabel=d=>({cs:'CS',md:'MD',logi:'물류'}[d]||d||'-');
+  // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD·물류 기능에서 생성)
+  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi')
     .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
   const deptDefault=dept=>{ const g=FEATURES.find(x=>x.dept===dept); return g?g.items.map(it=>it.key):[]; };
   const randCode=()=>{ const s='ABCDEFGHJKLMNPRSTUVWXYZ23456789'; let o=''; for(let i=0;i<6;i++) o+=s[Math.floor((crypto.getRandomValues(new Uint32Array(1))[0]/4294967296)*s.length)]; return 'ED-'+o; };
@@ -33,7 +33,7 @@
         .adm-tbl td,.adm-tbl th{vertical-align:middle}
         .code-cell{font-family:var(--mono);letter-spacing:.02em}
         .dept-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px}
-        .dept-badge.cs{background:#e7f0ff;color:#2d6cdf}.dept-badge.md{background:#ffe9ea;color:#e0313b}
+        .dept-badge.cs{background:#e7f0ff;color:#2d6cdf}.dept-badge.md{background:#ffe9ea;color:#e0313b}.dept-badge.logi{background:#e3f7ef;color:#12886a}
         .lead-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;
           background:#efe9ff;color:#5b3fc4;margin-left:6px;letter-spacing:.02em}
         .off-badge{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;background:var(--line-2);color:var(--muted);margin-left:6px}

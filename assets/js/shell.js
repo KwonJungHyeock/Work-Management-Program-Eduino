@@ -68,7 +68,7 @@ function bootShell(){
   $('brandBtn').onclick=()=>playIntro(()=>{ location.hash=''; });
 
   // 로그인 사용자 정보
-  const deptLabel = { cs:'CS · 고객 상담', md:'MD · 상품 기획', admin:'관리자' };
+  const deptLabel = { cs:'CS · 고객 상담', md:'MD · 상품 기획', logi:'물류 관리', admin:'관리자' };
   const uName = (me.user && me.user.name) || me.device || '';
   $('devName').textContent = uName;
   $('devRole').textContent = (me.user && (deptLabel[me.user.dept] || (me.user.role==='admin'?'관리자':'')) ) || '이 PC';
@@ -94,7 +94,7 @@ function bootShell(){
     return hasPerm(key); };
 
   // 내비게이션 — 공통(홈)은 항상, CS·MD는 표시하되 권한 없는 기능은 잠금
-  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', admin:'#f0a020' };
+  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', logi:'#20b088', admin:'#f0a020' };
   const nav = $('nav');
   NAV.forEach(g=>{
     if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
