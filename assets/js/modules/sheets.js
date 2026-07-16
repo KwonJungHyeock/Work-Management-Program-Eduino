@@ -327,7 +327,7 @@
       {k:'settle',h:'정산구분',w:78,tag:true}, {k:'selfCode',h:'자체상품코드',w:104},
       {k:'name',h:'품명',w:240,wrap:true}, {k:'qty',h:'수량',w:52,num:true},
       {k:'ship',h:'배송비',w:78,num:true,money:true},
-      {k:'orderStatus',h:'발주 진행여부',w:96,tag:true,options:['발주전','발주완료']},   // 입점사에 발주 넣었는지
+      {k:'orderStatus',h:'발주 진행여부',w:96,tag:true,options:['발주전','발주완료','발주취소']},   // 입점사에 발주 넣었는지
       {k:'invoice',h:'송장번호',w:120},                              // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
       {k:'shipInfo',h:'배송정보/비고',w:180,wrap:true},
       {k:'__pstatus',h:'처리현황',w:118,compute:r=>((r.invoice||'').toString().trim()?'송장번호 입력완료':'송장번호 입력필요'),badge:true} ] });

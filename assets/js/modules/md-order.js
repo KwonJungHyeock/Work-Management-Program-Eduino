@@ -254,10 +254,11 @@
                 <label class="fld">일자<input type="date" id="fDate" value="${esc(form.date)}"></label>
               </div>
               <label class="fld" style="margin-top:14px">배송정보/비고<textarea id="fShipInfo" rows="2" placeholder="수령인 · 연락처 · 주소 · 요청사항">${esc(form.shipInfo)}</textarea></label>
-              <div style="display:flex;gap:10px;margin-top:14px">
+              <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
                 <button class="btn pri lg" id="addOrder">${icon('plus')}발주 목록에 추가</button>
-                <span class="muted" style="align-self:center;font-size:12.5px">미등록 코드는 <b>이카운트</b>에 등록하면 매일 00시 자동 반영됩니다.</span>
+                <button class="btn lg" id="newOrderForm" title="주문자·배송정보를 비우고 다른 고객의 새 주문서를 시작합니다">${icon('refresh')}새 주문서</button>
               </div>
+              <div class="muted" id="ordFormHint" style="margin-top:10px;font-size:12.5px;line-height:1.6">같은 주문자에게 여러 상품이면 <b>상품코드·수량만 바꿔 계속 추가</b>하세요 → 하나의 주문서로 묶입니다. 다른 주문자는 <b>[새 주문서]</b>. <span style="opacity:.8">· 미등록 코드는 이카운트 등록 시 매일 00시 자동 반영</span></div>
             </div>
           </div>
 
@@ -374,23 +375,37 @@
             ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(),
             ord:nextOrd(), orderStatus:'발주전', synced:false, unregistered:!p };   // ord=입력순 · orderStatus=발주 진행여부
           orders.push(rec); saveOrders();
-          // 코드/품명/주문자/배송정보만 비우고 구분·경로·일자 유지 (정산 선택도 초기화 — 다음 상품은 자동판정)
+          // 상품(코드·품명·수량)만 비우고 주문자·배송정보·구분·경로·일자 유지 → 같은 주문서에 여러 상품 연속 추가
+          // (정산 선택도 초기화 — 다음 상품은 자동판정 · 다른 주문자는 [새 주문서]로 고객정보 비움)
           form.code=''; form.name=''; form.settle=''; curSettle=''; codeEl.value=''; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
-          $f('#fOrderer').value=''; $f('#fShipInfo').value=''; $f('#fQty').value=1;
-          refreshLookup(); renderAll(); codeEl.focus();
+          $f('#fQty').value=1;
+          refreshLookup(); renderAll(); updateOrderHint(); codeEl.focus();
           // 자동 저장이면 추가 즉시 내부+시트 동시 저장, 아니면 [저장] 대기
           if(getCfg().autoSend){ commit([rec]).then(r=>{ renderAll();
             toast(r.internalOnly?'저장됨 (내부 시트)':(r.ok?(r.unconfirmed?SHEET_MSG.unconf(1):SHEET_MSG.ok(1)):SHEET_MSG.fail(r.error))); }); }
           else toast('발주 목록에 추가 · [저장]으로 반영');
         }
+        // 현재 주문서 상태 표시 — 같은 주문자+일자로 담긴 상품 수
+        function updateOrderHint(){ const h=$f('#ordFormHint'); if(!h) return;
+          const on=($f('#fOrderer').value||'').trim(), dt=($f('#fDate').value||'').slice(0,10);
+          const n=on?orders.filter(o=>String(o.orderer||'').trim()===on && String(o.date||'').slice(0,10)===dt).length:0;
+          h.innerHTML = n
+            ? `${icon('check')} 현재 주문서: <b>${esc(on)}</b> · <b style="color:var(--ok)">${n}개</b> 담김 — 상품코드·수량만 바꿔 계속 추가하거나 <b>[새 주문서]</b>`
+            : `같은 주문자에게 여러 상품이면 <b>상품코드·수량만 바꿔 계속 추가</b>하세요 → 하나의 주문서로 묶입니다. 다른 주문자는 <b>[새 주문서]</b>. <span style="opacity:.8">· 미등록 코드는 이카운트 등록 시 매일 00시 자동 반영</span>`;
+        }
         $f('#addOrder').onclick=addOrder;
+        $f('#newOrderForm').onclick=()=>{ form.orderer=''; form.shipInfo=''; form.code=''; form.name=''; form.qty=1;
+          $f('#fOrderer').value=''; $f('#fShipInfo').value=''; codeEl.value=''; $f('#fQty').value=1; { const n=nameEl(); if(n){ n.value=''; n.dataset.auto=''; } }
+          refreshLookup(); updateOrderHint(); codeEl.focus(); toast('새 주문서 — 주문자·배송정보를 비웠습니다'); };
+        $f('#fOrderer').addEventListener('input', updateOrderHint);
+        $f('#fDate').addEventListener('change', updateOrderHint);
         body.querySelector('.card-bd').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='fCode'){ e.preventDefault(); addOrder(); }});
         $f('#clearOrders').onclick=()=>{ if(orders.length&&confirm('발주 목록을 모두 비울까요?')){ orders=[]; saveOrders(); renderAll(); } };
         const rowsTSV=rows=>rows.map(r=>r.join('\t')).join('\n');
         { const sc=$f('#sheetCopy'); if(sc) sc.onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; }
         { const scsv=$f('#sheetCsv'); if(scsv) scsv.onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); }; }
         $f('#saveOrders').onclick=onSave;
-        refreshLookup(); renderAll(); codeEl.focus();
+        refreshLookup(); renderAll(); updateOrderHint(); codeEl.focus();
       }
 
       // 출고송장/입고 칸: 발주 시 배송비를 먼저 채우고(담당자가 나중에 송장번호로 덮어씀)
