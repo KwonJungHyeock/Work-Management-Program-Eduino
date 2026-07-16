@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
       if (!acc || acc.active === false || String(acc.code) !== code) {
         return res.status(200).json({ ok: false, error: '아이디 또는 접속코드가 올바르지 않습니다' });
       }
-      return res.status(200).json({ ok: true, user: safeUser(acc, 'member') });
+      return res.status(200).json({ ok: true, user: safeUser(acc) });   // 계정의 실제 역할(파트장 'lead' 등) 반영
     }
 
     if (op === 'listUsers') {
