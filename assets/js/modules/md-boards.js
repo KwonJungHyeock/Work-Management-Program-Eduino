@@ -31,7 +31,7 @@
       render(root){
         const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
         const me=(Auth.user&&Auth.user())||{};
-        const canDel=isAdmin || me.role==='lead';   // 기록 삭제 = 파트장급(파트장·관리자)만
+        const canDel=isAdmin || me.role==='lead' || (cfg.memberDelete && me.dept===cfg.dept);   // 파트장급 · (보드가 허용 시)해당 부서원
         // 담당자 목록 (사용자 편집 · 로컬 저장) — whoField 가 select/agent 인 경우
         const whoCfg = cfg.fields.find(f=>f.k===cfg.whoField);
         const agentsKey = 'eduino.md.board.'+cfg.sheet+'.agents';

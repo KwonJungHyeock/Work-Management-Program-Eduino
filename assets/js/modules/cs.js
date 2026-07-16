@@ -69,10 +69,18 @@
     renderCats(); renderList();
   }
 
-  /* 합친 메뉴: 답변 템플릿 · 메일 템플릿을 서브탭으로 */
+  /* 문자(SMS) 템플릿 기본값 — 짧은 고객 문자용 */
+  const SMS_DEFAULTS = [
+    { cat:'배송', title:'송장번호 안내', body:'[에듀이노] 주문하신 상품이 오늘 출고되었습니다. 송장번호: {송장번호} ({택배사}). 이용해 주셔서 감사합니다.' },
+    { cat:'배송', title:'배송 지연 안내', body:'[에듀이노] 주문 상품 배송이 다소 지연되고 있습니다. 빠르게 발송해 드리겠습니다. 불편을 드려 죄송합니다.' },
+    { cat:'접수', title:'교환/반품 접수 안내', body:'[에듀이노] 요청하신 교환/반품이 정상 접수되었습니다. 처리 결과는 확인 후 다시 안내드리겠습니다. 감사합니다.' },
+    { cat:'입금', title:'입금 확인 안내', body:'[에듀이노] 입금이 확인되었습니다. 주문하신 상품을 순차 발송해 드리겠습니다. 감사합니다.' },
+  ];
+  /* 합친 메뉴: 답변 · 메일 · 문자 템플릿을 서브탭으로 */
   const SUBS = {
     answer: { icon:'chat', storeKey:STORE.csTpl,     defaults:ANSWER_DEFAULTS, label:'답변 템플릿', hint:'자주 쓰는 CS 답변을 분류별로 저장하고 상담 메모에서 바로 불러옵니다.' },
     mail:   { icon:'mail', storeKey:STORE.csMailTpl, defaults:MAIL_DEFAULTS,   label:'메일 템플릿', hint:'고객 메일에 자주 쓰는 양식을 저장하고 한 번에 복사합니다.' },
+    sms:    { icon:'phone', storeKey:STORE.csSmsTpl, defaults:SMS_DEFAULTS,    label:'문자 템플릿', hint:'고객 문자(SMS)에 자주 쓰는 짧은 문구를 저장하고 한 번에 복사합니다.' },
   };
   MODULES['cs.templates'] = {
     title:'답변·메일 템플릿', icon:'chat',
@@ -80,11 +88,12 @@
       let tab='answer';
       root.innerHTML=`
         <div class="mhead">
-          <div class="tt">답변·메일 템플릿</div>
-          <div class="ds">CS 답변과 고객 메일 양식을 한 곳에서 관리합니다. 상담 메모의 <b>답변</b>은 <b>답변 템플릿</b>에서 불러옵니다.</div>
+          <div class="tt">답변·메일·문자 템플릿</div>
+          <div class="ds">CS 답변·고객 메일·문자 양식을 한 곳에서 관리합니다. 상담 메모의 <b>답변</b>은 <b>답변 템플릿</b>에서 불러옵니다.</div>
           <div class="mtabs">
             <div class="t" data-t="answer">답변 템플릿</div>
             <div class="t" data-t="mail">메일 템플릿</div>
+            <div class="t" data-t="sms">문자 템플릿</div>
           </div>
         </div>
         <div class="mbody" id="tplBody"></div>`;
