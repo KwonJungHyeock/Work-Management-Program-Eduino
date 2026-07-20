@@ -1,5 +1,5 @@
 /* ===========================================================================
-   홈 · 공통 (대시보드 · 공지사항 · 업무 메모)
+   홈 · 공통 (대시보드 · 공지사항 · 알림)
    - 팀 공유 데이터는 서버리스 /api/store 의 공용 컬렉션(notice·memo)에 저장
    - 같은 도메인이라 별도 설정 없이 배포 환경에서 바로 동작
    =========================================================================== */
@@ -188,13 +188,12 @@
       const body=root.querySelector('#alBody'); let unreadCache=[];
       async function markRead(list){ for(const n of list){ n.readBy=[...(n.readBy||[]),u.loginId]; try{ await collPush('notice',n); }catch{} } }
       async function load(){
-        const [notices,memos,cbs]=await Promise.all([collGet('notice'),collGet('memo'),collGet('callbacks')]);
+        const [notices,cbs]=await Promise.all([collGet('notice'),collGet('callbacks')]);
         if(!root.isConnected||!root.querySelector('#alBody')) return;
         const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept));
         const unread=(notices||[]).filter(n=>(visibleTo(n.dept||'all',u)||mentMe(n)) && !(n.readBy||[]).includes(u.loginId))
           .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
         unreadCache=unread;
-        const myMemo=(memos||[]).filter(m=>!m.done && visibleTo(m.to||'all',u) && m.author!==u.loginId).length;
         const openCb=(isAdmin||u.dept==='cs')?(cbs||[]).filter(c=>!c.done).length:0;
         let html=`<div class="al-sec">미확인 공지 · ${unread.length}건</div>`;
         html+= unread.length
@@ -203,9 +202,8 @@
               <div class="al-meta"><span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
                 <button class="btn pri sm" data-read="${esc(n.id)}" style="margin-left:auto">${icon('check')}확인</button></div></div>`).join('')
           : `<div class="al-none">${icon('check')}<div style="margin-top:6px;font-size:14px">확인할 공지가 없습니다.</div></div>`;
-        if(myMemo||openCb){ html+=`<div class="al-sec" style="margin-top:20px">확인 필요</div>`;
-          if(openCb) html+=`<div class="al-link" data-go="cs.notes"><div class="al-ic">${icon('clipboard')}</div><div><b>미처리 콜백 ${openCb}건</b><div class="muted" style="font-size:12px">처리 대기 탭에서 확인하세요</div></div></div>`;
-          if(myMemo) html+=`<div class="al-link" data-go="home.memo"><div class="al-ic">${icon('send')}</div><div><b>나에게 온 업무 메모 ${myMemo}건</b><div class="muted" style="font-size:12px">업무 메모에서 확인하세요</div></div></div>`;
+        if(openCb){ html+=`<div class="al-sec" style="margin-top:20px">확인 필요</div>`;
+          html+=`<div class="al-link" data-go="cs.notes"><div class="al-ic">${icon('clipboard')}</div><div><b>미처리 콜백 ${openCb}건</b><div class="muted" style="font-size:12px">처리 대기 탭에서 확인하세요</div></div></div>`;
         }
         body.innerHTML=html;
         body.querySelectorAll('[data-read]').forEach(btn=>btn.onclick=async()=>{ btn.disabled=true; const n=unread.find(x=>x.id===btn.dataset.read);
@@ -215,73 +213,6 @@
       root.querySelector('#alAllRead').onclick=async(e)=>{ if(!unreadCache.length){ toast('확인할 공지가 없습니다'); return; }
         e.currentTarget.disabled=true; await markRead(unreadCache); toast('모든 공지를 확인했습니다'); load(); if(window.refreshNavBadges) window.refreshNavBadges(); };
       load();
-    }
-  };
-
-  /* ============================ 업무 메모 ============================ */
-  MODULES['home.memo']={
-    title:'업무 메모', icon:'send',
-    render(root){
-      const u=meU();
-      root.innerHTML=`
-      <style>
-        .mm-card{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:13px 16px;margin-bottom:10px;box-shadow:var(--sh-sm)}
-        .mm-card.done{opacity:.6;background:var(--panel-2)}
-        .mm-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
-        .mm-to{font-size:11.5px;font-weight:800;color:#5b3fc4;background:#eae4ff;border-radius:5px;padding:2px 8px}
-        .mm-body{font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
-        .mm-meta{font-size:12px;color:var(--muted);margin-top:8px;display:flex;gap:9px;align-items:center}
-      </style>
-      <div class="mhead pad"><div class="mhead-row">
-        <div><div class="tt">업무 메모</div><div class="ds">직원·부서에게 메모를 남깁니다. (교대 인수인계·재통화 요청 등) 처리하면 완료로 내려집니다.</div></div></div></div>
-      <div class="mbody" id="mmBody"></div>`;
-      const body=root.querySelector('#mmBody'); let roster=[];
-      async function load(){
-        body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
-        const raw=await collGet('memo');
-        body.innerHTML=''; body.appendChild(composer());
-        if(raw===null){ body.insertAdjacentHTML('beforeend', empty('공용 저장소에 연결되지 않았습니다. (배포 환경에서 표시됩니다)','alert')); return; }
-        // 나에게 보이는 것 + 내가 쓴 것
-        const list=raw.filter(m=>visibleTo(m.to||'all',u) || m.author===u.loginId)
-          .sort((a,b)=>(a.done?1:0)-(b.done?1:0) || String(b.createdAt).localeCompare(String(a.createdAt)));
-        if(!list.length){ body.insertAdjacentHTML('beforeend', empty('메모가 없습니다.','send')); return; }
-        list.forEach(m=>body.appendChild(card(m)));
-      }
-      function card(m){
-        const mine=m.author===u.loginId, c=el('div','mm-card'+(m.done?' done':''));
-        c.innerHTML=`<div class="mm-top"><span class="mm-to">→ ${esc(targetLabel(m.to||'all',roster))}</span>
-            <span class="muted" style="font-size:12px">${esc(m.authorName||m.author||'')}</span>
-            ${m.done?'<span class="badge synced" style="background:var(--ok-bg);color:var(--ok)">완료</span>':''}
-            <span style="margin-left:auto;display:flex;gap:4px">
-              <button class="btn ghost sm" data-a="toggle">${m.done?'되돌리기':'완료'}</button>
-              ${mine?'<button class="btn ghost sm" data-a="del">'+icon('trash')+'</button>':''}</span></div>
-          <div class="mm-body">${esc(m.body||'')}</div>
-          <div class="mm-meta">${esc(dateShort(m.createdAt))}</div>`;
-        c.querySelector('[data-a=toggle]').onclick=async()=>{ m.done=!m.done; m.doneBy=m.done?u.loginId:null; await collPush('memo',m); load(); };
-        const db=c.querySelector('[data-a=del]'); if(db) db.onclick=async()=>{ if(confirm('이 메모를 삭제할까요?')){ await collDel('memo',m.id); load(); } };
-        return c;
-      }
-      function composer(){
-        const box=el('div','compose');
-        const people=roster.filter(r=>r.loginId!==u.loginId);
-        box.innerHTML=`<div style="font-weight:800;font-size:14px;margin-bottom:4px">${icon('send')} 메모 남기기</div>
-          <textarea id="mmIn" rows="2" placeholder="메모 내용 (예: 홍길동님 재통화 요청 · 오후 배송 마감 확인)" style="width:100%;margin-top:8px"></textarea>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
-            <label class="fld" style="margin:0">받는 대상<select id="mmTo">
-              <option value="all">전체</option><option value="cs">CS</option><option value="md">MD</option>
-              ${people.length?'<optgroup label="직원">'+people.map(p=>`<option value="${esc(p.loginId)}">${esc(p.name)} (${DEPT_LABEL[p.dept]||p.dept||'-'})</option>`).join('')+'</optgroup>':''}
-            </select></label>
-            <button class="btn pri" id="mmPost" style="margin-left:auto">${icon('send')}남기기</button>
-            <span class="muted" id="mmStat" style="font-size:12.5px"></span></div>`;
-        box.querySelector('#mmPost').onclick=async()=>{
-          const b=box.querySelector('#mmIn').value.trim(); if(!b){ box.querySelector('#mmStat').textContent='내용을 입력하세요'; return; }
-          box.querySelector('#mmStat').textContent='남기는 중…';
-          await collPush('memo',{ id:uuid(), to:box.querySelector('#mmTo').value, body:b, author:u.loginId, authorName:u.name, createdAt:nowISO(), done:false });
-          toast('메모를 남겼습니다'); load();
-        };
-        return box;
-      }
-      rosterList().then(r=>{ roster=r; load(); });
     }
   };
 

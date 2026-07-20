@@ -138,19 +138,17 @@ function bootShell(){
       const uid=me.user.loginId;
       const wantCb = isAdmin || myDept==='cs';
       // 3개 컬렉션 병렬 조회(순차 왕복 → 1회 왕복으로 단축)
-      const [cbs, nts, mms] = await Promise.all([
+      const [cbs, nts] = await Promise.all([
         wantCb ? fetchColl('callbacks') : Promise.resolve(null),
         fetchColl('notice'),
-        fetchColl('memo'),
       ]);
-      let cbOpen=0, unreadN=0, myMemo=0;
+      let cbOpen=0, unreadN=0;
       if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); }
       const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===uid)||(m.t==='dept'&&m.v===myDept));
       if(nts){ unreadN=nts.filter(x=>(noticeVisible(x.dept)||mentMe(x)) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
-      if(mms){ myMemo=mms.filter(m=>!m.done && noticeVisible(m.to||'all') && m.author!==uid).length; }
       badgeAt=Date.now();
-      // 알림 = 미확인 공지 + 나에게 온 메모 + (CS/관리자) 미처리 콜백
-      const totalAlerts = unreadN + myMemo + cbOpen;
+      // 알림 = 미확인 공지 + (CS/관리자) 미처리 콜백
+      const totalAlerts = unreadN + cbOpen;
       setBadge('home.alerts', totalAlerts);
       // 브라우저 알림 — 확인필요 항목이 늘어나고 알림이 켜져 있으며 탭이 백그라운드일 때
       if(window.__prevAlerts!=null && totalAlerts>window.__prevAlerts){

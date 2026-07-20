@@ -170,7 +170,6 @@ const NAV = [
       { key:'home.dash',   name:'홈 대시보드', icon:'dashboard' },
       { key:'home.alerts', name:'알림',        icon:'bell' },
       { key:'home.notice', name:'공지사항',   icon:'megaphone' },
-      { key:'home.memo',   name:'업무 메모',   icon:'send' },
       { key:'home.calendar', name:'일정·달력',  icon:'check2' },
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
