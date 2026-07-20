@@ -191,6 +191,7 @@ const NAV = [
       { key:'md.prodhub',   name:'상품·품질 관리',     icon:'grid' },
       { key:'md.pricewatch', name:'가격비교',           icon:'chart' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
+      { key:'md.tstpl',     name:'기술상담 템플릿',     icon:'chat' },
       { key:'md.settle',    name:'일일결산',           icon:'check2' },
       { key:'md.extra',     name:'부가기능',           icon:'grid' },
       { key:'md.manual',    name:'업무 매뉴얼',        icon:'clipboard' },
@@ -212,7 +213,7 @@ const NAV = [
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
 const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'cs.partners', 'cs.manual', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
-  'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.settle', 'md.manual',
+  'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.tstpl', 'md.settle', 'md.manual',
   'logi.manual'];
 
 const STORE = {
@@ -238,6 +239,8 @@ const STORE = {
   tsAgents: 'eduino.ts.notes.agents',    // 담당자 목록(사용자 편집)
   tsTypes:  'eduino.ts.notes.platforms', // 문의플랫폼 목록(사용자 편집)
   tsSumTpl: 'eduino.ts.notes.sumtpl',    // TS 일일 결산 저장 양식(커스텀)
+  tsMailTpl:'eduino.ts.mailtpl',         // TS 기술상담 메일 답변 템플릿
+  tsChatTpl:'eduino.ts.chattpl',         // TS 기술상담 채팅 답변 템플릿
   syncCfg:  'eduino.sync.cfg',       // 공용 저장소(구글) 연동 { url, autoPull }
   shareMap: 'eduino.share.map',      // 공유 범위 오버라이드 { settingKey: 'all'|'cs'|'md' } (전사 공유)
   catMap:   'eduino.md.catmap',      // 이카운트 코드→이름표 { vendor:{코드:구매처명}, category:{코드:분류명} }
@@ -282,6 +285,7 @@ const SHARE_DEFAULT = {
   [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csSmsTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
   [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
   [STORE.tsNoteCfg]:'md', [STORE.tsAgents]:'md', [STORE.tsTypes]:'md', [STORE.tsSumTpl]:'md',
+  [STORE.tsMailTpl]:'md', [STORE.tsChatTpl]:'md',
   'eduino.board.exchange.cfg':'cs', 'eduino.board.postpay.cfg':'cs',
   'eduino.board.vendorchg.cfg':'md', 'eduino.board.stockmgmt.cfg':'md', 'eduino.board.inspect.cfg':'md', 'eduino.board.prodmgmt.cfg':'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
@@ -313,7 +317,7 @@ function myShareScopes(){
 const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csSmsTpl, STORE.csNoteCfg, STORE.csAgents,
-  STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl,
+  STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl, STORE.tsMailTpl, STORE.tsChatTpl,
   STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed',
   'eduino.manual.cs', 'eduino.manual.md', 'eduino.manual.logi',
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
@@ -338,6 +342,8 @@ const SHARED_LABELS = {
   [STORE.tsAgents]:'TS 담당자 목록',
   [STORE.tsTypes]:'TS 문의플랫폼',
   [STORE.tsSumTpl]:'TS 결산 저장 양식',
+  [STORE.tsMailTpl]:'TS 메일 템플릿',
+  [STORE.tsChatTpl]:'TS 채팅 템플릿',
   'eduino.board.exchange.cfg':'교환/반품 시트 연동 URL',
   'eduino.board.postpay.cfg':'후불/발주 시트 연동 URL',
   'eduino.board.vendorchg.cfg':'입점사 신규/변동 시트 연동 URL',
