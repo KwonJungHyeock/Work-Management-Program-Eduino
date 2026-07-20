@@ -106,12 +106,12 @@
     const badge=(typeof tagBadge==='function')?tagBadge:(v=>esc(v));
     const left=`
       <div class="st-sec-cap" style="margin-top:0">상담 메모</div>
-      <table class="st-tbl"><tbody><tr><td>상담 메모</td><td class="stnum">${notesN}건</td></tr></tbody></table>
-      <div class="st-sec-cap">견적·발주·후불 결산 (금액)</div>
-      <table class="st-tbl"><tbody>
-        <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
-        ${order.map(k=>`<tr><td>${badge(k,'st-dt-badge')}${k==='개인결제'?' <span style="font-size:10px;color:var(--muted)">· 카페24 매출(합계 제외)</span>':''}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
-        <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
+      <div class="st-statline"><span>상담 메모</span><b>${notesN}건</b></div>
+      <div class="st-sec-cap">견적·발주·후불 결산 <span class="st-cap-sub">· 매출합계 = 발주 + 후불</span></div>
+      <table class="st-money"><tbody>
+        <tr class="st-money-hd"><td class="m-gub">구분</td><td class="m-cnt">건수</td><td class="m-amt">총금액</td></tr>
+        ${order.map(k=>`<tr><td class="m-gub">${badge(k,'st-dt-badge')}${k==='개인결제'?'<span class="m-note">카페24 · 합계 제외</span>':''}</td><td class="m-cnt">${g[k].c}</td><td class="m-amt">${won(g[k].s)}<span class="m-won">원</span></td></tr>`).join('')}
+        <tr class="m-tot"><td class="m-gub">매출합계<span class="m-tsub">발주+후불</span></td><td class="m-cnt">${tc}</td><td class="m-amt">${won(ts)}<span class="m-won">원</span></td></tr>
       </tbody></table>
       <div class="st-sec-cap">담당자별</div>
       <div class="st-ppl-col">${ppl.length?ppl.map(([n,v])=>`<span class="st-chip" style="${personStyle(n)}">${esc(n)} <b>${v}</b></span>`).join(''):'<span class="muted" style="font-size:12.5px">기록 없음</span>'}</div>`;
@@ -121,7 +121,7 @@
         ${ex.map(r=>`<tr><td>${esc(r.name||'')}</td><td>${esc(r.contact||'')}</td><td>${r.status?badge(r.status,'st-dt-badge'):''}</td>
           <td class="st-dt-wrap">${esc(r.content||'')}${r.gubun?`<span class="muted" style="font-size:11px;margin-left:4px">(${esc(r.gubun)})</span>`:''}</td></tr>`).join('')}
       </tbody></table></div>`:'<div class="muted" style="font-size:13px;padding:6px 2px">해당 일자 교환/반품/환불 내역이 없습니다.</div>'}`;
-    return `<div class="st-cs2 st-lalign"><div>${left}</div><div>${right}</div></div>`;
+    return `<div class="st-cs2"><div>${left}</div><div>${right}</div></div>`;
   }
   const catLine=agg=>Object.entries(agg.byCat).map(([k,v])=>`${k} ${v}`).join(' · ');
   const personLine=agg=>Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}건`).join(', ');
@@ -153,6 +153,25 @@
     .st-tbl tr:last-child td{border-bottom:none}
     .st-tbl .stnum{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;width:70px}
     .st-tbl .st-tot td{background:var(--panel-2);font-weight:800}
+    /* CS 일일결산 — 상담메모 슬림 스탯 + 금액 결산표(구분 최소폭·금액 우측 강조·줄바꿈 없음) */
+    .st-statline{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:9px 15px;font-size:13.5px;background:var(--panel);color:var(--ink-2)}
+    .st-statline b{font-variant-numeric:tabular-nums;font-weight:800;color:var(--ink);font-size:15px}
+    .st-cap-sub{font-size:11px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0}
+    .st-money{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .st-money td{padding:10px 15px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+    .st-money tr:last-child td{border-bottom:none}
+    .st-money .st-money-hd td{background:var(--panel-2);font-weight:800;font-size:11px;color:var(--muted);letter-spacing:.03em;padding:8px 15px}
+    .st-money .m-gub{white-space:nowrap;width:1%}
+    .st-money .m-cnt{text-align:center;width:56px;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+    .st-money .m-amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap;font-size:15px;color:var(--ink)}
+    .st-money .st-money-hd .m-amt,.st-money .st-money-hd .m-cnt{font-weight:800;color:var(--muted);font-size:11px}
+    .st-money .m-amt .m-won{font-size:11px;font-weight:600;color:var(--muted);margin-left:2px}
+    .st-money .m-note{display:inline-block;font-size:10px;color:var(--muted);margin-left:7px;font-weight:600}
+    .st-money .m-tot td{background:var(--panel-2)}
+    .st-money .m-tot .m-gub{font-weight:800;font-size:13.5px}
+    .st-money .m-tsub{font-weight:600;color:var(--muted);font-size:11px;margin-left:7px}
+    .st-money .m-tot .m-amt{color:var(--red);font-size:17px}
+    .st-money .m-tot .m-amt .m-won{color:var(--red);opacity:.75;font-size:12px}
     .st-ppl-cap{font-size:11.5px;font-weight:800;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px}
     .st-ppl{display:flex;flex-direction:column}
     .st-ppl>div+.st-chip,.st-ppl .st-chip{display:inline-flex}
