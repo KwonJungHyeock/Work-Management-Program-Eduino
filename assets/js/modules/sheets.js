@@ -87,7 +87,7 @@
         let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null, dateDir='desc';
         const fvals={};   // 컬럼 필터 값 { 컬럼키: 선택값 }
         const myDept=(Auth.user&&Auth.user()||{}).dept;
-        const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
+        const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept || (typeof canEditKey==='function'&&canEditKey(cfg.key)));
         const canReorder=!!cfg.reorderable && canEdit;
         const hasActions=canDel||canEdit;
         const dayOf=r=>String(r.day||r.date||'').slice(0,10);

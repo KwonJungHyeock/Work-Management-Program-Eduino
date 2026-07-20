@@ -18,6 +18,10 @@
   // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD·물류 기능에서 생성)
   const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi')
     .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
+  // 사이드바 NAV엔 없지만 수정 권한 부여가 필요한 내장 기록판(발주 기록·상담 기록 등)
+  [{dept:'cs',extra:[{key:'cs.records',name:'CS상담 기록'}]},
+   {dept:'md',extra:[{key:'md.records',name:'발주 기록'},{key:'md.tsrecords',name:'TS상담 기록'}]}]
+    .forEach(x=>{ const g=FEATURES.find(f=>f.dept===x.dept); if(g) x.extra.forEach(e=>{ if(!g.items.some(i=>i.key===e.key)) g.items.push(e); }); });
   const deptDefault=dept=>{ const g=FEATURES.find(x=>x.dept===dept); return g?g.items.map(it=>it.key):[]; };
   const randCode=()=>{ const s='ABCDEFGHJKLMNPRSTUVWXYZ23456789'; let o=''; for(let i=0;i<6;i++) o+=s[Math.floor((crypto.getRandomValues(new Uint32Array(1))[0]/4294967296)*s.length)]; return 'ED-'+o; };
 
@@ -41,14 +45,20 @@
         .u-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
         .u-form .fld{margin:0}
         .perm-sec{margin-top:16px;border-top:1px solid var(--line-2);padding-top:14px}
-        .perm-cap{font-size:13px;font-weight:800;margin-bottom:11px}
-        .perm-pick{display:flex;gap:22px;flex-wrap:wrap}
-        .perm-grp{min-width:180px}
-        .perm-gl{font-size:11px;font-weight:800;letter-spacing:.05em;margin-bottom:8px;text-transform:uppercase}
-        .perm-gl.cs{color:#2d6cdf}.perm-gl.md{color:#e0313b}
-        .perm-items{display:flex;flex-direction:column;gap:8px}
-        .perm-chk{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;font-weight:600;color:var(--ink-2)}
-        .perm-chk input{width:16px;height:16px}
+        .perm-cap{font-size:13px;font-weight:800;margin-bottom:4px}
+        .perm-legend{font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6}
+        .perm-legend b{color:var(--ink-2)}
+        #permPick{display:flex;gap:14px;flex-wrap:wrap}
+        .perm-grp{flex:1 1 250px;min-width:240px;border:1px solid var(--line-2);border-radius:10px;padding:10px 13px;background:var(--panel-2)}
+        .perm-gl{font-size:11px;font-weight:800;letter-spacing:.05em;margin-bottom:6px;text-transform:uppercase}
+        .perm-gl.cs{color:#2d6cdf}.perm-gl.md{color:#e0313b}.perm-gl.logi{color:#12886a}
+        .perm-t{width:100%;border-collapse:collapse}
+        .perm-t th{font-size:10px;color:var(--muted);font-weight:800;padding:3px 4px 6px;border-bottom:1px solid var(--line)}
+        .perm-t th.c{text-align:center;width:44px}.perm-t th.f{text-align:left}
+        .perm-t td{padding:5px 4px;font-size:12.8px;color:var(--ink-2);border-bottom:1px solid var(--line)}
+        .perm-t td.c{text-align:center}.perm-t tr:last-child td{border-bottom:0}
+        .perm-t input{width:16px;height:16px;cursor:pointer}
+        .perm-t input[data-eperm]{accent-color:#e0313b}
       </style>
       <div class="mhead pad">
         <div class="tt">팀원 계정 관리</div>
@@ -72,8 +82,9 @@
             </div>
             <label class="chk" style="margin-top:14px"><input type="checkbox" id="fActive" checked> <b>활성 계정</b> <span class="muted" style="font-weight:500">· 끄면 로그인 차단(퇴사·휴직 시) · 상담/발주 기록은 보존됩니다</span></label>
             <div class="perm-sec">
-              <div class="perm-cap">열람 권한 <span class="muted" style="font-weight:500">· 체크한 기능만 사용할 수 있습니다 (부서 선택 시 자동 체크)</span></div>
-              <div class="perm-pick" id="permPick"></div>
+              <div class="perm-cap">기능 권한 (페이지별 열람 · 수정)</div>
+              <div class="perm-legend"><b>열람</b> = 페이지 접근 · <b style="color:#e0313b">수정</b> = 해당 게시판 데이터를 수정·등록 허용. 부서 선택 시 열람이 자동 체크되고, <b>수정</b>은 필요한 페이지만 콕 집어 부여하세요. (예: CS 담당자에게 <b>MD › 발주 기록</b>의 수정만 허용)</div>
+              <div id="permPick"></div>
             </div>
             <div style="display:flex;align-items:center;gap:14px;margin-top:16px">
               <button class="btn pri" id="saveUser">${icon('check')}저장</button>
@@ -92,25 +103,33 @@
       const $=s=>root.querySelector(s);
       let editing=null, usersCache=[];
       const roleLabel=r=>r==='lead'?'파트장':'팀원';
-      function renderPerms(sel){ const box=$('#permPick'); const S=new Set(sel||[]);
+      function renderPerms(sel, esel){ const box=$('#permPick'); const S=new Set(sel||[]), E=new Set(esel||[]);
         box.innerHTML=FEATURES.map(g=>`<div class="perm-grp"><div class="perm-gl ${g.dept}">${esc(g.name)}</div>
-          <div class="perm-items">${g.items.map(it=>`<label class="perm-chk"><input type="checkbox" data-perm="${it.key}" ${S.has(it.key)?'checked':''}> ${esc(it.name)}</label>`).join('')}</div></div>`).join(''); }
+          <table class="perm-t"><thead><tr><th class="f">기능</th><th class="c">열람</th><th class="c">수정</th></tr></thead>
+          <tbody>${g.items.map(it=>`<tr><td>${esc(it.name)}</td>
+            <td class="c"><input type="checkbox" data-perm="${it.key}" ${S.has(it.key)?'checked':''}></td>
+            <td class="c"><input type="checkbox" data-eperm="${it.key}" ${E.has(it.key)?'checked':''}></td></tr>`).join('')}</tbody></table></div>`).join('');
+        // 수정 체크 → 열람 자동 체크(수정하려면 열람 필요) · 열람 해제 → 수정도 해제
+        box.querySelectorAll('[data-eperm]').forEach(ec=>ec.onchange=()=>{ if(ec.checked){ const p=box.querySelector(`[data-perm="${ec.dataset.eperm}"]`); if(p) p.checked=true; } });
+        box.querySelectorAll('[data-perm]').forEach(pc=>pc.onchange=()=>{ if(!pc.checked){ const ep=box.querySelector(`[data-eperm="${pc.dataset.perm}"]`); if(ep) ep.checked=false; } });
+      }
       const collectPerms=()=>[...$('#permPick').querySelectorAll('[data-perm]:checked')].map(c=>c.dataset.perm);
+      const collectEditPerms=()=>[...$('#permPick').querySelectorAll('[data-eperm]:checked')].map(c=>c.dataset.eperm);
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
-      $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur]); };
+      $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()), eCur=collectEditPerms(); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur], eCur); };
       function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true;
-        renderPerms(deptDefault('cs')); $('#fId').disabled=false; $('#editHint').innerHTML='<b style="color:var(--ok)">신규 계정 발급</b>'; $('#fId').focus(); }
+        renderPerms(deptDefault('cs'), []); $('#fId').disabled=false; $('#editHint').innerHTML='<b style="color:var(--ok)">신규 계정 발급</b>'; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
         $('#fDept').value=u.dept||'cs'; $('#fRole').value=u.role==='lead'?'lead':'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
-        renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'));
+        renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'), Array.isArray(u.editPerms)?u.editPerms:[]);
         $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
-      renderPerms(deptDefault('cs'));
+      renderPerms(deptDefault('cs'), []);
       // 신규 계정: 폼을 빈 상태로 초기화(수정 모드 해제) + 접속코드 자동 생성 → 바로 발급 가능
       $('#newUser').onclick=()=>{ resetForm(); $('#fCode').value=randCode(); $('#admStat').textContent=''; root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
 
       $('#saveUser').onclick=async()=>{
         const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value, role:$('#fRole').value,
-          email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), active:$('#fActive').checked, perms:collectPerms() };
+          email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), active:$('#fActive').checked, perms:collectPerms(), editPerms:collectEditPerms() };
         if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--danger)">아이디와 접속코드는 필수입니다.</span>'; return; }
         // 파트장은 직무별 1명 제한
         if(user.role==='lead'){ const other=usersCache.find(x=>x.dept===user.dept && x.role==='lead' && x.loginId!==user.loginId);

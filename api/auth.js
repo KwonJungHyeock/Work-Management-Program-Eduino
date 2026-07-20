@@ -48,7 +48,7 @@ function isAdmin(body) { const a = (body && body.admin) || {}; return a.loginId 
 async function logAudit(entry) {
   try { await redis(['LPUSH', 'eduino:audit', JSON.stringify({ at: new Date().toISOString(), ...entry })]); await redis(['LTRIM', 'eduino:audit', 0, 499]); } catch (e) {}
 }
-function safeUser(acc, role) { return { loginId: acc.loginId, name: acc.name || acc.loginId, dept: acc.dept || '', role: role || acc.role || 'member', email: acc.email || '', perms: Array.isArray(acc.perms) ? acc.perms : null }; }
+function safeUser(acc, role) { return { loginId: acc.loginId, name: acc.name || acc.loginId, dept: acc.dept || '', role: role || acc.role || 'member', email: acc.email || '', perms: Array.isArray(acc.perms) ? acc.perms : null, editPerms: Array.isArray(acc.editPerms) ? acc.editPerms : null }; }
 
 module.exports = async function handler(req, res) {
   try {
@@ -89,6 +89,7 @@ module.exports = async function handler(req, res) {
       if (loginId === ADMIN_ID) return res.status(400).json({ ok: false, error: '예약된 아이디입니다' });
       if (!String(u.code || '').trim()) return res.status(400).json({ ok: false, error: '접속코드를 입력하세요' });
       const perms = Array.isArray(u.perms) ? u.perms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
+      const editPerms = Array.isArray(u.editPerms) ? u.editPerms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
       const role = u.role === 'lead' ? 'lead' : 'member';
       // 파트장은 직무별 1명 제한 (서버 측 이중 방어)
       if (role === 'lead') {
@@ -98,7 +99,7 @@ module.exports = async function handler(req, res) {
       const prev = await getAccount(loginId);
       const acc = {
         loginId, code: String(u.code), name: String(u.name || ''), dept: String(u.dept || ''),
-        email: String(u.email || ''), role, active: u.active !== false, perms,
+        email: String(u.email || ''), role, active: u.active !== false, perms, editPerms,
         createdAt: (prev && prev.createdAt) || u.createdAt || new Date().toISOString(),
       };
       await putAccount(acc);

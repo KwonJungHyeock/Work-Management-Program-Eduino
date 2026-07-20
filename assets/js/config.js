@@ -216,6 +216,14 @@ const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.
   'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.tstpl', 'md.settle', 'md.manual',
   'logi.manual'];
 
+/* 게시판별 '수정 권한' — 관리자이거나, 계정에 editPerms로 명시 부여된 경우 true.
+   (부서원의 자기 부서 기본 수정 권한과 별개로 그 위에 더해지는 교차 부여 · 관리자가 계정 화면에서 페이지별로 부여) */
+function canEditKey(key){
+  const u=(typeof Auth!=='undefined' && Auth.user && Auth.user())||null; if(!u) return false;
+  if(u.role==='admin') return true;
+  return Array.isArray(u.editPerms) && u.editPerms.includes(key);
+}
+
 const STORE = {
   session:  'eduino.session',   // { device, code, ts }
   device:   'eduino.device',    // 기기 이름 (이 PC에 고정 저장)
