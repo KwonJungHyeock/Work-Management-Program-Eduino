@@ -73,6 +73,7 @@
             ${(cfg.filters||[]).map(f=>`<select class="sv-in" data-fk="${esc(f.k)}"><option value="">${esc(f.label)} 전체</option></select>`).join('')}
             <input class="sv-in" id="fQ" type="text" placeholder="검색어…">
             <span class="sv-sp"></span>
+            ${cfg.ordKey?`<button class="btn ghost sm" id="btnSort" title="일자 정렬 전환">일자 최신순 ↓</button>`:''}
             ${(isAdmin&&cfg.sheetPush)?`<button class="btn ghost sm" id="btnPush">${icon('cloudUp')}시트로 전송</button>`:''}
             ${isAdmin?`<button class="btn ghost sm" id="btnCsv">${icon('download')}CSV</button>`:''}
             <button class="btn ghost sm" id="btnReload">${icon('refresh')}</button>
@@ -83,7 +84,7 @@
         </div>`;
 
         const $=s=>root.querySelector(s);
-        let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null;
+        let preset='month', custom={from:todayStr(), to:todayStr()}, all=[], who='', q='', editId=null, dateDir='desc';
         const fvals={};   // 컬럼 필터 값 { 컬럼키: 선택값 }
         const myDept=(Auth.user&&Auth.user()||{}).dept;
         const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept);
@@ -109,7 +110,7 @@
             // 발주 기록: 날짜 내림차순 + 같은 주문서(orderGroup) 인접 + 입력순(ord) 오름차순
             const gkey=r=>cfg.groupKey?String(r[cfg.groupKey]||r.id):r.id;
             const gmin={}; rows.forEach(r=>{ const g=gkey(r), o=ordOf(r); if(gmin[g]==null||o<gmin[g]) gmin[g]=o; });
-            rows.sort((a,b)=> dayOf(b).localeCompare(dayOf(a)) || (gmin[gkey(a)]-gmin[gkey(b)]) || (ordOf(a)-ordOf(b)));
+            rows.sort((a,b)=> (dateDir==='asc'?dayOf(a).localeCompare(dayOf(b)):dayOf(b).localeCompare(dayOf(a))) || (gmin[gkey(a)]-gmin[gkey(b)]) || (ordOf(a)-ordOf(b)));
           } else {
             rows.sort((a,b)=>String(b.day||b.date||'').localeCompare(String(a.day||a.date||''))
               || String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
@@ -241,6 +242,9 @@
         (cfg.filters||[]).forEach(f=>{ const sel=root.querySelector(`[data-fk="${f.k}"]`); if(sel) sel.onchange=()=>{ fvals[f.k]=sel.value; paint(); }; });
         $('#fQ').oninput=()=>{ q=$('#fQ').value.trim(); paint(); };
         $('#btnReload').onclick=load;
+        const sortBtn=$('#btnSort');
+        if(sortBtn) sortBtn.onclick=()=>{ dateDir=dateDir==='desc'?'asc':'desc';
+          sortBtn.textContent=dateDir==='desc'?'일자 최신순 ↓':'일자 오래된순 ↑'; paint(); };
         const csvBtn=$('#btnCsv');   // 시트 다운로드(CSV)는 관리자만 (팀원 화면엔 버튼 미표시)
         if(csvBtn) csvBtn.onclick=()=>{
           if(!isAdmin){ toast('시트 다운로드는 관리자만 가능합니다'); return; }
@@ -341,11 +345,16 @@
       const oldM=String(old.day||old.date||'').slice(0,7), newM=String(rec.date||'').slice(0,7);
       if(window.Records && oldM && newM && oldM!==newM) await Records.del('md','orders',rec.id,oldM,old.who,old.day||old.date);
       if(window.Records) await Records.pushMD(rec);                  // 내부 발주 기록 갱신(중복 없이 덮어씀 · 송장번호 포함)
+      // 발주취소 시 결제요청(선결제 자동집계) 목록에서도 제거 — 같은 id로 연동
+      if(window.Records && String(rec.orderStatus||'')==='발주취소'){
+        try{ await Records.del('md','payreq',rec.id,String(rec.date||rec.day||'').slice(0,7)); }catch(e){}
+      }
     },
     cols:[ {k:'date',h:'일자',w:60,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(5,10):(String(r.day||'').slice(5,10)||d); }},  // 월-일만 표시(폭 절약)
       {k:'whoName',h:'담당자',w:52,color:true}, {k:'gubun',h:'구분',w:42,tag:true},
       {k:'route',h:'경로',w:42,wrap:true}, {k:'orderer',h:'주문자명',w:70,wrap:true}, {k:'vendor',h:'입점사명',w:72,wrap:true},
-      {k:'settle',h:'정산',w:50,tag:true}, {k:'selfCode',h:'상품코드',w:56,wrap:true},
+      {k:'settle',h:'정산',w:50,tag:true,options:['','월정산','선결제','후불','기타']},   // 자동채움 오류 시 담당자/파트장이 인라인 수정
+      {k:'selfCode',h:'상품코드',w:56,wrap:true},
       {k:'name',h:'품명',w:112,wrap:true}, {k:'qty',h:'수량',w:32,num:true},
       {k:'ship',h:'배송비',w:52,num:true,money:true},
       {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','발주취소']},   // 입점사에 발주 넣었는지
