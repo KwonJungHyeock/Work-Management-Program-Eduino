@@ -23,6 +23,7 @@ try { for (const line of readFileSync(new URL('./.env', import.meta.url),'utf8')
 const arg = k => { const a=process.argv.find(x=>x.startsWith('--'+k)); return a?(a.includes('=')?a.split('=')[1]:true):false; };
 const DEBUG=arg('debug'), DRY=arg('dry'), LIMIT=Number(arg('limit'))||0, ONE=arg('code');
 const DELAY=Number(E.NTREX_DELAY_MS)||2000;   // 기본 간격 넉넉히(차단 위험↓) · .env로 조정
+const MAXFAIL=Math.max(3, Number(E.NTREX_MAX_FAIL)||10);   // 연속 실패 이 횟수 도달 시 즉시 중단(업무 PC IP 보호)
 const jitter=()=>Math.floor(Math.random()*800);   // 요청마다 0~0.8초 무작위 추가(봇 티 줄임)
 const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36';
 const siteUrl = no => `https://www.devicemart.co.kr/goods/view?no=${encodeURIComponent(no)}`;
@@ -116,7 +117,7 @@ for(const p of items){
       console.log(`CHANGED ${p.ed}/${p.ntx}: ${won(p.basePrice)} -> ${won(cur)}`);
     }
   }catch(e){ failed++; consecFail++;
-    if(consecFail>=20){ console.log(`\n연속 ${consecFail}건 실패 — 사이트 차단/장애로 보고 조기 종료(수집분 업로드).`); break; }
+    if(consecFail>=MAXFAIL){ console.log(`\n연속 ${consecFail}건 실패 — 사이트 차단/장애로 보고 조기 종료(수집분 업로드). ※ 업무 PC 보호를 위해 즉시 중단합니다.`); break; }
   }
   await sleep(DELAY+jitter());
 }
