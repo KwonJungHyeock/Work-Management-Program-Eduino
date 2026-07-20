@@ -47,14 +47,14 @@
   /* 견적·발주·후불 금액 결산 (CS) — 구분별 건수+총금액, 견적/발주/후불 순 */
   const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
   function payMoneyHtml(recs){
-    recs=recs||[]; const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
+    recs=recs||[]; const order=['견적','발주','후불','개인결제']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
     recs.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
     const won=n=>Number(n||0).toLocaleString();
     const salesK=['발주','후불']; const tc=salesK.reduce((a,k)=>a+g[k].c,0), ts=salesK.reduce((a,k)=>a+g[k].s,0);   // 매출합계=발주+후불(견적 제외)
     return `<div class="st-sec-cap">견적·발주·후불 결산 (금액)</div>
       <div style="overflow-x:auto"><table class="st-tbl" style="max-width:540px"><tbody>
         <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
-        ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
+        ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}${k==='개인결제'?' <span style="font-size:10px;color:var(--muted)">· 카페24 매출(합계 제외)</span>':''}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
         <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
       </tbody></table></div>`;
   }
@@ -62,7 +62,7 @@
   function csTopHtml(dept,agg){
     const rows=(AGG[dept]||[]).map(s=>`<tr><td>${esc(s.label)}</td><td class="stnum">${agg.byCat[s.label]||0}</td></tr>`).join('');
     const ppl=Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]);
-    const recs=(agg.details&&agg.details.postpay)||[]; const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
+    const recs=(agg.details&&agg.details.postpay)||[]; const order=['견적','발주','후불','개인결제']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
     recs.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
     const won=n=>Number(n||0).toLocaleString(); const salesK=['발주','후불']; const tc=salesK.reduce((a,k)=>a+g[k].c,0), ts=salesK.reduce((a,k)=>a+g[k].s,0);   // 매출합계=발주+후불(견적 제외)
     return `<div class="st-top3">
@@ -73,7 +73,7 @@
       <div><div class="st-sec-cap" style="margin-top:0">견적·발주·후불 결산 (금액)</div>
         <table class="st-tbl"><tbody>
           <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
-          ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
+          ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}${k==='개인결제'?' <span style="font-size:10px;color:var(--muted)">· 카페24 매출(합계 제외)</span>':''}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
           <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
         </tbody></table></div>
     </div>`;
@@ -81,7 +81,7 @@
   /* 견적·발주·후불 상세 리스트 (엑셀 결산 형식 · 견적→발주→후불 순 · 메모 포함) */
   function payListHtml(recs){
     recs=(recs||[]).slice(); if(!recs.length) return '';
-    const ord={'견적':0,'발주':1,'후불':2,'결제요청':3,'기타':4};
+    const ord={'견적':0,'발주':1,'후불':2,'개인결제':3,'결제요청':4,'기타':5};
     recs.sort((a,b)=>((ord[a.gubun]==null?9:ord[a.gubun])-(ord[b.gubun]==null?9:ord[b.gubun])) || String(a.rdate||'').localeCompare(String(b.rdate||'')));
     const cell=v=>esc(v==null?'':String(v)); const won=v=>{ const n=parseAmt(v); return n?n.toLocaleString()+'원':cell(v); };
     return `<div class="st-sec-cap">견적·발주·후불 상세 · ${recs.length}건 (견적→발주→후불 순)</div>
@@ -99,7 +99,7 @@
     const notesN=agg.byCat['상담 메모']||0;
     const pay=(agg.details&&agg.details.postpay)||[]; const ex=(agg.details&&agg.details.exchange)||[];
     const won=n=>Number(n||0).toLocaleString();
-    const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
+    const order=['견적','발주','후불','개인결제']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
     pay.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
     const salesK=['발주','후불']; const tc=salesK.reduce((a,k)=>a+g[k].c,0), ts=salesK.reduce((a,k)=>a+g[k].s,0);   // 매출합계=발주+후불(견적 제외)
     const ppl=Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]);
@@ -110,7 +110,7 @@
       <div class="st-sec-cap">견적·발주·후불 결산 (금액)</div>
       <table class="st-tbl"><tbody>
         <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
-        ${order.map(k=>`<tr><td>${badge(k,'st-dt-badge')}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
+        ${order.map(k=>`<tr><td>${badge(k,'st-dt-badge')}${k==='개인결제'?' <span style="font-size:10px;color:var(--muted)">· 카페24 매출(합계 제외)</span>':''}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
         <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
       </tbody></table>
       <div class="st-sec-cap">담당자별</div>
