@@ -125,6 +125,7 @@ console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${
 
 if(DRY){ console.log('[dry-run] skip upload'); process.exit(0); }
 if(!E.STORE_URL){ console.log('STORE_URL not set -> skip upload (add STORE_URL to .env)'); process.exit(0); }
-const doc={ id:`ntrex:${day}`, coll:'ntrex', day, checkedAt:new Date().toISOString(), count:diffs.length, items:diffs };
+const doc={ id:`ntrex:${day}`, coll:'ntrex', day, checkedAt:new Date().toISOString(),
+  count:diffs.length, checked, failed, noprice, total:items.length, items:diffs };   // 일일 리포트용 통계 포함
 const r=await fetch(E.STORE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'ntrex',item:doc})});
 console.log('upload:', r.status, ascii(await r.text()).slice(0,200));

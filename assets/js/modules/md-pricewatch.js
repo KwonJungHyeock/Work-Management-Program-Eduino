@@ -79,6 +79,17 @@
         .nx-note{border-left:4px solid var(--info);background:var(--info-bg);border-radius:0 10px 10px 0;padding:12px 16px;margin-bottom:14px;font-size:13px;color:var(--ink-2)}
         .nx-ta{width:100%;min-height:150px;font:inherit;border:1px solid var(--line-2);border-radius:8px;padding:10px;line-height:1.6}
         .nx-usr{font-size:10.5px;font-weight:800;color:var(--info);background:var(--info-bg);border-radius:5px;padding:1px 6px;margin-left:6px}
+        /* 일일 리포트 */
+        .rp-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);margin-bottom:11px;overflow:hidden}
+        .rp-hd{display:flex;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;flex-wrap:wrap}
+        .rp-hd:hover{background:var(--hover)}
+        .rp-date{font-weight:800;font-size:14px;color:var(--ink);min-width:96px;font-variant-numeric:tabular-nums}
+        .rp-stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);align-items:baseline}
+        .rp-stats b{color:var(--ink);font-weight:800} .rp-chg b{color:var(--red)}
+        .rp-rev{margin-left:auto;display:flex;align-items:center;gap:6px}
+        .rp-ok{font-size:11.5px;font-weight:800;color:var(--ok);background:var(--ok-bg);border-radius:6px;padding:3px 9px;white-space:nowrap}
+        .rp-bd{border-top:1px solid var(--line);padding:4px 6px 6px}
+        .rp-cv{margin-left:6px;color:var(--muted);font-size:12px;transition:transform .15s}
       </style>
       <div class="mhead">
         <div class="tt">가격비교</div>
@@ -90,17 +101,60 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.v===vKey);
         t.onclick=()=>{ vKey=t.dataset.v; section='alerts'; addOpen=false; editNtx=null; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.v===vKey)); load(); }; });
 
-      let diffs=[], apDay='';
+      let diffs=[], apDay='', history=[];
+      const REVIEWED_KEY='eduino.ntrex.reviewed';   // 일일 리포트 확인 표시(담당자·날짜) · MD 공유
       function draw(){
         const v=vendor();
         const secBar=`<div class="pw-seg">
           <button data-s="alerts" class="${section==='alerts'?'on':''}">가격 변동 알림</button>
+          <button data-s="report" class="${section==='report'?'on':''}">일일 리포트${history.length?` (${history.length})`:''}</button>
           <button data-s="list" class="${section==='list'?'on':''}">취급 상품 (${effectiveProducts(v).length})</button>
           ${isAdmin()?`<button data-s="mail" class="${section==='mail'?'on':''}">메일 양식</button>`:''}</div>`;
         body.innerHTML=secBar+`<div id="pwSec"></div>`;
         body.querySelectorAll('.pw-seg button').forEach(b=>b.onclick=()=>{ section=b.dataset.s; addOpen=false; editNtx=null; draw(); });
         const sec=body.querySelector('#pwSec');
-        if(section==='alerts') drawAlerts(sec,v); else if(section==='list') drawList(sec,v); else drawMail(sec,v);
+        if(section==='alerts') drawAlerts(sec,v); else if(section==='report') drawReport(sec,v); else if(section==='list') drawList(sec,v); else drawMail(sec,v);
+      }
+
+      /* -------- 일일 리포트 (날짜별 수집 결과 보관 · 담당자 확인) -------- */
+      function drawReport(sec,v){
+        const me=(Auth.user&&Auth.user())||{};
+        const days=history;
+        if(!days.length){ sec.innerHTML=`<div class="nx-note">${icon('info')} 아직 수집 리포트가 없습니다. 크롤러가 매일 실행되면 이곳에 <b>일자별 리포트</b>가 자동으로 쌓입니다.</div>`; return; }
+        sec.innerHTML=`<div class="nx-note">매일 자동 수집된 결과를 <b>날짜별로 보관</b>합니다. 날짜를 눌러 변동 내역을 확인하고, <b>[확인]</b>으로 검토 표시를 남기세요. (일일결산용 · MD 공유)</div><div id="rpList"></div>`;
+        const listEl=sec.querySelector('#rpList');
+        function paint(){
+          const rv=store(REVIEWED_KEY).get({})||{};
+          listEl.innerHTML=days.map((d,i)=>{
+            const st=rv[d.day]; const open=(i===0);
+            const checked=(d.checked!=null?d.checked:(d.total!=null?d.total:null));
+            const total=(d.total!=null?d.total:null);
+            const cnt=(d.count!=null?d.count:(d.items||[]).length);
+            const np=(d.noprice!=null?d.noprice:'-'), fa=(d.failed!=null?d.failed:'-');
+            const rows=(d.items||[]);
+            return `<div class="rp-card">
+              <div class="rp-hd" data-toggle>
+                <span class="rp-date">${esc(d.day||'')}</span>
+                <span class="rp-stats">
+                  <span>검사 <b>${checked!=null?checked:'-'}${total!=null?` / ${total}`:''}</b></span>
+                  <span class="rp-chg">변동 <b>${cnt}</b>건</span>
+                  <span class="muted">무가격 ${np} · 실패 ${fa}</span>
+                </span>
+                <span class="rp-rev">${ st?`<span class="rp-ok">✔ ${esc(st.by||'')} 확인</span>`:`<button class="btn ghost sm" data-a="review" data-day="${esc(d.day)}">확인</button>` }
+                  <span class="rp-cv">${open?'▲':'▼'}</span></span>
+              </div>
+              <div class="rp-bd" style="display:${open?'block':'none'}">
+                ${ rows.length?`<table class="nx-t"><thead><tr><th>에듀이노코드</th><th>상품명</th><th style="text-align:right">기존가</th><th style="text-align:right">현재가</th><th style="text-align:right">변동</th></tr></thead><tbody>${rows.map(it=>{ const diff=(Number(it.newPrice)||0)-(Number(it.oldPrice)||0); const up=diff>0; return `<tr><td class="nx-code">${esc(it.ed||'')}</td><td>${esc(it.name||'')}</td><td class="num">${won(it.oldPrice)}원</td><td class="num"><b>${won(it.newPrice)}원</b></td><td class="num" style="color:${up?'var(--danger)':'var(--ok)'};font-weight:800">${up?'▲':'▼'} ${won(Math.abs(diff))}</td></tr>`; }).join('')}</tbody></table>`:`<div class="nx-empty" style="padding:22px">${icon('check2')}<div>이 날은 가격 변동이 없습니다.</div></div>` }
+              </div></div>`;
+          }).join('');
+          listEl.querySelectorAll('.rp-hd[data-toggle]').forEach(h=>h.onclick=(e)=>{ if(e.target.closest('[data-a=review]')) return;
+            const bd=h.parentElement.querySelector('.rp-bd'), cv=h.querySelector('.rp-cv');
+            const show=bd.style.display==='none'; bd.style.display=show?'block':'none'; if(cv) cv.textContent=show?'▲':'▼'; });
+          listEl.querySelectorAll('[data-a=review]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation();
+            const rv2=store(REVIEWED_KEY).get({})||{}; rv2[b.dataset.day]={ by:me.name||me.loginId||'', at:nowISO() };
+            store(REVIEWED_KEY).set(rv2); toast('확인 표시했습니다 (MD 공유)'); paint(); });
+        }
+        paint();
       }
 
       /* -------- 가격 변동 알림 -------- */
@@ -273,8 +327,8 @@
 
       async function load(){ const v=vendor(); const items=await collGet(v.coll);
         if(!root.isConnected) return;
-        const list=(items||[]).filter(d=>d&&d.type!=='mailcfg'); list.sort((a,b)=>String(b.day||'').localeCompare(String(a.day||'')));
-        const latest=list[0]; diffs=(latest&&latest.items)||[]; apDay=(latest&&latest.day)||''; draw();
+        const list=(items||[]).filter(d=>d&&d.type!=='mailcfg'&&d.day); list.sort((a,b)=>String(b.day||'').localeCompare(String(a.day||'')));
+        history=list; const latest=list[0]; diffs=(latest&&latest.items)||[]; apDay=(latest&&latest.day)||''; draw();
       }
       load();
     }

@@ -295,6 +295,7 @@ const SHARE_DEFAULT = {
   [STORE.ntrexMailCfg]:'md',         // 엔티렉스 공급가 요청 메일 양식 = MD 공유
   'eduino.ntrex.products':'md',      // 가격비교 취급상품 담당자 추가/수정 = MD 공유
   'eduino.ntrex.dismissed':'md',     // 가격 변동 알림 중 처리/삭제한 건 = MD 공유
+  'eduino.ntrex.reviewed':'md',      // 일일 리포트 확인 표시(담당자·날짜) = MD 공유
   'eduino.manual.cs':'cs',           // CS 업무 매뉴얼 = CS 공유
   'eduino.manual.md':'md',           // MD 업무 매뉴얼 = MD 공유
   'eduino.manual.logi':'all',        // 물류 업무 매뉴얼 = 전사 버킷 동기화(부서 스코프 미추가 · 페이지 접근은 부서/관리자로 제어)
@@ -318,7 +319,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csSmsTpl, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl, STORE.tsMailTpl, STORE.tsChatTpl,
-  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed',
+  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed', 'eduino.ntrex.reviewed',
   'eduino.manual.cs', 'eduino.manual.md', 'eduino.manual.logi',
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
@@ -356,6 +357,7 @@ const SHARED_LABELS = {
   [STORE.ntrexMailCfg]:'엔티렉스 공급가 요청 메일 양식',
   'eduino.ntrex.products':'가격비교 취급상품(담당자 편집)',
   'eduino.ntrex.dismissed':'가격비교 처리/삭제한 알림',
+  'eduino.ntrex.reviewed':'가격비교 일일 리포트 확인 표시',
   'eduino.manual.cs':'CS 업무 매뉴얼',
   'eduino.manual.md':'MD 업무 매뉴얼',
   'eduino.manual.logi':'물류 업무 매뉴얼',
