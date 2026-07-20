@@ -13,6 +13,8 @@
   const addMonth = (ym,delta)=>{ const [y,m]=ym.split('-').map(Number); return ymOf(new Date(y,(m-1)+delta,1)); };
   const rangeMonths = (from,to)=>{ const a=[]; let c=from; let guard=0; while(c<=to && guard++<60){ a.push(c); c=addMonth(c,1); } return a.length?a:[from]; };
   const monthRecs = async (dept,sheet,ym)=>{ try{ return (window.Records&&Records.month)?((await Records.month(dept,sheet,ym))||[]):[]; }catch(e){ return []; } };
+  const lastDay = ym=>{ const [y,m]=ym.split('-').map(Number); return ym+'-'+pad(new Date(y,m,0).getDate()); };   // 그 달 마지막 날 (YYYY-MM-DD)
+  const dayOf = r=>String(r.day||r.date||r.rdate||'').slice(0,10);   // 레코드 일자 (YYYY-MM-DD)
   const normSettle = s=>{ s=String(s||'').trim(); if(s==='원'||s==='월'||s==='월정산') return '월정산'; if(s==='선'||s==='선결제') return '선결제'; return s||'기타'; };
   const csGroup = g=>{ g=String(g||'').trim(); return (g==='견적'||g==='발주'||g==='후불')?g:'기타'; };
 
@@ -44,8 +46,8 @@
   MODULES['admin.sales']={
     title:'매출 데이터', icon:'chart',
     render(root){
-      const cym=ymOf(new Date());
-      let preset='m1', from=cym, to=cym;
+      const now=new Date(); const cym=ymOf(now); const cday=cym+'-'+pad(now.getDate());
+      let preset='m1', from=cym, to=cym;   // 프리셋: YYYY-MM · 직접설정(custom): YYYY-MM-DD
       root.innerHTML=`
       <style>
         .sl-period{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px}
@@ -53,7 +55,7 @@
         .sl-period .seg button{border:0;background:var(--panel);padding:8px 13px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
         .sl-period .seg button:first-child{border-left:0}
         .sl-period .seg button.on{background:var(--active-bg);color:var(--red)}
-        .sl-period input[type=month]{font:inherit;font-size:12.5px;border:1px solid var(--line-2);border-radius:8px;padding:6px 9px}
+        .sl-period input[type=month],.sl-period input[type=date]{font:inherit;font-size:12.5px;border:1px solid var(--line-2);border-radius:8px;padding:6px 9px}
         .sl-period .rng{display:flex;align-items:center;gap:6px}
         .sl-period .tot{margin-left:auto;font-size:12.5px;color:var(--muted)} .sl-period .tot b{color:var(--ink)}
         .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -121,24 +123,34 @@
 
       async function load(){
         body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
-        const months=rangeMonths(from,to);
+        // from/to 를 일(day) 경계로 정규화 — 프리셋(월)은 월 시작~말일, 직접설정은 선택 일자 그대로
+        const fromDay = from.length>7 ? from : from+'-01';
+        const toDay   = to.length>7 ? to : lastDay(to);
+        const months=rangeMonths(from.slice(0,7), to.slice(0,7));
         const [csPacks, mdPacks]=await Promise.all([
           Promise.all(months.map(m=>monthRecs('cs','postpay',m))),
           Promise.all(months.map(m=>monthRecs('md','orders',m))),
         ]);
         if(!root.isConnected) return;
-        const csAll=csPacks.flat(), mdAll=mdPacks.flat();
+        const inRange=r=>{ const d=dayOf(r); return d && d>=fromDay && d<=toDay; };   // 선택 기간(일 단위) 필터
+        const csAll=csPacks.flat().filter(inRange), mdAll=mdPacks.flat().filter(inRange);
+        // 월별 추이용 — 필터된 레코드를 월로 재분류
+        const csByM={}, mdByM={}; months.forEach(m=>{ csByM[m]=[]; mdByM[m]=[]; });
+        csAll.forEach(r=>{ const m=dayOf(r).slice(0,7); if(csByM[m]) csByM[m].push(r); });
+        mdAll.forEach(r=>{ const m=dayOf(r).slice(0,7); if(mdByM[m]) mdByM[m].push(r); });
         const csAgg=aggregate(csAll,'cs'), mdAgg=aggregate(mdAll,'md');
         // CS 매출 합계 = 발주 + 후불만 (견적은 견적서 단계라 합계 제외 · 아래 구분 행에는 그대로 표시)
         const csSalesOf=a=>(a.by['발주']?a.by['발주'].amount:0)+(a.by['후불']?a.by['후불'].amount:0);
         const csSales=csSalesOf(csAgg);
-        const csT=csPacks.map(p=>csSalesOf(aggregate(p,'cs'))), mdT=mdPacks.map(p=>aggregate(p,'md').total);
-        const rangeLabel = from===to?from:`${from} ~ ${to} · ${months.length}개월`;
+        const csT=months.map(m=>csSalesOf(aggregate(csByM[m],'cs'))), mdT=months.map(m=>aggregate(mdByM[m],'md').total);
+        const rangeLabel = preset==='custom'
+          ? (fromDay===toDay?fromDay:`${fromDay} ~ ${toDay}`)
+          : (from===to?from:`${from} ~ ${to} · ${months.length}개월`);
 
         body.innerHTML=`
           <div class="sl-period">
             <div class="seg">${PRESETS.map(([p,l])=>`<button data-p="${p}" class="${preset===p?'on':''}">${l}</button>`).join('')}</div>
-            ${preset==='custom'?`<span class="rng"><input type="month" id="slFrom" value="${esc(from)}"> ~ <input type="month" id="slTo" value="${esc(to)}"></span>`:''}
+            ${preset==='custom'?`<span class="rng"><input type="date" id="slFrom" value="${esc(fromDay)}"> ~ <input type="date" id="slTo" value="${esc(toDay)}"></span>`:''}
             <span class="tot">${esc(rangeLabel)} · 합계 <b>${won(csSales+mdAgg.total)}원</b></span>
           </div>
           <div class="sl-grid">
@@ -154,11 +166,11 @@
           <div class="sl-note">※ CS 매출 합계는 <b>발주+후불</b>만 집계합니다(견적은 견적서 단계라 합계 제외 · 구분 행에는 그대로 표시). 입점사 발주 '매입'은 발주(입고)금액 기준(수량×입고단가)입니다.</div>`;
 
         body.querySelectorAll('.sl-period .seg button').forEach(b=>b.onclick=()=>{ preset=b.dataset.p;
-          if(preset!=='custom'){ [from,to]=presetRange(preset,cym); } else { [from,to]=presetRange('m1',cym); }
+          if(preset!=='custom'){ [from,to]=presetRange(preset,cym); } else { from=cym+'-01'; to=cday; }   // 직접설정 초기값: 이번 달 1일 ~ 오늘
           load(); });
         const fEl=body.querySelector('#slFrom'), tEl=body.querySelector('#slTo');
-        if(fEl) fEl.onchange=()=>{ from=fEl.value||cym; if(from>to) to=from; load(); };
-        if(tEl) tEl.onchange=()=>{ to=tEl.value||cym; if(to<from) from=to; load(); };
+        if(fEl) fEl.onchange=()=>{ from=fEl.value||from; if(from>to) to=from; load(); };
+        if(tEl) tEl.onchange=()=>{ to=tEl.value||to; if(to<from) from=to; load(); };
       }
       load();
     }
