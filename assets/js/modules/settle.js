@@ -143,11 +143,13 @@
     @media(max-width:900px){.st-top3{grid-template-columns:1fr 1fr}}
     @media(max-width:560px){.st-top3{grid-template-columns:1fr}}
     /* CS 일일결산 좌/우 2단 (왼쪽 상담메모·금액 · 오른쪽 교환/반품/환불) */
-    .st-cs2{display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1.1fr);gap:20px;align-items:start}
-    @media(max-width:860px){.st-cs2{grid-template-columns:1fr}}
+    /* 왼쪽(상담·결산)은 좁게 고정, 오른쪽(교환/반품/환불)에 넓은 영역 확보 */
+    .st-cs2{display:grid;grid-template-columns:minmax(300px,390px) minmax(340px,1fr);gap:26px;align-items:start}
+    @media(max-width:880px){.st-cs2{grid-template-columns:1fr}}
     .st-lalign .st-tbl .stnum,.st-lalign .st-dtl .stnum{text-align:left}
     .st-who{display:inline-block;font-weight:700;border-radius:5px;padding:1px 8px;font-size:12px;background:var(--line-2);color:var(--ink-2)}
-    .st-ppl-col{display:flex;flex-direction:column;gap:6px;min-width:110px}
+    .st-ppl-col{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;min-width:0}
+    .st-ppl-col .st-chip{width:auto;flex:0 0 auto}
     .st-tbl{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden}
     .st-tbl td{padding:9px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
     .st-tbl tr:last-child td{border-bottom:none}
