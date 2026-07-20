@@ -14,7 +14,7 @@
     filterFields:[{k:'gubun',label:'구분'}],
     fields:[
       { k:'rdate',    label:'접수일자',  type:'date' },
-      { k:'gubun',    label:'구분',      type:'select', options:['견적','발주','후불','결제요청','기타'], req:true },
+      { k:'gubun',    label:'구분',      type:'select', options:['견적','발주','후불','개인결제','결제요청','기타'], req:true },
       { k:'agent',    label:'담당자',    type:'agent',  options:['신아름','함인영'] },
       { k:'route',    label:'경로',      type:'select', options:['게시판','메일','전화','카톡','톡톡','대표님소개','업무폰','학교장터','연구비카드'] },
       { k:'custType', label:'고객유형',  type:'select', options:CS_CUSTOMER_TYPES },

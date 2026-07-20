@@ -41,6 +41,9 @@
         table.pq td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
         table.pq td.wrap{white-space:pre-wrap;word-break:break-word;min-width:200px;line-height:1.45}
         table.pq tfoot td{background:var(--panel-2);font-weight:800;border-top:2px solid var(--line-2)}
+        table.pq tr.pq-gtop td{border-top:2px solid var(--line-2)}
+        table.pq tr.pq-sub td{background:var(--panel-2);font-weight:800;color:var(--ink-2);border-bottom:1px solid var(--line-2)}
+        table.pq tr.pq-sub td:first-child{text-align:right;color:var(--muted)}
         .pq-in{height:34px;font:inherit;border:1px solid var(--line-2);border-radius:7px;padding:0 9px;background:var(--panel);width:100%;min-width:90px}
         .pq-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:14px 16px;margin-bottom:16px}
         .pq-hdrow{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;margin-bottom:12px}
@@ -74,8 +77,8 @@
             <div class="pq-f"><label>&nbsp;</label><button class="btn pri" id="pfAdd">${icon('check')}추가</button></div>
           </div></div>`;
       }
-      function rowView(r){
-        return `<tr>
+      function rowView(r, first){
+        return `<tr class="${first?'pq-gtop':''}">
           <td style="white-space:nowrap">${esc(String(r.day||r.date||'').slice(5))}</td>
           <td>${kindBadge(r.kind||'발주')}</td>
           <td style="white-space:nowrap">${esc(r.orderer||'')}</td>
@@ -102,9 +105,28 @@
           <td style="white-space:nowrap"><span style="display:flex;gap:4px"><button class="btn pri sm" data-a="save" data-id="${esc(r.id)}">${icon('check')}</button><button class="btn ghost sm" data-a="cancel">취소</button></span></td>
         </tr>`;
       }
+      // 같은 입점사(업체)끼리 묶어 표시 + 업체별 소계 (같은 날짜 기준 · 결제 통합용)
+      function bodyRows(rows){
+        let html='', i=0;
+        while(i<rows.length){
+          const v=String(rows[i].vendor||'').trim(); const grp=[]; let j=i;
+          while(j<rows.length && String(rows[j].vendor||'').trim()===v){ grp.push(rows[j]); j++; }
+          grp.forEach((r,idx)=>{ html+= editId===r.id?rowEdit(r):rowView(r, idx===0); });
+          if(grp.length>1 && !grp.some(r=>r.id===editId)){
+            const gt=grp.reduce((s,r)=>s+parseAmt(r.amount),0), gq=grp.reduce((s,r)=>s+(Number(r.qty)||0),0);
+            html+=`<tr class="pq-sub"><td colspan="5">${esc(v||'(미지정)')} · ${grp.length}건 소계</td><td class="num">${gq||''}</td><td class="num">${won(gt)}원</td><td ${editable?'colspan="2"':''}></td></tr>`;
+          }
+          i=j;
+        }
+        return html;
+      }
       function paint(){
         if(!root.isConnected) return;
-        const rows=all.slice().sort((a,b)=>String(a.kind==='발주'?0:1).localeCompare(String(b.kind==='발주'?0:1)) || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+        // 업체(입점사)별로 묶고, 그 안에서 발주 먼저·입력순 — 같은 날짜의 같은 입점사 주문이 인접+소계로 통합 표시
+        const rows=all.slice().sort((a,b)=>
+          String(a.vendor||'').localeCompare(String(b.vendor||''))
+          || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1))
+          || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
         const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
         const qtyTotal=rows.reduce((s,r)=>s+(Number(r.qty)||0),0);
         const cols=editable?9:8;
@@ -121,7 +143,7 @@
           <div class="bd-meta" style="font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600">${esc(date)} · 결제요청 ${rows.length}건 · 합계 <b style="color:var(--red)">${won(total)}원</b></div>
           <div class="pq-wrap"><table class="pq">
             <thead><tr><th>날짜</th><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th><th>계좌정보</th>${editable?'<th></th>':''}</tr></thead>
-            <tbody>${rows.length?rows.map(r=>editId===r.id?rowEdit(r):rowView(r)).join(''):`<tr><td class="pq-empty" colspan="${cols}">${esc(date)}에 결제요청 내역이 없습니다.${editable?' 선결제 발주를 저장하거나 위에서 수동 추가하세요.':''}</td></tr>`}</tbody>
+            <tbody>${rows.length?bodyRows(rows):`<tr><td class="pq-empty" colspan="${cols}">${esc(date)}에 결제요청 내역이 없습니다.${editable?' 선결제 발주를 저장하거나 위에서 수동 추가하세요.':''}</td></tr>`}</tbody>
             ${rows.length?`<tfoot><tr><td colspan="5">합계</td><td class="num">${qtyTotal||''}</td><td class="num">${won(total)}원</td><td ${editable?'colspan="2"':''}></td></tr></tfoot>`:''}
           </table></div>`;
         wire();

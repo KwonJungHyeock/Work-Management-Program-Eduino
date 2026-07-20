@@ -32,6 +32,7 @@
         const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
         const me=(Auth.user&&Auth.user())||{};
         const canDel=isAdmin || me.role==='lead' || (cfg.memberDelete && me.dept===cfg.dept);   // 파트장급 · (보드가 허용 시)해당 부서원
+        const canOpt=isAdmin || (me.role==='lead' && me.dept===cfg.dept);   // 선택 항목(속성값) 추가·삭제 = 관리자 또는 해당 부서 파트장
         // 담당자 목록 (사용자 편집 · 로컬 저장) — whoField 가 select/agent 인 경우
         const whoCfg = cfg.fields.find(f=>f.k===cfg.whoField);
         const agentsKey = 'eduino.md.board.'+cfg.sheet+'.agents';
@@ -109,7 +110,7 @@
           <div id="syncPanel" class="hidden" style="margin-bottom:20px"></div>
           <div class="bd-card">
             <div class="bd-hd">새 기록 입력
-              ${isAdmin && (cfg.fields||[]).some(f=>f.type==='select')?`<button type="button" class="btn ghost sm" id="bOptEdit" style="margin-left:auto">${icon('settings')}선택 항목 편집</button>`:''}</div>
+              ${canOpt && (cfg.fields||[]).some(f=>f.type==='select')?`<button type="button" class="btn ghost sm" id="bOptEdit" style="margin-left:auto">${icon('settings')}선택 항목 편집</button>`:''}</div>
             <div class="bd-bd"><form id="bForm"><div class="bd-grid" id="fGrid"></div>
               <div class="bd-actions">
                 <button type="submit" class="btn pri lg">${icon('save')}저장</button>
@@ -160,7 +161,7 @@
             // 선택 항목 = 공용 옵션 레지스트리(OptionSets) · 관리자는 드롭다운에서 ＋추가, 삭제는 [선택 항목 편집]에서
             const setKey=cfg.key+'.'+f.k;
             const buildSel=(cur)=>{ const opts=OptionSets.get(setKey, f.options||[]);
-              return `<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 항목 추가…</option>':''}`; };
+              return `<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${canOpt?'<option value="__add">＋ 항목 추가…</option>':''}`; };
             wrap.innerHTML=lab+`<select data-k="${esc(f.k)}">${buildSel(form[f.k])}</select>`;
             grid.appendChild(wrap);
             const sel=wrap.querySelector('select');
@@ -360,14 +361,14 @@
         // 선택 항목 편집(관리자) — 드롭다운 옵션 추가/삭제를 한곳에서 · 팀 자동 공유
         function refreshSelect(fk){ const sel=grid.querySelector(`select[data-k="${fk}"]`); if(!sel) return;
           const f=cfg.fields.find(x=>x.k===fk); const opts=OptionSets.get(cfg.key+'.'+fk, f.options||[]); const cur=form[fk];
-          sel.innerHTML=`<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${isAdmin?'<option value="__add">＋ 항목 추가…</option>':''}`;
+          sel.innerHTML=`<option value="">(선택)</option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}${canOpt?'<option value="__add">＋ 항목 추가…</option>':''}`;
           if(cur && !opts.includes(cur)) form[fk]=''; }
         if($('#bOptEdit')) $('#bOptEdit').onclick=()=>{
           const selects=cfg.fields.filter(f=>f.type==='select');
           const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
           const inner=el('div',''); inner.style.cssText='background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:600px;width:100%;max-height:86vh;overflow:auto;padding:22px 24px;box-shadow:var(--sh-lg)';
           function draw(){ inner.innerHTML=`<div style="font-size:16px;font-weight:800;margin-bottom:4px">${icon('settings')} 선택 항목 편집</div>
-            <div class="muted" style="font-size:12.5px;margin-bottom:16px">관리자 전용 · 저장 즉시 <b>팀 전체에 반영</b>됩니다. 항목의 <b>✕</b>로 삭제, 아래 칸으로 추가하세요.</div>
+            <div class="muted" style="font-size:12.5px;margin-bottom:16px">관리자·해당 부서 파트장 · 저장 즉시 <b>팀 전체에 반영</b>됩니다. 항목의 <b>✕</b>로 삭제, 아래 칸으로 추가하세요.</div>
             ${selects.map(f=>{ const opts=OptionSets.get(cfg.key+'.'+f.k, f.options||[]);
               return `<div style="margin-bottom:16px"><div style="font-weight:700;font-size:13px;margin-bottom:7px">${esc(f.label)}</div>
                 <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
