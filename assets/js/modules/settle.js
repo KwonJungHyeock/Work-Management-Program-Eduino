@@ -50,12 +50,12 @@
     recs=recs||[]; const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
     recs.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
     const won=n=>Number(n||0).toLocaleString();
-    const tc=order.reduce((a,k)=>a+g[k].c,0), ts=order.reduce((a,k)=>a+g[k].s,0);
+    const salesK=['발주','후불']; const tc=salesK.reduce((a,k)=>a+g[k].c,0), ts=salesK.reduce((a,k)=>a+g[k].s,0);   // 매출합계=발주+후불(견적 제외)
     return `<div class="st-sec-cap">견적·발주·후불 결산 (금액)</div>
       <div style="overflow-x:auto"><table class="st-tbl" style="max-width:540px"><tbody>
         <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
         ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
-        <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
+        <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
       </tbody></table></div>`;
   }
   /* CS 상단 3열: 항목별 집계 · 담당자별(축소) · 견적/발주/후불 금액결산 */
@@ -64,7 +64,7 @@
     const ppl=Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]);
     const recs=(agg.details&&agg.details.postpay)||[]; const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
     recs.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
-    const won=n=>Number(n||0).toLocaleString(); const tc=order.reduce((a,k)=>a+g[k].c,0), ts=order.reduce((a,k)=>a+g[k].s,0);
+    const won=n=>Number(n||0).toLocaleString(); const salesK=['발주','후불']; const tc=salesK.reduce((a,k)=>a+g[k].c,0), ts=salesK.reduce((a,k)=>a+g[k].s,0);   // 매출합계=발주+후불(견적 제외)
     return `<div class="st-top3">
       <div><div class="st-sec-cap" style="margin-top:0">항목별 집계</div>
         <table class="st-tbl"><tbody>${rows}<tr class="st-tot"><td>합계</td><td class="stnum">${agg.total}</td></tr></tbody></table></div>
@@ -74,7 +74,7 @@
         <table class="st-tbl"><tbody>
           <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
           ${order.map(k=>`<tr><td>${(typeof tagBadge==='function')?tagBadge(k,'st-dt-badge'):esc(k)}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
-          <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
+          <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
         </tbody></table></div>
     </div>`;
   }
@@ -101,7 +101,7 @@
     const won=n=>Number(n||0).toLocaleString();
     const order=['견적','발주','후불']; const g={}; order.forEach(k=>g[k]={c:0,s:0});
     pay.forEach(r=>{ const k=String(r.gubun||'').trim(); if(g[k]){ g[k].c++; g[k].s+=parseAmt(r.amount); } });
-    const tc=order.reduce((a,k)=>a+g[k].c,0), ts=order.reduce((a,k)=>a+g[k].s,0);
+    const salesK=['발주','후불']; const tc=salesK.reduce((a,k)=>a+g[k].c,0), ts=salesK.reduce((a,k)=>a+g[k].s,0);   // 매출합계=발주+후불(견적 제외)
     const ppl=Object.entries(agg.byPerson).sort((a,b)=>b[1]-a[1]);
     const badge=(typeof tagBadge==='function')?tagBadge:(v=>esc(v));
     const left=`
@@ -111,7 +111,7 @@
       <table class="st-tbl"><tbody>
         <tr style="font-weight:800;background:var(--panel-2)"><td>구분</td><td class="stnum">건수</td><td class="stnum">총금액</td></tr>
         ${order.map(k=>`<tr><td>${badge(k,'st-dt-badge')}</td><td class="stnum">${g[k].c}</td><td class="stnum">${won(g[k].s)}원</td></tr>`).join('')}
-        <tr class="st-tot"><td>합계</td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
+        <tr class="st-tot"><td>매출합계<span style="font-weight:500;color:var(--muted);font-size:11px"> · 발주+후불</span></td><td class="stnum">${tc}</td><td class="stnum">${won(ts)}원</td></tr>
       </tbody></table>
       <div class="st-sec-cap">담당자별</div>
       <div class="st-ppl-col">${ppl.length?ppl.map(([n,v])=>`<span class="st-chip" style="${personStyle(n)}">${esc(n)} <b>${v}</b></span>`).join(''):'<span class="muted" style="font-size:12.5px">기록 없음</span>'}</div>`;
