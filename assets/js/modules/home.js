@@ -299,16 +299,14 @@
         #dashWrap > .console{margin:0}
         .dash-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start;margin:0}
         @media(max-width:900px){.dash-2{grid-template-columns:1fr}}
-        /* 요약 타일 — 살짝 도드라지는 상단 하이라이트 + 부드러운 그림자로 "현황판" 느낌 */
-        #statRow{margin:0;gap:14px}
-        #statRow .tile{border-radius:15px;padding:16px 17px;box-shadow:var(--sh-sm);
-          background:linear-gradient(180deg,color-mix(in srgb,var(--tc,var(--red)) 5%,var(--panel)),var(--panel) 62%)}
-        #statRow .tile::before{width:0}
-        #statRow .tile .tl{display:flex;align-items:center;gap:7px;font-size:11.5px}
-        #statRow .tile .tl .ic{width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;
-          font-size:14px;color:var(--tc,var(--red));background:color-mix(in srgb,var(--tc,var(--red)) 13%,transparent)}
-        #statRow .tile .tv{font-size:32px;margin-top:12px}
-        #statRow .tile.click:hover{transform:translateY(-2px);box-shadow:var(--sh);border-color:color-mix(in srgb,var(--tc,var(--red)) 45%,var(--line))}
+        /* 좌측 하단 임베드 달력 — 팀 일정 공유 확인용(컴팩트) */
+        .dash-cal .mbody{padding:12px 12px 14px}
+        .dash-cal .cal-wrap{max-width:none}
+        .dash-cal .cal-bar{margin-bottom:10px}
+        .dash-cal .cal-title{font-size:15px;min-width:110px}
+        .dash-cal .cal-cell{min-height:60px}
+        .dash-cal .cal-ev{font-size:10.5px}
+        .dash-cal .cal-day{margin-top:12px;padding:13px 15px}
         .dcard{border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden;box-shadow:var(--sh-sm)}
         .dcard-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);
           font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
@@ -366,10 +364,13 @@
             <div class="c-metric"><small>접속</small><span class="c-live"><i></i><span id="ckPres">–</span>명</span></div>
           </div>
         </div>
-        <div class="tile-row" id="statRow">${Array.from({length:4}).map(()=>`<div class="tile" style="--tc:var(--line-strong)"><div class="skel skel-line" style="width:56%"></div><div class="skel skel-line" style="width:40%;height:24px;margin-top:10px"></div></div>`).join('')}</div>
         <div class="dash-2">
-          <div class="dcard"><div class="dcard-hd">${icon('megaphone')}공지사항 <span class="more" data-go="home.notice">전체 보기</span></div>
-            <div class="dcard-bd" id="dNotice"><div class="muted" style="padding:10px">불러오는 중…</div></div></div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="dcard"><div class="dcard-hd">${icon('megaphone')}공지사항 <span class="more" data-go="home.notice">전체 보기</span></div>
+              <div class="dcard-bd" id="dNotice"><div class="muted" style="padding:10px">불러오는 중…</div></div></div>
+            <div class="dcard"><div class="dcard-hd">${icon('check2')}일정·달력 <span class="more" data-go="home.calendar">전체 보기</span></div>
+              <div id="dashCal" class="dash-cal"><div class="muted" style="padding:12px">불러오는 중…</div></div></div>
+          </div>
           <div style="display:flex;flex-direction:column;gap:14px">
             <div class="dcard"><div class="dcard-hd">${icon('users')}접속 중 <span class="more" id="presMore"></span></div>
               <div class="dcard-bd" id="dPres"><div class="muted" style="padding:10px">…</div></div></div>
@@ -416,53 +417,24 @@
       (typeof QUICK_LINKS!=='undefined'?QUICK_LINKS:[]).forEach(l=>{ const a=el('a','ql-chip'); a.href=l.url; a.target='_blank'; a.rel='noopener noreferrer';
         a.innerHTML=`${icon('external')}${esc(l.name)}`; ql.appendChild(a); });
 
-      // 통계 카드
-      function renderStats(nUnreadNotice, nMemo, nCbOpen, todayCs){
-        todayCs=todayCs||0;
-        const cards=[
-          { k:'home.notice', ic:'megaphone', l:'미확인 공지', v:nUnreadNotice, c:'var(--d1)' },
-          { k:'home.memo',   ic:'send',      l:'새 메모',     v:nMemo, c:'var(--d4)' },
-        ];
-        if(u.dept==='cs'||u.role==='admin'){
-          cards.push({ k:'cs.notes', ic:'clipboard', l:'미처리 콜백', v:nCbOpen, c:'var(--d3)' });
-          cards.push({ k:'cs.notes', ic:'headset',   l:'오늘 상담',   v:todayCs, c:'var(--d1)' });
-        }
-        if(u.role==='lead'){ cards.push({ k:'admin.insights', ic:'chart', l:'우리 파트 현황', link:true, c:'var(--d2)' }); }
-        const row=root.querySelector('#statRow'); if(!row) return; row.innerHTML='';
-        cards.forEach(c=>{ const d=el('div','tile click'); d.style.setProperty('--tc',c.c);
-          d.innerHTML=c.link
-            ? `<div class="tl">${icon(c.ic)}${c.l}</div><div class="tv" style="font-size:17px;color:var(--muted);font-weight:700;margin-top:9px">열기 →</div>`
-            : `<div class="tl">${icon(c.ic)}${c.l}</div><div class="tv">${c.v}<small>건</small></div>`;
-          d.onclick=()=>{ location.hash=c.k; }; row.appendChild(d); });
-      }
+      // 헤더 '전체 보기' 링크 + 좌측 하단 팀 일정 달력(전사 공유) 임베드
+      root.querySelectorAll('.dcard-hd .more[data-go]').forEach(m=>m.onclick=()=>location.hash=m.dataset.go);
+      (function(){ const cal=root.querySelector('#dashCal'); if(cal && typeof embedModule==='function') embedModule(cal,'home.calendar'); })();
 
       // 공지 최근
       (async()=>{
         const raw=await collGet('notice');
         const box=root.querySelector('#dNotice'); if(!box || !root.isConnected) return;
-        if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; renderStats(0,0,0,0); }
+        if(raw===null){ box.innerHTML=`<div class="muted" style="padding:10px">공용 저장소 연결 후 표시됩니다.</div>`; }
         else {
           const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===u.loginId)||(m.t==='dept'&&m.v===u.dept));
           const list=raw.filter(n=>visibleTo(n.dept||'all',u)||mentMe(n)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-          const unread=list.filter(n=>!(n.readBy||[]).includes(u.loginId)).length;
           box.innerHTML = list.length ? list.slice(0,5).map(n=>{
             const ur=!(n.readBy||[]).includes(u.loginId);
             return `<div class="drow" data-go="home.notice">${ur?'<span class="pin"></span>':'<span style="width:7px"></span>'}
               <span class="dt">${esc(n.title||'(제목 없음)')}</span><span class="dm">${esc(dateShort(n.createdAt))}</span></div>`;
           }).join('') : `<div class="muted" style="padding:10px">공지가 없습니다.</div>`;
           box.querySelectorAll('[data-go]').forEach(r=>r.onclick=()=>location.hash='home.notice');
-          // 메모·미처리 콜백 카운트도 함께
-          const memos=await collGet('memo');
-          const nMemo=(memos||[]).filter(m=>!m.done && (visibleTo(m.to||'all',u)) && m.author!==u.loginId).length;
-          const cbs=await collGet('callbacks');
-          const nCb=(cbs||[]).filter(c=>!c.done).length;
-          // 오늘 상담 — 서버 누적 시트에서 오늘 날짜 건수 집계(로컬 저장소 아님)
-          let todayCs=0;
-          if(u.dept==='cs'||u.role==='admin'){
-            try{ const recs=(window.Records&&Records.month)?await Records.month('cs','notes',todayStr().slice(0,7)):[];
-              todayCs=(recs||[]).filter(r=>(r.day||r.date||'')===todayStr()).length; }catch{}
-          }
-          renderStats(unread, nMemo, nCb, todayCs);
         }
       })();
 

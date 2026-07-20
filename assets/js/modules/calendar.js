@@ -21,7 +21,7 @@
   const koDate=s=>{ const {y,m,d}=parseYmd(s); const dow=new Date(y,m,d).getDay(); return `${y}년 ${m+1}월 ${d}일 (${DOW[dow]})`; };
 
   MODULES['home.calendar']={
-    title:'일정', icon:'check2',
+    title:'일정·달력', icon:'check2',
     render(root){
       const u=meU();
       const now=new Date();
