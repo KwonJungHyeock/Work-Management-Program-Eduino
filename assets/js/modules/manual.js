@@ -169,7 +169,7 @@
     seed:['CS상담','견적/발주/후불','교환/반품','중국 발주요청','답변·메일 템플릿','고객 정보 검색'],
     ensure:{ id:'csDiscount', name:'CS할인정책', single:true, content:CS_DISCOUNT } });
   buildManual({ key:'md.manual', dept:'md', storeKey:'eduino.manual.md', title:'업무 매뉴얼',
-    seed:['입점사 발주','결제요청','입점사 관리','상품·품질 관리','가격비교','TS상담'] });
+    seed:['입점사 발주','결제요청','입점사 관리','상품·품절 관리','가격비교','TS상담'] });
   buildManual({ key:'logi.manual', dept:'logi', storeKey:'eduino.manual.logi', title:'업무 매뉴얼',
     seed:['입출고','재고관리','배송/택배','반품/교환 처리'] });
 

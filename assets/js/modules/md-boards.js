@@ -546,7 +546,7 @@
 
   // 상품관리·품절관리·제품검수를 한 메뉴에서 서브탭으로 (개별 보드는 그대로 유지 · 임베드)
   MODULES['md.prodhub']={
-    title:'상품·품질 관리', icon:'grid',
+    title:'상품·품절 관리', icon:'grid',
     render(root){
       const SUBS=[
         { t:'prodmgmt', key:'md.prodmgmt', label:'상품관리' },
@@ -556,7 +556,7 @@
       let tab='prodmgmt';
       root.innerHTML=`
         <div class="mhead">
-          <div class="tt">상품·품질 관리</div>
+          <div class="tt">상품·품절 관리</div>
           <div class="ds">상품관리 · 품절관리 · 제품검수 현황을 한 곳에서 관리합니다.</div>
           <div class="mtabs">${SUBS.map(s=>`<div class="t" data-t="${s.t}">${esc(s.label)}</div>`).join('')}</div>
         </div>

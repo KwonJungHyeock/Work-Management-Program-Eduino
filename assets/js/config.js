@@ -171,6 +171,7 @@ const NAV = [
       { key:'home.alerts', name:'알림',        icon:'bell' },
       { key:'home.notice', name:'공지사항',   icon:'megaphone' },
       { key:'home.memo',   name:'업무 메모',   icon:'send' },
+      { key:'home.calendar', name:'일정',      icon:'check2' },
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.notes',     name:'CS상담 메모',   icon:'clipboard' },
@@ -188,7 +189,7 @@ const NAV = [
       { key:'md.order',     name:'입점사 발주',        icon:'truck' },
       { key:'md.payreq',    name:'결제요청',           icon:'stamp' },
       { key:'md.vendormgmt', name:'입점사 관리',        icon:'truck' },
-      { key:'md.prodhub',   name:'상품·품질 관리',     icon:'grid' },
+      { key:'md.prodhub',   name:'상품·품절 관리',     icon:'grid' },
       { key:'md.pricewatch', name:'가격비교',           icon:'chart' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
       { key:'md.tstpl',     name:'기술상담 템플릿',     icon:'chat' },
