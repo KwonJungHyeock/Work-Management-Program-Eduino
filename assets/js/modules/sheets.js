@@ -333,6 +333,7 @@
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 같은 주문서는 묶여서 입력순으로 표시되며, ▲▼로 순서를 바꿀 수 있습니다. 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자', reorderable:true, ordKey:'ord', groupKey:'orderGroup',
+    filters:[{k:'settle',label:'정산구분'},{k:'gubun',label:'구분'},{k:'orderStatus',label:'발주여부'}],   // 월정산/선결제 등 따로 보기
     // 하나의 주문서(여러 상품)는 발주 기록에서도 주문건 공통 컬럼을 rowspan 병합해 한 건으로 표시
     groupMergeKeys:['date','whoName','gubun','route','orderer','vendor','settle','ship','shipInfo'],
     // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · CS와 동일 records+id upsert(중복 없음)
