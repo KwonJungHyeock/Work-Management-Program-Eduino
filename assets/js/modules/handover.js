@@ -13,13 +13,22 @@
   async function collPush(coll,item){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll,item})}); return r.ok; }catch(e){ return false; } }
   async function collDel(coll,id){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collDel',coll,id})}); return r.ok; }catch(e){ return false; } }
 
-  // 기본 카드 항목(MD 입점사) — 담당자·결제조건·중요/주의사항·메모
+  // 기본 카드 항목(MD 입점사) — 입점사명(name)은 상단 고정, 아래 15개 항목
   const DEFAULT_FIELDS=[
-    { k:'manager',  label:'담당자',   ph:'우리 측 / 상대 측 담당자·연락처', badge:true },
-    { k:'payTerms', label:'결제조건', ph:'예: 월말마감 익월정산 / 선결제 / 위탁' },
-    { k:'important',label:'중요사항', ta:1, ph:'꼭 알아야 할 핵심 정보(단가·정산·핵심 연락)' },
-    { k:'caution',  label:'주의사항', ta:1, ph:'실수하기 쉬운 점·리스크·금기' },
-    { k:'memo',     label:'메모',     ta:1, ph:'기타 참고·협상 이력 등' },
+    { k:'gradeSettle', label:'등급/정산', ph:'예: A급 / 월정산',            badge:true },
+    { k:'status',      label:'상태',      ph:'예: 거래중 / 중단 / 신규',    badge:true },
+    { k:'category',    label:'상품분류',  ph:'예: 로봇·코딩 / 교재·키트' },
+    { k:'manager',     label:'담당자',    ph:'우리 측 / 상대 측 담당자',    badge:true },
+    { k:'contact',     label:'연락처',    ph:'02-000-0000 / 010-0000-0000' },
+    { k:'email',       label:'이메일',    ph:'name@example.com' },
+    { k:'discountRate',label:'할인율',    ph:'예: 20% / 키트 20% 보드 10%' },
+    { k:'orderDeadline',label:'발주마감', ph:'예: 매주 화 15시 / 월말' },
+    { k:'courier',     label:'택배사',    ph:'예: CJ대한통운 / 로젠' },
+    { k:'shipTerms',   label:'배송조건',  ph:'예: 3만원 이상 무료 / 착불' },
+    { k:'shipMethod',  label:'배송방식',  ph:'예: 택배 / 직배송 / 화물' },
+    { k:'bizNo',       label:'사업자번호',ph:'000-00-00000' },
+    { k:'site',        label:'판매사이트',ph:'https:// 또는 쇼핑몰명·아이디' },
+    { k:'memo',        label:'비고',      ta:1, ph:'기타 참고·협상 이력 등' },
   ];
   // CS 파트너사 카드 항목 — 등급·공급율·사이트·담당자·연락처·메일·결제조건·메모
   const PARTNER_FIELDS=[
@@ -101,18 +110,19 @@
               ? (f.ta?`<textarea data-k="${f.k}" style="width:100%;min-height:70px;font:inherit;font-size:13px;line-height:1.6;border:1px solid var(--line-2);border-radius:8px;padding:9px 11px;resize:vertical" placeholder="${esc(f.ph)}">${esc(val)}</textarea>`
                        :`<input data-k="${f.k}" style="width:100%;font:inherit;font-size:13px;border:1px solid var(--line-2);border-radius:8px;padding:8px 11px" placeholder="${esc(f.ph)}" value="${esc(val)}">`)
               : `<div style="white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--ink-2);min-height:20px">${esc(val)||'<span class="muted">-</span>'}</div>`;
-            return `<div style="margin-bottom:12px"><div class="muted" style="font-size:11.5px;font-weight:800;margin-bottom:4px">${esc(f.label)}</div>${input}</div>`;
+            const span = f.ta ? 'grid-column:1/-1;' : '';
+            return `<div style="${span}"><div class="muted" style="font-size:11.5px;font-weight:800;margin-bottom:4px">${esc(f.label)}</div>${input}</div>`;
           };
-          ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:540px;width:96%;max-height:calc(100vh - 48px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+          ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:660px;width:96%;max-height:calc(100vh - 48px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
             <div style="padding:18px 22px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
               <div style="font-size:16px;font-weight:800;flex:1">${icon('folder')} ${isNew?`새 ${esc(cfg.unit)} 등록`:esc(cfg.unit)+' 인수인계 카드'}</div>
               <button class="btn ghost sm" id="hvClose">${icon('x')}</button>
             </div>
             <div style="padding:16px 22px;overflow-y:auto">
-              <div style="margin-bottom:12px"><div class="muted" style="font-size:11.5px;font-weight:800;margin-bottom:4px">${esc(cfg.unit)}명</div>
+              <div style="margin-bottom:14px"><div class="muted" style="font-size:11.5px;font-weight:800;margin-bottom:4px">${esc(cfg.unit)}명</div>
                 ${edit?`<input id="hvName" style="width:100%;font:inherit;font-size:14px;font-weight:700;border:1px solid var(--line-2);border-radius:8px;padding:9px 11px" placeholder="${esc(cfg.unit)}명" value="${esc(v.name||'')}">`
                       :`<div style="font-size:15px;font-weight:800">${esc(v.name||'')}</div>`}</div>
-              ${FIELDS.map(fieldHtml).join('')}
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px">${FIELDS.map(fieldHtml).join('')}</div>
               ${v.updatedBy?`<div class="muted" style="font-size:11.5px;margin-top:4px">최종 수정: ${esc(v.updatedBy)} · ${esc((v.updatedAt||'').slice(0,10))}</div>`:''}
               <div id="hvMsg" class="muted" style="font-size:12.5px;margin-top:6px;min-height:16px"></div>
             </div>
@@ -152,9 +162,12 @@
         const nrm=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
         function csvCell(v){ v=String(v==null?'':v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
         function templateCsv(){
-          const sample={ name:'(주)로보라이즌', manager:'홍길동 / 010-0000-0000', payTerms:'월말마감 익월정산',
-            important:'예: 핵심 단가·정산 조건', caution:'예: 주의할 점', memo:'예: 참고 메모',
-            grade:'파트너사 A', supplyRate:'키트 20% / 보드 10%', site:'https://example.com', contact:'02-000-0000', email:'contact@example.com' };
+          const sample={ name:'(주)로보라이즌', gradeSettle:'A급 / 월정산', status:'거래중', category:'로봇·코딩',
+            manager:'홍길동', contact:'010-0000-0000', email:'contact@example.com', discountRate:'20%',
+            orderDeadline:'매주 화 15시', courier:'CJ대한통운', shipTerms:'3만원 이상 무료', shipMethod:'택배',
+            bizNo:'000-00-00000', site:'https://example.com', memo:'참고 메모',
+            // 파트너사(CS) 필드 예시도 함께
+            grade:'파트너사 A', supplyRate:'키트 20% / 보드 10%', payTerms:'월말마감 익월정산' };
           const header=COLS.map(c=>c.label);
           const ex=COLS.map(c=>sample[c.k]!=null?sample[c.k]:'');
           return '﻿'+[header, ex].map(r=>r.map(csvCell).join(',')).join('\r\n');
