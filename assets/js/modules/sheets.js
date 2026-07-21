@@ -55,6 +55,10 @@
           table.sv td[data-msp]{vertical-align:top;background:var(--panel-2)}
           table.sv tr.sv-grp-first>td{border-top:2px solid var(--line-2)}
           table.sv tr.sv-grp-sub td{background:transparent}
+          /* 출고지연 강조 — 행 전체 빨강 배경 + 좌측 빨간 바 */
+          table.sv tr.sv-late>td{background:#fdecec !important}
+          table.sv tr.sv-late td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+          table.sv tr.sv-late.sv-grp-sub td{background:#fdecec !important}
           .sv-mv{border:1px solid var(--line-2);background:var(--panel);color:var(--muted);cursor:pointer;border-radius:5px;padding:2px 6px;font-size:11px;line-height:1}
           .sv-mv:hover{background:var(--hover);color:var(--ink)}
         </style>
@@ -128,8 +132,8 @@
           // 담당자 컬러 배지(상담사별 색 구분)
           if(c.color && v){ const col=colorForName(v);
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:800;color:${col};background:${col}1a;border-radius:6px;padding:2px 9px">${esc(v)}</span></td>`; }
-          // 구분/분류/상태 값별 색상 배지
-          if(c.tag && v && typeof tagBadge==='function'){ const cl=tagColor(v);
+          // 구분/분류/상태 값별 색상 배지 (출고지연·발주취소는 빨강 강조)
+          if(c.tag && v && typeof tagBadge==='function'){ const cl=(v==='출고지연'||v==='발주취소')?{bg:'#fdeaea',fg:'#c53434'}:tagColor(v);
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;background:${cl.bg};color:${cl.fg}">${esc(v)}</span></td>`; }
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
@@ -167,20 +171,21 @@
           const grpCnt={}; if(cfg.groupKey) show.forEach(r=>{ const g=r[cfg.groupKey]; if(g) grpCnt[g]=(grpCnt[g]||0)+1; });
           const MERGE=(cfg.groupMergeKeys&&cfg.groupMergeKeys.length)?cfg.groupMergeKeys:null;   // 주문건 공통 컬럼(rowspan 병합)
           const tdRowspan=(td,n)=> td.replace('<td', '<td data-msp="1" rowspan="'+n+'"');
-          const rowHtml=(r,extra)=>`<tr${extra||''}>${cfg.cols.map(c=>(editId===r.id?editCell(r,c):cell(r,c))).join('')}${hasActions?actionCell(r):''}</tr>`;
+          const rowCls=(r,base)=>{ const fl=cfg.rowFlag?cfg.rowFlag(r):''; return [base,fl].filter(Boolean).join(' '); };
+          const rowHtml=(r,base)=>{ const c=rowCls(r,base); return `<tr${c?` class="${c}"`:''}>${cfg.cols.map(cc=>(editId===r.id?editCell(r,cc):cell(r,cc))).join('')}${hasActions?actionCell(r):''}</tr>`; };
           let bodyRows='';
           for(let i=0;i<show.length;){
             const r=show[i]; const g=cfg.groupKey&&r[cfg.groupKey]; const grouped=g&&grpCnt[g]>1;
             if(grouped && MERGE){
               const gr=[]; let j=i; while(j<show.length && (cfg.groupKey&&show[j][cfg.groupKey])===g){ gr.push(show[j]); j++; }
               const editingInGroup=gr.some(x=>x.id===editId);
-              if(editingInGroup){ gr.forEach(x=>{ bodyRows+=rowHtml(x,' class="sv-grp"'); }); }
+              if(editingInGroup){ gr.forEach(x=>{ bodyRows+=rowHtml(x,'sv-grp'); }); }
               else gr.forEach((x,idx)=>{
                 const cells=cfg.cols.map(c=>{ if(MERGE.indexOf(c.k)>=0){ return idx===0? tdRowspan(cell(x,c), gr.length) : ''; } return cell(x,c); }).join('');
-                bodyRows+=`<tr class="${idx===0?'sv-grp sv-grp-first':'sv-grp-sub'}">${cells}${hasActions?actionCell(x):''}</tr>`;
+                bodyRows+=`<tr class="${rowCls(x,idx===0?'sv-grp sv-grp-first':'sv-grp-sub')}">${cells}${hasActions?actionCell(x):''}</tr>`;
               });
               i=j;
-            } else { bodyRows+=rowHtml(r, grouped?' class="sv-grp"':''); i++; }
+            } else { bodyRows+=rowHtml(r, grouped?'sv-grp':''); i++; }
           }
           const body=show.length? `<tbody>${bodyRows}</tbody>` : '';
           $('#tbl').innerHTML=head+body;
@@ -334,6 +339,7 @@
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 같은 주문서는 묶여서 입력순으로 표시되며, ▲▼로 순서를 바꿀 수 있습니다. 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자', reorderable:true, ordKey:'ord', groupKey:'orderGroup',
     filters:[{k:'settle',label:'정산구분'},{k:'gubun',label:'구분'},{k:'orderStatus',label:'발주여부'}],   // 월정산/선결제 등 따로 보기
+    rowFlag:r=>String(r.orderStatus||'')==='출고지연'?'sv-late':'',   // 출고지연 발주건은 빨갛게 강조
     // 하나의 주문서(여러 상품)는 발주 기록에서도 주문건 공통 컬럼을 rowspan 병합해 한 건으로 표시
     groupMergeKeys:['date','whoName','gubun','route','orderer','vendor','settle','ship','shipInfo'],
     // 기존 발주 내역 → 구글시트 입점사발주 탭 일괄 전송(백필) · CS와 동일 records+id upsert(중복 없음)
@@ -358,7 +364,7 @@
       {k:'selfCode',h:'상품코드',w:56,wrap:true},
       {k:'name',h:'품명',w:112,wrap:true}, {k:'qty',h:'수량',w:32,num:true},
       {k:'ship',h:'배송비',w:52,num:true,money:true},
-      {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','발주취소']},   // 입점사에 발주 넣었는지
+      {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','발주취소','출고지연']},   // 입점사에 발주 넣었는지 · 출고지연 시 행 강조
       {k:'invoice',h:'송장번호',w:70,wrap:true},                     // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
       {k:'shipInfo',h:'배송정보/비고',w:106,wrap:true},
       {k:'__pstatus',h:'처리',w:56,compute:r=>((r.invoice||'').toString().trim()?'송장완료':'송장필요'),badge:true} ] });
