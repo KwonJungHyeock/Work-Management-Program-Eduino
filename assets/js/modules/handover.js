@@ -71,12 +71,14 @@
             <div class="hv-bar">
               <input class="q" placeholder="${esc(cfg.unit)}명·담당자 검색" value="${esc(q)}">
               ${canEdit()?`<button class="btn pri" id="hvAdd">${icon('plus')}새 ${esc(cfg.unit)}</button>`:''}
+              ${canEdit()?`<button class="btn" id="hvBulk">${icon('upload')}엑셀 일괄등록</button>`:''}
               <span class="muted" style="font-size:12.5px">${rows.length}곳</span>
             </div>
             ${rows.length?`<div class="hv-grid">${rows.map(cardHtml).join('')}</div>`
               :`<div class="hv-empty">${icon('folder')}<div style="margin-top:8px">등록된 ${esc(cfg.unit)}가 없습니다.${canEdit()?` <b>[새 ${esc(cfg.unit)}]</b>로 추가하세요.`:''}</div></div>`}`;
           const qi=body.querySelector('.q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=body.querySelector('.q'); n.focus(); try{n.setSelectionRange(p,p);}catch(e){} };
           const add=body.querySelector('#hvAdd'); if(add) add.onclick=()=>openCard(null);
+          const bulk=body.querySelector('#hvBulk'); if(bulk) bulk.onclick=()=>openBulk();
           body.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{ const v=list.find(x=>x.id===c.dataset.id); if(v) openCard(v); });
         }
         function cardHtml(v){
@@ -142,6 +144,118 @@
             del.disabled=true; const ok=await collDel(cfg.coll,v.id);
             if(ok){ toast('삭제했습니다'); close(); await load(); } else { del.disabled=false; toast('삭제 실패'); } };
         }
+        /* ── 엑셀/CSV 일괄 등록 ────────────────────────────────────────
+           - 등록 항목과 동일한 컬럼(입점사명 + 각 필드)으로 양식 제공
+           - .xlsx / .csv / .tsv 업로드(공용 파서 XlsxLite) 또는 붙여넣기
+           - 같은 이름이 이미 있으면 '업데이트'(빈 칸은 기존 값 유지), 없으면 신규 */
+        const COLS=[{k:'name',label:cfg.unit+'명'}, ...FIELDS.map(f=>({k:f.k,label:f.label}))];
+        const nrm=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+        function csvCell(v){ v=String(v==null?'':v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+        function templateCsv(){
+          const sample={ name:'(주)로보라이즌', manager:'홍길동 / 010-0000-0000', payTerms:'월말마감 익월정산',
+            important:'예: 핵심 단가·정산 조건', caution:'예: 주의할 점', memo:'예: 참고 메모',
+            grade:'파트너사 A', supplyRate:'키트 20% / 보드 10%', site:'https://example.com', contact:'02-000-0000', email:'contact@example.com' };
+          const header=COLS.map(c=>c.label);
+          const ex=COLS.map(c=>sample[c.k]!=null?sample[c.k]:'');
+          return '﻿'+[header, ex].map(r=>r.map(csvCell).join(',')).join('\r\n');
+        }
+        function rowsToRecs(rows){
+          rows=(rows||[]).filter(r=>Array.isArray(r)&&r.some(c=>String(c==null?'':c).trim()!==''));
+          if(!rows.length) return { recs:[], err:'내용이 없습니다.' };
+          const labelKey={}; COLS.forEach(c=>{ labelKey[nrm(c.label)]=c.k; labelKey[nrm(c.k)]=c.k; });
+          const header=(rows[0]||[]).map(nrm);
+          let colMap=header.map(h=>labelKey[h]||null);
+          const matched=colMap.filter(Boolean);
+          let start, hasHeader=matched.includes('name');
+          if(hasHeader){ start=1; }                       // 헤더 인식됨
+          else { colMap=COLS.map(c=>c.k); start=0; }        // 헤더 없음 → 순서대로 매핑
+          const recs=[];
+          for(let r=start;r<rows.length;r++){ const row=rows[r]||[]; const rec={};
+            colMap.forEach((k,i)=>{ if(k) rec[k]=String(row[i]==null?'':row[i]).trim(); });
+            if(!(rec.name||'').trim()) continue;
+            recs.push(rec);
+          }
+          if(!recs.length) return { recs:[], err:cfg.unit+'명 열을 찾지 못했거나 유효한 행이 없습니다. 양식을 확인해 주세요.' };
+          return { recs };
+        }
+        function openBulk(){
+          const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+          ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:760px;width:96%;max-height:calc(100vh - 48px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+            <div style="padding:18px 22px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+              <div style="font-size:16px;font-weight:800;flex:1">${icon('upload')} ${esc(cfg.unit)} 엑셀 일괄등록</div>
+              <button class="btn ghost sm" id="bkClose">${icon('x')}</button>
+            </div>
+            <div style="padding:16px 22px;overflow-y:auto">
+              <ol style="margin:0 0 12px 18px;font-size:12.8px;line-height:1.9;color:var(--ink-2)">
+                <li><b>[양식 다운로드]</b>로 엑셀(CSV) 양식을 받아, 예시 행을 지우고 ${esc(cfg.unit)} 정보를 채웁니다.</li>
+                <li>첫 줄(제목)은 그대로 두고, ${esc(COLS.map(c=>c.label).join(' · '))} 순서로 입력하세요.</li>
+                <li><b>[파일 선택]</b>으로 .xlsx / .csv 파일을 올리거나, 표를 복사해 아래에 붙여넣습니다.</li>
+                <li>이미 등록된 <b>${esc(cfg.unit)}명이 같으면 자동으로 업데이트</b>(빈 칸은 기존 값 유지), 없으면 신규 등록됩니다.</li>
+              </ol>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                <button class="btn" id="bkTmpl">${icon('download')}양식 다운로드</button>
+                <input type="file" id="bkFile" accept=".xlsx,.csv,.tsv,.txt,text/csv" style="display:none">
+                <button class="btn pri" id="bkPick">${icon('sheet')}파일 선택(.xlsx/.csv)</button>
+              </div>
+              <div class="muted" style="font-size:11.5px;font-weight:800;margin:2px 0 4px">또는 엑셀에서 복사해 붙여넣기</div>
+              <textarea id="bkPaste" placeholder="엑셀에서 범위를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) 하세요. 탭·콤마 구분 모두 인식합니다." style="width:100%;min-height:82px;font:inherit;font-size:12.5px;line-height:1.6;border:1px solid var(--line-2);border-radius:8px;padding:9px 11px;resize:vertical"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" id="bkParsePaste">붙여넣기 인식</button></div>
+              <div id="bkPreview" style="margin-top:12px"></div>
+              <div id="bkMsg" class="muted" style="font-size:12.5px;margin-top:8px;min-height:16px"></div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)">
+              <button class="btn ghost" id="bkCancel">닫기</button>
+              <button class="btn pri" id="bkConfirm" disabled>${icon('save')}등록 실행</button>
+            </div>
+          </div>`;
+          document.body.appendChild(ov);
+          const close=()=>ov.remove();
+          ov.onclick=e=>{ if(e.target===ov) close(); };
+          ov.querySelector('#bkClose').onclick=close; ov.querySelector('#bkCancel').onclick=close;
+          const msg=ov.querySelector('#bkMsg'), prev=ov.querySelector('#bkPreview'), confirm2=ov.querySelector('#bkConfirm');
+          let staged=[];   // [{rec, existing}]
+          ov.querySelector('#bkTmpl').onclick=()=>{ downloadBlob(new Blob([templateCsv()],{type:'text/csv;charset=utf-8'}), `${cfg.unit}_일괄등록양식.csv`); toast('양식(CSV) 다운로드'); };
+          const fEl=ov.querySelector('#bkFile');
+          ov.querySelector('#bkPick').onclick=()=>fEl.click();
+          fEl.onchange=async()=>{ const f=fEl.files&&fEl.files[0]; fEl.value=''; if(!f) return;
+            if(!window.XlsxLite){ msg.innerHTML='<span style="color:var(--danger)">파서를 불러오지 못했습니다(새로고침 후 재시도).</span>'; return; }
+            msg.textContent='파일 읽는 중…';
+            try{ const { rows }=await XlsxLite.parseFile(f); showPreview(rowsToRecs(rows)); }
+            catch(e){ msg.innerHTML=`<span style="color:var(--danger)">파일 처리 실패: ${esc(e.message||e)}</span>`; } };
+          ov.querySelector('#bkParsePaste').onclick=()=>{
+            const t=ov.querySelector('#bkPaste').value; if(!t.trim()){ msg.textContent='붙여넣은 내용이 없습니다.'; return; }
+            const r=(window.XlsxLite&&XlsxLite.parseCsv)?XlsxLite.parseCsv(t):{rows:t.split(/\r?\n/).map(l=>l.split(/\t/))};
+            showPreview(rowsToRecs(r.rows));
+          };
+          function showPreview({recs, err}){
+            if(err){ prev.innerHTML=''; confirm2.disabled=true; staged=[]; msg.innerHTML=`<span style="color:var(--danger)">${esc(err)}</span>`; return; }
+            staged=recs.map(rec=>({ rec, existing:list.find(x=>nrm(x.name)===nrm(rec.name)) }));
+            const nNew=staged.filter(s=>!s.existing).length, nUpd=staged.length-nNew;
+            const head=COLS.map(c=>`<th style="text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11px;color:var(--muted)">${esc(c.label)}</th>`).join('');
+            const cell=v=>`<td style="padding:5px 8px;border-bottom:1px solid var(--line-2);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(snippet(v,28))}</td>`;
+            const rowsHtml=staged.slice(0,30).map(s=>`<tr>${s.existing?'<td style="padding:5px 8px;border-bottom:1px solid var(--line-2)"><span class="hv-mgr" style="background:var(--warn-bg);color:var(--warn)">수정</span></td>':'<td style="padding:5px 8px;border-bottom:1px solid var(--line-2)"><span class="hv-mgr" style="background:var(--ok-bg,#e6f7ef);color:var(--ok)">신규</span></td>'}${COLS.map(c=>cell(s.rec[c.k])).join('')}</tr>`).join('');
+            prev.innerHTML=`<div style="font-size:12.8px;margin-bottom:6px"><b>${staged.length}건</b> 인식 · 신규 <b style="color:var(--ok)">${nNew}</b> · 수정 <b style="color:var(--warn)">${nUpd}</b>${staged.length>30?` <span class="muted">(미리보기 30건)</span>`:''}</div>
+              <div style="overflow:auto;border:1px solid var(--line);border-radius:9px;max-height:280px"><table style="border-collapse:collapse;width:100%"><thead><tr><th style="padding:5px 8px;border-bottom:1px solid var(--line)"></th>${head}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+            confirm2.disabled=false; msg.textContent='';
+          }
+          confirm2.onclick=async()=>{
+            if(!staged.length) return;
+            confirm2.disabled=true; const who=me().name||me().loginId||'', at=new Date().toISOString();
+            let done=0, fail=0;
+            for(const s of staged){
+              const base=s.existing?{...s.existing}:{ id:uid() };
+              base.name=(s.rec.name||'').trim();
+              FIELDS.forEach(f=>{ const v=(s.rec[f.k]||'').trim(); if(v!=='') base[f.k]=v; });   // 빈 칸은 기존 값 유지
+              base.updatedBy=who; base.updatedAt=at;
+              const ok=await collPush(cfg.coll, base); ok?done++:fail++;
+              msg.innerHTML=`<span style="color:var(--info)">등록 중… ${done+fail}/${staged.length}</span>`;
+            }
+            await load();
+            if(fail){ msg.innerHTML=`<span style="color:var(--danger)">${done}건 완료 · ${fail}건 실패(잠시 후 재시도)</span>`; confirm2.disabled=false; }
+            else{ toast(`${cfg.unit} ${done}건 일괄등록 완료`); close(); }
+          };
+        }
+
         async function load(){ const items=await collGet(cfg.coll); if(!root.isConnected) return;
           list=(items||[]).filter(x=>x&&x.id); draw(); }
         load();
