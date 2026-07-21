@@ -39,6 +39,7 @@
     { k:'contact',    label:'연락처',   ph:'연락처' },
     { k:'email',      label:'메일',     ph:'이메일' },
     { k:'payTerms',   label:'결제조건', ph:'예: 선결제 / 월정산 / 위탁' },
+    { k:'bizNo',      label:'사업자번호', ph:'000-00-00000' },
     { k:'memo',       label:'메모',     ta:1, ph:'기타 참고·협상 이력 등' },
   ];
   const uid = ()=> 'v'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
