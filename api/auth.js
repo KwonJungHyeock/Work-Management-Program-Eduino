@@ -42,6 +42,8 @@ async function getAccount(loginId) { const v = await redis(['HGET', ACCOUNTS_KEY
 async function allAccounts() { const map = arrToObj(await redis(['HGETALL', ACCOUNTS_KEY])); return Object.keys(map).map(k => { try { return JSON.parse(map[k]); } catch (e) { return null; } }).filter(Boolean); }
 async function putAccount(a) { await redis(['HSET', ACCOUNTS_KEY, a.loginId, JSON.stringify(a)]); }
 async function delAccount(id) { await redis(['HDEL', ACCOUNTS_KEY, id]); }
+async function getAdminProfile() { try { const v = await redis(['GET', 'eduino:admin:profile']); return v ? JSON.parse(v) : {}; } catch (e) { return {}; } }
+async function putAdminProfile(p) { await redis(['SET', 'eduino:admin:profile', JSON.stringify(p || {})]); }
 
 function isAdmin(body) { const a = (body && body.admin) || {}; return a.loginId === ADMIN_ID && String(a.code) === String(ADMIN_CODE); }
 // 감사 로그 (누가·언제·무엇을) — 최근 500건 보관
@@ -61,7 +63,8 @@ module.exports = async function handler(req, res) {
       const code = String(body.code || '');
       if (!loginId || !code) return res.status(200).json({ ok: false, error: '아이디와 접속코드를 입력하세요' });
       if (loginId === ADMIN_ID && code === ADMIN_CODE) {
-        return res.status(200).json({ ok: true, user: { loginId: ADMIN_ID, name: '관리자', dept: 'admin', role: 'admin', email: '' } });
+        const prof = await getAdminProfile();
+        return res.status(200).json({ ok: true, user: { loginId: ADMIN_ID, name: prof.name || '관리자', dept: 'admin', role: 'admin', email: prof.email || '' } });
       }
       const acc = await getAccount(loginId);
       if (!acc || acc.active === false || String(acc.code) !== code) {
@@ -72,7 +75,10 @@ module.exports = async function handler(req, res) {
 
     if (op === 'listUsers') {
       if (!isAdmin(body)) return res.status(403).json({ ok: false, error: '관리자 권한이 필요합니다' });
-      return res.status(200).json({ ok: true, users: await allAccounts(), adminId: ADMIN_ID });
+      const prof = await getAdminProfile();
+      // 대표(마스터 관리자) 계정도 목록에 표시 — 이름/이메일만 수정 가능(삭제·비활성 불가)
+      const adminRow = { loginId: ADMIN_ID, name: prof.name || '관리자', dept: 'admin', role: 'admin', email: prof.email || '', active: true, code: '(고정 · 환경변수)', isMaster: true };
+      return res.status(200).json({ ok: true, users: [adminRow, ...await allAccounts()], adminId: ADMIN_ID });
     }
 
     if (op === 'roster') {
@@ -86,7 +92,10 @@ module.exports = async function handler(req, res) {
       const u = body.user || {};
       const loginId = String(u.loginId || '').trim();
       if (!/^[a-zA-Z0-9._-]{2,30}$/.test(loginId)) return res.status(400).json({ ok: false, error: '아이디는 영문/숫자/._- 2~30자' });
-      if (loginId === ADMIN_ID) return res.status(400).json({ ok: false, error: '예약된 아이디입니다' });
+      if (loginId === ADMIN_ID) {   // 대표 계정: 이름·이메일만 수정(코드/역할/부서는 환경변수 고정)
+        await putAdminProfile({ name: String(u.name || '').slice(0, 40), email: String(u.email || '').slice(0, 120) });
+        return res.status(200).json({ ok: true });
+      }
       if (!String(u.code || '').trim()) return res.status(400).json({ ok: false, error: '접속코드를 입력하세요' });
       const perms = Array.isArray(u.perms) ? u.perms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
       const editPerms = Array.isArray(u.editPerms) ? u.editPerms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
@@ -111,6 +120,7 @@ module.exports = async function handler(req, res) {
     if (op === 'deleteUser') {
       if (!isAdmin(body)) return res.status(403).json({ ok: false, error: '관리자 권한이 필요합니다' });
       const id = String(body.loginId || '').trim();
+      if (id === ADMIN_ID) return res.status(400).json({ ok: false, error: '대표 계정은 삭제할 수 없습니다' });
       const prev = await getAccount(id);
       await delAccount(id);
       await logAudit({ actor: (body.admin && body.admin.loginId) || 'admin', action: 'account.delete', target: id, detail: (prev && prev.name) || id });

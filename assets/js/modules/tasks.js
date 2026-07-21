@@ -79,7 +79,7 @@
     function drawPicked(){ const box=$('#acPicked');
       if(!picked){ box.innerHTML=''; return; }
       box.innerHTML=`<span style="display:inline-flex;align-items:center;gap:8px;background:var(--info-bg);color:var(--info);border-radius:8px;padding:5px 10px;font-weight:800;font-size:13px">
-        ${icon('users')} ${esc2(picked.name)} <span style="font-weight:600;font-size:11px;color:var(--ink-2)">${DL[picked.dept]||picked.dept||''} · ${picked.role==='lead'?'파트장':'팀원'}${picked.loginId?'':' · 미등록계정'}</span>
+        ${icon('users')} ${esc2(picked.name)} <span style="font-weight:600;font-size:11px;color:var(--ink-2)">${DL[picked.dept]||picked.dept||''} · ${picked.role==='lead'?'파트장':picked.role==='manager'?'팀장':'팀원'}${picked.loginId?'':' · 미등록계정'}</span>
         <button type="button" id="acUnpick" style="border:0;background:none;cursor:pointer;color:var(--muted);font-weight:800">✕</button></span>`;
       const up=$('#acUnpick'); if(up) up.onclick=()=>{ picked=null; $('#acDirect').value=''; drawPicked(); };
     }
@@ -93,10 +93,20 @@
       let res=[]; try{ res=Duties.match(q,{}); }catch(e){ res=[]; }
       if(!res.length){ box.innerHTML='<div class="muted" style="font-size:12px">추천 후보 없음 — 위에서 직접 선택하세요.</div>'; return; }
       const max=res[0].score||1;
-      box.innerHTML=`<div class="muted" style="font-size:11px;font-weight:800;margin-bottom:5px">추천 담당자 (클릭해 선택)</div>`+
-        res.slice(0,4).map((r,i)=>`<button type="button" class="acCand" data-n="${esc2(r.person.name)}" style="display:block;width:100%;text-align:left;border:1px solid ${picked&&picked.name===r.person.name?'var(--info)':'var(--line-2)'};background:${picked&&picked.name===r.person.name?'var(--info-bg)':'var(--panel)'};border-radius:9px;padding:8px 11px;margin-bottom:6px;cursor:pointer">
-          <div style="font-weight:800;font-size:13px">${i===0?'🎯 ':''}${esc2(r.person.name)} <span style="font-weight:600;font-size:11px;color:var(--muted)">${DL[r.person.dept]||r.person.dept} · ${r.person.role==='lead'?'파트장':'팀원'} · 적합도 ${Math.round(r.score/max*100)}%</span></div>
-          <div style="font-size:11.5px;color:var(--ink-2);margin-top:3px;line-height:1.5">${r.hits.slice(0,2).map(h=>`· <b style="color:var(--info)">${esc2(h.group)}</b>${h.item?' — '+esc2(h.item):''}`).join('<br>')}</div></button>`).join('');
+      const DEPTCOLOR={cs:'#2d6cdf',md:'#e0313b',logi:'#12886a',acct:'#b45309',hq:'#6d3fd6',admin:'#b45309'};
+      const DEPTTINT ={cs:'#eaf1ff',md:'#ffecef',logi:'#e6f7f0',acct:'#fbeeda',hq:'#f0ebfe',admin:'#fbeeda'};
+      box.innerHTML=`<div class="muted" style="font-size:11px;font-weight:800;margin-bottom:6px">추천 담당자 · 클릭해 선택</div>`+
+        res.slice(0,4).map(r=>{ const col=DEPTCOLOR[r.person.dept]||'#5a6474', tint=DEPTTINT[r.person.dept]||'#eef1f6';
+          const on=picked&&picked.name===r.person.name;
+          const groups=[...new Set(r.hits.map(h=>h.group).filter(Boolean))].slice(0,3);
+          return `<button type="button" class="acCand" data-n="${esc2(r.person.name)}" style="display:block;width:100%;text-align:left;border:1px solid ${on?col:'var(--line-2)'};border-left:4px solid ${col};background:${on?tint:'var(--panel)'};border-radius:10px;padding:9px 12px;margin-bottom:7px;cursor:pointer">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-weight:800;font-size:14px;color:var(--ink)">${esc2(r.person.name)}</span>
+              <span style="font-size:11px;font-weight:700;color:${col}">${DL[r.person.dept]||r.person.dept} · ${r.person.role==='lead'?'파트장':r.person.role==='manager'?'팀장':'팀원'}</span>
+              <span style="margin-left:auto;font-size:11px;font-weight:800;color:${col};background:${tint};border-radius:10px;padding:2px 9px">적합도 ${Math.round(r.score/max*100)}%</span>
+            </div>
+            <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px">${groups.map(g=>`<span style="font-size:11.5px;font-weight:700;color:${col};background:${tint};border:1px solid ${col}22;border-radius:6px;padding:2px 8px">${esc2(g)}</span>`).join('')}</div>
+          </button>`; }).join('');
       box.querySelectorAll('.acCand').forEach(b=>b.onclick=()=>pick(b.dataset.n));
     }
     let mt=null; const onQ=()=>{ clearTimeout(mt); mt=setTimeout(refreshMatch,250); };

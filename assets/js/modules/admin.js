@@ -13,8 +13,8 @@
     if(!d.ok) throw new Error(d.error||'요청 실패');
     return d;
   }
-  const DEPTS=[['cs','CS · 고객 상담'],['md','MD · 상품 기획'],['logi','물류 · 물류 관리']];
-  const deptLabel=d=>({cs:'CS',md:'MD',logi:'물류'}[d]||d||'-');
+  const DEPTS=[['hq','에듀이노 총괄'],['cs','CS · 고객 상담'],['md','MD · 상품 기획'],['logi','물류 · 물류 관리']];
+  const deptLabel=d=>({hq:'에듀이노 총괄',cs:'CS',md:'MD',logi:'물류',acct:'경리',admin:'대표'}[d]||d||'-');
   // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD·물류 기능에서 생성)
   const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi')
     .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
@@ -36,8 +36,9 @@
       <style>
         .adm-tbl td,.adm-tbl th{vertical-align:middle}
         .code-cell{font-family:var(--mono);letter-spacing:.02em}
-        .dept-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px}
+        .dept-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;background:#eef1f6;color:#5a6474}
         .dept-badge.cs{background:#e7f0ff;color:#2d6cdf}.dept-badge.md{background:#ffe9ea;color:#e0313b}.dept-badge.logi{background:#e3f7ef;color:#12886a}
+        .dept-badge.hq{background:#ede9fe;color:#6d3fd6}.dept-badge.admin{background:#fdecd2;color:#b45309}
         .lead-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;
           background:#efe9ff;color:#5b3fc4;margin-left:6px;letter-spacing:.02em}
         .off-badge{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:5px;background:var(--line-2);color:var(--muted);margin-left:6px}
@@ -73,8 +74,9 @@
             <div class="u-form">
               <label class="fld">아이디<input type="text" id="fId" placeholder="cs.kim" autocomplete="off"></label>
               <label class="fld">이름<input type="text" id="fName" placeholder="김상담"></label>
-              <label class="fld">부서<select id="fDept">${DEPTS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
-              <label class="fld">역할<select id="fRole"><option value="member">팀원</option><option value="lead">파트장</option><option value="manager">팀장(전사)</option></select></label>
+              <label class="fld">부서<select id="fDept">${DEPTS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}<option value="__custom">＋ 직접 입력…</option></select>
+                <input type="text" id="fDeptCustom" placeholder="부서명 직접 입력" style="display:none;margin-top:5px"></label>
+              <label class="fld">역할<select id="fRole"><option value="member">팀원</option><option value="lead">파트장</option><option value="manager">팀장</option></select></label>
               <label class="fld">업무 이메일<input type="text" id="fEmail" placeholder="kim@robodyne.co.kr"></label>
               <label class="fld">접속코드
                 <span style="display:flex;gap:6px"><input type="text" id="fCode" placeholder="접속코드" style="flex:1">
@@ -116,21 +118,31 @@
       const collectPerms=()=>[...$('#permPick').querySelectorAll('[data-perm]:checked')].map(c=>c.dataset.perm);
       const collectEditPerms=()=>[...$('#permPick').querySelectorAll('[data-eperm]:checked')].map(c=>c.dataset.eperm);
       $('#genCode').onclick=()=>{ $('#fCode').value=randCode(); };
-      $('#fDept').onchange=()=>{ const cur=new Set(collectPerms()), eCur=collectEditPerms(); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur], eCur); };
-      function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true;
+      const DEPT_CODES=DEPTS.map(d=>d[0]);
+      const toggleCustomDept=()=>{ const c=$('#fDept').value==='__custom'; $('#fDeptCustom').style.display=c?'block':'none'; if(c) $('#fDeptCustom').focus(); };
+      const deptVal=()=>{ const v=$('#fDept').value; return v==='__custom' ? $('#fDeptCustom').value.trim() : v; };
+      const setDept=d=>{ if(d && !DEPT_CODES.includes(d)){ $('#fDept').value='__custom'; $('#fDeptCustom').value=d; } else { $('#fDept').value=d||'cs'; $('#fDeptCustom').value=''; } toggleCustomDept(); };
+      $('#fDept').onchange=()=>{ toggleCustomDept(); const cur=new Set(collectPerms()), eCur=collectEditPerms(); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur], eCur); };
+      const setMasterLock=on=>{ ['fRole','fCode','genCode','fActive'].forEach(id=>{ const e=$('#'+id); if(e) e.disabled=on; });
+        $('#fDept').disabled=on; $('#fDeptCustom').disabled=on; const pp=$('#permPick'); if(pp) pp.style.opacity=on?'.5':''; if(pp) pp.style.pointerEvents=on?'none':''; };
+      function resetForm(){ editing=null; ['fId','fName','fEmail','fCode','fDeptCustom'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true; toggleCustomDept(); setMasterLock(false);
         renderPerms(deptDefault('cs'), []); $('#fId').disabled=false; $('#editHint').innerHTML='<b style="color:var(--ok)">신규 계정 발급</b>'; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
-        $('#fDept').value=u.dept||'cs'; $('#fRole').value=(u.role==='lead'||u.role==='manager')?u.role:'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
+        setDept(u.dept||'cs'); $('#fRole').value=(u.role==='lead'||u.role==='manager')?u.role:'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'), Array.isArray(u.editPerms)?u.editPerms:[]);
-        $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
+        setMasterLock(!!u.isMaster);
+        $('#editHint').innerHTML=u.isMaster?`<b style="color:var(--warn)">대표 계정 · 이름/이메일만 수정</b>`:`'${esc(u.loginId)}' 수정 중`; $('#fName').focus(); }
       renderPerms(deptDefault('cs'), []);
       // 신규 계정: 폼을 빈 상태로 초기화(수정 모드 해제) + 접속코드 자동 생성 → 바로 발급 가능
       $('#newUser').onclick=()=>{ resetForm(); $('#fCode').value=randCode(); $('#admStat').textContent=''; root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
 
       $('#saveUser').onclick=async()=>{
-        const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:$('#fDept').value, role:$('#fRole').value,
+        const isMaster = editing && editing===(usersCache.find(x=>x.isMaster)||{}).loginId;
+        const user={ loginId:$('#fId').value.trim(), name:$('#fName').value.trim(), dept:deptVal(), role:$('#fRole').value,
           email:$('#fEmail').value.trim(), code:$('#fCode').value.trim(), active:$('#fActive').checked, perms:collectPerms(), editPerms:collectEditPerms() };
-        if(!user.loginId||!user.code){ $('#admStat').innerHTML='<span style="color:var(--danger)">아이디와 접속코드는 필수입니다.</span>'; return; }
+        if(!user.loginId){ $('#admStat').innerHTML='<span style="color:var(--danger)">아이디는 필수입니다.</span>'; return; }
+        if(!isMaster && !user.code){ $('#admStat').innerHTML='<span style="color:var(--danger)">접속코드는 필수입니다.</span>'; return; }
+        if(!isMaster && $('#fDept').value==='__custom' && !user.dept){ $('#admStat').innerHTML='<span style="color:var(--danger)">부서명을 입력하세요.</span>'; return; }
         // 파트장은 직무별 1명 제한
         if(user.role==='lead'){ const other=usersCache.find(x=>x.dept===user.dept && x.role==='lead' && x.loginId!==user.loginId);
           if(other){ $('#admStat').innerHTML=`<span style="color:var(--danger)">이미 ${esc(deptLabel(user.dept))} 파트장(${esc(other.name||other.loginId)})이 있습니다. 기존 파트장을 팀원으로 바꾼 뒤 지정하세요.</span>`; return; } }
@@ -153,19 +165,22 @@
           const tb=t.querySelector('tbody'); tb.innerHTML='';
           if(!users.length){ tb.innerHTML=`<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">발급된 계정이 없습니다. 위에서 발급하세요.</td></tr>`; return; }
           users.forEach(u=>{ const tr=el('tr'); if(u.active===false) tr.className='inactive';
-            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${u.role==='manager'?'<span class="lead-badge" style="background:#ede9fe;color:#6d3fd6">팀장</span>':u.role==='lead'?'<span class="lead-badge">파트장</span>':''}${u.active===false?'<span class="off-badge">비활성</span>':''}</td>
+            const roleBadge = u.isMaster||u.role==='admin' ? '<span class="lead-badge" style="background:#fdecd2;color:#b45309">대표</span>'
+              : u.role==='manager' ? '<span class="lead-badge" style="background:#ede9fe;color:#6d3fd6">팀장</span>'
+              : u.role==='lead' ? '<span class="lead-badge">파트장</span>' : '';
+            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${roleBadge}${u.active===false?'<span class="off-badge">비활성</span>':''}</td>
               <td><span class="dept-badge ${esc(u.dept||'')}">${esc(deptLabel(u.dept))}</span></td>
               <td class="muted">${esc(u.email||'-')}</td>
               <td class="code-cell">${esc(u.code||'-')}</td>
               <td><span style="display:flex;gap:4px;justify-content:flex-end">
-                <button class="btn ghost sm" data-a="toggle">${u.active===false?'활성화':'비활성화'}</button>
+                ${u.isMaster?'':`<button class="btn ghost sm" data-a="toggle">${u.active===false?'활성화':'비활성화'}</button>`}
                 <button class="btn ghost sm" data-a="edit">수정</button>
-                <button class="btn ghost sm" data-a="del">${icon('trash')}</button></span></td>`;
+                ${u.isMaster?'':`<button class="btn ghost sm" data-a="del">${icon('trash')}</button>`}</span></td>`;
             tr.querySelector('[data-a=edit]').onclick=()=>{ fillForm(u); root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
-            tr.querySelector('[data-a=toggle]').onclick=async()=>{ const on=u.active===false;
+            const tg=tr.querySelector('[data-a=toggle]'); if(tg) tg.onclick=async()=>{ const on=u.active===false;
               if(!confirm(`'${u.name||u.loginId}' 계정을 ${on?'활성화':'비활성화'}할까요?${on?'':' (로그인이 차단됩니다)'}`)) return;
               try{ await authApi('saveUser',{user:{...u, active:on}}); load(); toast(on?'활성화했습니다':'비활성화했습니다'); }catch(err){ toast(err.message); } };
-            tr.querySelector('[data-a=del]').onclick=async()=>{ if(!confirm(`'${u.loginId}' 계정을 삭제할까요? (비활성화로 두면 기록·이력이 보존됩니다)`)) return;
+            const db=tr.querySelector('[data-a=del]'); if(db) db.onclick=async()=>{ if(!confirm(`'${u.loginId}' 계정을 삭제할까요? (비활성화로 두면 기록·이력이 보존됩니다)`)) return;
               try{ await authApi('deleteUser',{loginId:u.loginId}); load(); }catch(err){ toast(err.message); } };
             tb.appendChild(tr);
           });
