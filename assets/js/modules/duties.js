@@ -17,7 +17,7 @@
     title:'직무 범위', icon:'clipboard',
     render(root){
       if(!isAdmin()){ root.innerHTML='<div class="mhead"><div class="tt">직무 범위</div></div><div class="mbody"><div class="muted" style="padding:30px">관리자만 접근할 수 있습니다.</div></div>'; return; }
-      let people=[], selId=null, cur=null, tab='edit', seeded=false;
+      let people=[], selId=null, cur=null, seeded=false;
 
       root.innerHTML=`
       <style>
@@ -65,18 +65,15 @@
         .du-hit .why b{color:var(--info)}
       </style>
       <div class="mhead">
-        <div class="tt">직무 범위 관리</div>
-        <div class="ds">직원별 직무 지도(상시/담당/서브 → 업무그룹 → 세부업무)를 관리하고, 지시 매칭·현황을 확인합니다.</div>
-        <div class="mtabs"><div class="t" data-t="edit">직무 편집</div><div class="t" data-t="board">현황판</div></div>
+        <div class="tt">직무 범위</div>
+        <div class="ds">직원별 직무 지도(상시/담당/서브 → 업무그룹 → 세부업무)를 관리합니다. 지시 매칭의 기준이 됩니다.</div>
       </div>
       <div class="mbody wide" id="duBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#duBody');
-      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
-        t.onclick=()=>{ syncDom(); tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
 
       // 편집 DOM → cur 모델 반영(재렌더/저장 전)
       function syncDom(){
-        if(tab!=='edit'||!cur) return;
+        if(!cur) return;
         const secEls=body.querySelectorAll('.du-sec'); const secs=[];
         secEls.forEach(se=>{
           const label=se.querySelector('.lab').value.trim();
@@ -94,7 +91,7 @@
         if(dn) cur.name=dn.value.trim(); if(dd) cur.dept=dd.value; if(dr) cur.role=dr.value;
       }
 
-      function draw(){ tab==='edit'?drawEdit():drawBoard(); }
+      function draw(){ drawEdit(); }
 
       function sideHtml(){
         return `<div class="du-side"><div class="hd">${icon('users')}팀원 <span class="muted" style="font-weight:600;margin-left:auto">${people.length}명</span></div>
@@ -107,12 +104,25 @@
 
       function drawEdit(){
         body.innerHTML=`
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <button class="btn sm" id="duTmpl">${icon('download')}엑셀 양식</button>
+            <input type="file" id="duFile" accept=".xlsx,.csv,.tsv,.txt" style="display:none"><button class="btn sm pri" id="duUp">${icon('upload')}엑셀 일괄등록</button>
+            <button class="btn sm" id="duExp">${icon('download')}현재 데이터 내보내기</button>
+          </div>
           ${seeded?`<div class="hl" style="border:1px solid var(--warn);background:var(--warn-bg);border-radius:9px;padding:9px 13px;margin-bottom:12px;font-size:12.5px">기본 시드(5명)를 표시 중입니다. 아무 직원이나 <b>저장</b>하거나 <b>[시드 서버 저장]</b>을 누르면 팀 공유 데이터로 승격됩니다. <button class="btn sm" id="duSeed" style="margin-left:8px">시드 서버 저장</button></div>`:''}
           <div class="du-wrap">
             ${sideHtml()}
             <div id="duMain">${cur?editorHtml():`<div class="muted" style="padding:30px">왼쪽에서 직원을 선택하거나 <b>[새 직원]</b>을 추가하세요.</div>`}</div>
           </div>`;
         wireSide();
+        body.querySelector('#duTmpl').onclick=()=>downloadBlob(new Blob([templateCsv()],{type:'text/csv;charset=utf-8'}),'직무범위_일괄등록양식.csv');
+        body.querySelector('#duExp').onclick=()=>downloadBlob(new Blob([exportCsv()],{type:'text/csv;charset=utf-8'}),'직무범위_현재데이터.csv');
+        const fEl=body.querySelector('#duFile');
+        body.querySelector('#duUp').onclick=()=>fEl.click();
+        fEl.onchange=async()=>{ const f=fEl.files&&fEl.files[0]; fEl.value=''; if(!f) return;
+          if(!window.XlsxLite){ toast('파서를 불러오지 못했습니다'); return; }
+          try{ const {rows}=await XlsxLite.parseFile(f); await importRows(rows); }
+          catch(e){ toast('파일 처리 실패: '+(e.message||e)); } };
         const seedBtn=body.querySelector('#duSeed'); if(seedBtn) seedBtn.onclick=async()=>{ seedBtn.disabled=true; const n=await Duties.seedToServer(); toast(`시드 ${n}명 서버 저장`); await reload(); };
         if(cur) wireEditor();
       }
@@ -183,62 +193,6 @@
         // 현황판/엑셀 버튼은 board에서
       }
 
-      /* ── 현황판 ── */
-      function drawBoard(){
-        const totalItems=p=>(p.sections||[]).reduce((a,s)=>a+(s.groups||[]).reduce((b,g)=>b+(g.items||[]).length,0),0);
-        const load=p=>(p.sections||[]).reduce((a,s)=>a+(s.w||1)*(s.groups||[]).reduce((b,g)=>b+((g.items||[]).length||1),0),0);
-        const maxLoad=Math.max(1,...people.map(load));
-        // 그룹 커버리지
-        const cov={}; people.forEach(p=>(p.sections||[]).forEach(s=>(s.groups||[]).forEach(g=>{ if(!g.name) return; (cov[g.name]=cov[g.name]||new Set()).add(p.name); })));
-        const covRows=Object.entries(cov).map(([g,set])=>({g,who:[...set]})).sort((a,b)=>a.who.length-b.who.length||a.g.localeCompare(b.g,'ko'));
-        const solo=covRows.filter(r=>r.who.length===1).length;
-
-        body.innerHTML=`
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-            <button class="btn" id="duTmpl">${icon('download')}엑셀 양식</button>
-            <input type="file" id="duFile" accept=".xlsx,.csv,.tsv,.txt" style="display:none"><button class="btn pri" id="duUp">${icon('upload')}엑셀 일괄등록</button>
-            <button class="btn" id="duExp">${icon('download')}현재 데이터 내보내기(CSV)</button>
-          </div>
-
-          <div class="card" style="margin-bottom:16px"><div class="card-hd">${icon('search')}<b>지시 매칭 미리보기</b> <span class="muted" style="font-size:11.5px;margin-left:auto">지시 문구를 입력하면 담당 후보가 뜹니다(2단계 '업무 지시' 엔진)</span></div>
-            <div class="du-mtest" style="padding:4px 2px 2px"><input id="duQ" placeholder="예: 쿠팡 반품 처리 / 학교장터 견적 / 전자세금계산서 발행"></div>
-            <div id="duMatch" style="margin-top:10px"></div>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
-            <div class="card"><div class="card-hd">${icon('chart')}<b>직원별 업무량</b> <span class="muted" style="font-size:11.5px;margin-left:auto">가중치 반영(상시3·담당2·서브1)</span></div>
-              <div style="padding:6px 2px">${people.slice().sort((a,b)=>load(b)-load(a)).map(p=>`
-                <div class="du-load"><div style="width:74px;font-size:12.5px;font-weight:700">${esc(p.name)}</div>
-                  <div class="bar" style="width:${Math.round(load(p)/maxLoad*100)}%"></div>
-                  <div class="muted" style="font-size:11.5px">${totalItems(p)}업무 · 부하 ${load(p)}</div></div>`).join('')}</div></div>
-
-            <div class="card"><div class="card-hd">${icon('folder')}<b>업무그룹 커버리지</b> <span class="muted" style="font-size:11.5px;margin-left:auto">단일 담당 ${solo}건 주의</span></div>
-              <div style="padding:6px 2px;max-height:420px;overflow:auto">${covRows.map(r=>`
-                <div class="du-cov"><div class="g">${esc(r.g)}</div>${r.who.map(w=>`<span class="du-chip ${r.who.length===1?'du-solo':''}">${esc(w)}</span>`).join('')}</div>`).join('')}</div></div>
-          </div>`;
-
-        // 매칭 미리보기
-        const q=body.querySelector('#duQ'), out=body.querySelector('#duMatch');
-        q.oninput=()=>{ const res=Duties.match(q.value,{});
-          if(!q.value.trim()){ out.innerHTML=''; return; }
-          if(!res.length){ out.innerHTML='<div class="muted" style="font-size:12.5px">매칭되는 담당자가 없습니다. 직무 데이터를 보강하거나 다른 표현으로 시도하세요.</div>'; return; }
-          const max=res[0].score||1;
-          out.innerHTML=res.slice(0,5).map((r,i)=>`<div class="du-hit">
-            <div><span class="nm">${i===0?'🎯 ':''}${esc(r.person.name)}</span><span class="rl">${DL[r.person.dept]||r.person.dept} · ${r.person.role==='lead'?'파트장':'팀원'} · 적합도 ${Math.round(r.score/max*100)}%</span></div>
-            <div class="why">${r.hits.map(h=>`· <b>${esc(h.group)}</b>${h.item?' — '+esc(h.item):''} <span class="muted">(${esc(h.section)})</span>`).join('<br>')}</div>
-          </div>`).join('');
-        };
-
-        // 엑셀
-        body.querySelector('#duTmpl').onclick=()=>downloadBlob(new Blob([templateCsv()],{type:'text/csv;charset=utf-8'}),'직무범위_일괄등록양식.csv');
-        body.querySelector('#duExp').onclick=()=>downloadBlob(new Blob([exportCsv()],{type:'text/csv;charset=utf-8'}),'직무범위_현재데이터.csv');
-        const fEl=body.querySelector('#duFile');
-        body.querySelector('#duUp').onclick=()=>fEl.click();
-        fEl.onchange=async()=>{ const f=fEl.files&&fEl.files[0]; fEl.value=''; if(!f) return;
-          if(!window.XlsxLite){ toast('파서를 불러오지 못했습니다'); return; }
-          try{ const {rows}=await XlsxLite.parseFile(f); await importRows(rows); }
-          catch(e){ toast('파일 처리 실패: '+(e.message||e)); } };
-      }
 
       /* ── 엑셀 양식/내보내기/가져오기 ──
          컬럼: 이름 · 부서 · 역할 · 구분 · 가중치 · 업무그룹 · 세부업무  (세부업무 1개 = 1행) */
@@ -304,21 +258,27 @@
     render(root){
       if(!isAdmin()){ root.innerHTML='<div class="mhead"><div class="tt">팀 설정</div></div><div class="mbody"><div class="muted" style="padding:30px">관리자만 접근할 수 있습니다.</div></div>'; return; }
       const SUBS=[
-        { t:'users',  key:'admin.users',  label:'팀원 계정' },
-        { t:'duties', key:'admin.duties', label:'직무 범위' },
+        { t:'users',  label:'팀원 계정' },
+        { t:'duties', label:'직무 범위' },
+        { t:'board',  label:'업무지시현황' },
       ];
-      let tab=(location.hash.split('?')[1]==='duties')?'duties':'users';
+      let tab=(window.__teamTab && SUBS.some(s=>s.t===window.__teamTab))?window.__teamTab:'users';
+      window.__teamTab=null;
       root.innerHTML=`
         <div class="mhead">
           <div class="tt">팀 설정</div>
-          <div class="ds">팀원 계정·권한과 직무 범위를 한 곳에서 관리합니다.</div>
+          <div class="ds">팀원 계정·권한, 직무 범위, 업무 지시 현황을 한 곳에서 관리합니다.</div>
           <div class="mtabs">${SUBS.map(s=>`<div class="t" data-t="${s.t}">${esc(s.label)}</div>`).join('')}</div>
         </div>
         <div class="mbody wide" id="tmBody"></div>`;
       const body=root.querySelector('#tmBody');
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
-      function draw(){ const s=SUBS.find(x=>x.t===tab)||SUBS[0]; embedModule(body, s.key); }
+      function draw(){
+        if(tab==='users') embedModule(body,'admin.users');
+        else if(tab==='duties') embedModule(body,'admin.duties');
+        else { body.innerHTML=''; if(window.renderAssignBoard) window.renderAssignBoard(body); }
+      }
       draw();
     }
   };

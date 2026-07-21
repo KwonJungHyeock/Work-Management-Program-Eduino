@@ -119,6 +119,115 @@
   }
   window.openAssignComposer = openAssignComposer;
 
+  /* ─────────────────────── 업무지시현황 보드(현황판) ─────────────────────── */
+  async function renderAssignBoard(host, opt){
+    opt=opt||{}; const u=me();
+    host.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
+    let list=[]; try{ list=await Assign.all()||[]; }catch(e){}
+    if(!host.isConnected) return;
+    let fSt='all', fWho='all', q='';
+    const today=new Date().toISOString().slice(0,10);
+    const isLate=a=>a.due && a.status!=='done' && a.due<today;
+
+    const st=document.createElement('div'); host.innerHTML=''; host.appendChild(st);
+    st.innerHTML=`<style>
+      .ab-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+      .ab-k{border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--panel)}
+      .ab-k .v{font-size:24px;font-weight:800;line-height:1} .ab-k .l{font-size:11px;color:var(--muted);margin-top:5px;font-weight:600}
+      .ab-k.warn{border-color:var(--warn)} .ab-k.warn .v{color:var(--warn)}
+      .ab-k.rev{border-color:#8b5cf6} .ab-k.rev .v{color:#8b5cf6}
+      .ab-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+      .ab-bar select,.ab-bar input{font:inherit;font-size:13px;border:1px solid var(--line-2);border-radius:8px;padding:7px 10px}
+      .ab-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+      .ab-tbl th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:7px 9px;border-bottom:1px solid var(--line)}
+      .ab-tbl td{padding:8px 9px;border-bottom:1px solid var(--line-2);vertical-align:top}
+      .ab-tbl tr.row{cursor:pointer} .ab-tbl tr.row:hover{background:var(--hover)}
+      .ab-tbl tr.late td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+      .ab-agg{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px}
+      .ab-agg th,.ab-agg td{padding:6px 10px;border-bottom:1px solid var(--line-2);text-align:center}
+      .ab-agg th{color:var(--muted);font-size:11px;font-weight:700} .ab-agg td:first-child,.ab-agg th:first-child{text-align:left;font-weight:700}
+      .ab-agg .barwrap{height:7px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:60px} .ab-agg .bar{height:100%;background:var(--ok)}
+      .ab-tl{font-size:11.5px;color:var(--ink-2);line-height:1.7;padding:2px 0 2px 6px;border-left:2px solid var(--line-2);margin-left:2px}
+    </style>
+      <div class="ab-kpi" id="abKpi"></div>
+      <div class="card" style="margin-bottom:14px"><div class="card-hd">${icon('users')}<b>담당자별 지시 집계</b> <span class="muted" style="font-size:11.5px;margin-left:auto">받은 지시 · 진행 · 완료 · 완료율</span></div>
+        <div style="padding:4px 2px" id="abAgg"></div></div>
+      <div class="ab-bar">
+        <select id="abSt"><option value="all">상태 전체</option><option value="sent">요청</option><option value="accepted">진행</option><option value="submitted">완료보고</option><option value="done">완료</option><option value="late">지연</option></select>
+        <select id="abWho"><option value="all">담당자 전체</option></select>
+        <input id="abQ" placeholder="제목·내용 검색" style="flex:1;min-width:160px">
+        <span class="muted" id="abCnt" style="font-size:12px"></span>
+      </div>
+      <div style="overflow:auto;border:1px solid var(--line);border-radius:11px">
+        <table class="ab-tbl"><thead><tr><th style="width:78px">상태</th><th>업무</th><th style="width:88px">담당자</th><th style="width:88px">지시자</th><th style="width:92px">지시일</th><th style="width:92px">마감</th></tr></thead><tbody id="abRows"></tbody></table>
+      </div>`;
+    const whoSel=st.querySelector('#abWho');
+    [...new Set(list.map(a=>a.toName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')).forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; whoSel.appendChild(o); });
+
+    function drawKpi(){
+      const k=st.querySelector('#abKpi');
+      const c={sent:0,accepted:0,submitted:0,done:0,late:0}; list.forEach(a=>{ c[a.status]=(c[a.status]||0)+1; if(isLate(a)) c.late++; });
+      k.innerHTML=`
+        <div class="ab-k"><div class="v">${list.length}</div><div class="l">전체 지시</div></div>
+        <div class="ab-k"><div class="v">${c.accepted||0}</div><div class="l">진행 중</div></div>
+        <div class="ab-k rev"><div class="v">${c.submitted||0}</div><div class="l">완료보고(확인 필요)</div></div>
+        <div class="ab-k"><div class="v">${c.done||0}</div><div class="l">완료</div></div>
+        <div class="ab-k warn"><div class="v">${c.late||0}</div><div class="l">지연(마감 초과)</div></div>`;
+    }
+    function drawAgg(){
+      const box=st.querySelector('#abAgg');
+      const by={}; list.forEach(a=>{ const n=a.toName||'(미지정)'; const o=by[n]||(by[n]={recv:0,acc:0,sub:0,done:0}); o.recv++; if(a.status==='accepted')o.acc++; else if(a.status==='submitted')o.sub++; else if(a.status==='done')o.done++; });
+      const rows=Object.entries(by).sort((a,b)=>b[1].recv-a[1].recv);
+      if(!rows.length){ box.innerHTML='<div class="muted" style="font-size:12.5px;padding:6px">아직 지시 내역이 없습니다.</div>'; return; }
+      box.innerHTML=`<table class="ab-agg"><thead><tr><th>담당자</th><th>받음</th><th>진행</th><th>완료보고</th><th>완료</th><th style="width:120px">완료율</th></tr></thead><tbody>
+        ${rows.map(([n,o])=>{ const rate=o.recv?Math.round(o.done/o.recv*100):0; return `<tr><td>${esc2(n)}</td><td>${o.recv}</td><td>${o.acc}</td><td>${o.sub}</td><td>${o.done}</td>
+          <td><div style="display:flex;align-items:center;gap:7px"><div class="barwrap"><div class="bar" style="width:${rate}%"></div></div><b style="font-size:11.5px">${rate}%</b></div></td></tr>`; }).join('')}</tbody></table>`;
+    }
+    function filtered(){ return list.filter(a=>{
+      if(fSt==='late'){ if(!isLate(a)) return false; } else if(fSt!=='all' && a.status!==fSt) return false;
+      if(fWho!=='all' && a.toName!==fWho) return false;
+      if(q && !((a.title||'')+(a.detail||'')).toLowerCase().includes(q.toLowerCase())) return false;
+      return true;
+    }).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))); }
+    function drawRows(){
+      const tb=st.querySelector('#abRows'), rows=filtered();
+      st.querySelector('#abCnt').textContent=`${rows.length}건`;
+      tb.innerHTML=rows.length?rows.map(a=>`<tr class="row ${isLate(a)?'late':''}" data-id="${esc2(a.id)}">
+        <td>${stPill(a.status)}</td>
+        <td><b>${esc2(a.title)}</b>${a.priority==='urgent'?' <span style="color:var(--danger);font-size:11px;font-weight:800">급함</span>':''}${a.detail?`<div class="muted" style="font-size:11.5px;margin-top:2px">${esc2(a.detail.slice(0,60))}${a.detail.length>60?'…':''}</div>`:''}</td>
+        <td>${esc2(a.toName||'-')}</td><td>${esc2(a.fromName||'-')}</td><td>${fmtDate(a.createdAt)}</td>
+        <td>${a.due?`<span style="${isLate(a)?'color:var(--danger);font-weight:700':''}">${fmtDate(a.due)}</span>`:'-'}</td></tr>
+        <tr class="detail" data-for="${esc2(a.id)}" style="display:none"><td colspan="6" style="background:var(--panel-2,#f7f9fc)"><div id="det-${esc2(a.id)}"></div></td></tr>`).join('')
+        :'<tr><td colspan="6" class="muted" style="padding:24px;text-align:center">해당하는 지시가 없습니다.</td></tr>';
+      tb.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>{ const d=tb.querySelector(`tr.detail[data-for="${CSS.escape(tr.dataset.id)}"]`); if(!d) return;
+        const open=d.style.display==='none'; d.style.display=open?'table-row':'none'; if(open) drawDetail(tr.dataset.id); });
+    }
+    function drawDetail(id){
+      const a=list.find(x=>x.id===id); if(!a) return; const box=st.querySelector(`#det-${CSS.escape(id)}`); if(!box) return;
+      const canReview=(a.fromId===u.loginId || a.fromName===u.name || isAdmin());
+      const tl=(a.timeline||[]).map(t=>`${fmtDT(t.at)} · <b>${S[t.act]||t.act}</b>${t.byName?' · '+esc2(t.byName):''}${t.note?' — '+esc2(t.note):''}`).join('<br>');
+      box.innerHTML=`<div style="padding:10px 4px">
+        <div style="font-size:12.5px;line-height:1.6">${a.detail?esc2(a.detail)+'<br>':''}${a.reportFormat?`<span class="muted">보고 형태: ${esc2(a.reportFormat)}</span><br>`:''}
+          ${a.progressNote?`<span class="muted">진행/보고: </span>${esc2(a.progressNote)}<br>`:''}${a.feedback?`<span style="color:var(--warn)">피드백: ${esc2(a.feedback)}</span><br>`:''}</div>
+        ${tl?`<div class="ab-tl" style="margin-top:8px">${tl}</div>`:''}
+        ${canReview&&a.status==='submitted'?`<div style="margin-top:10px;display:flex;gap:6px"><button class="btn pri sm" data-b="done" data-id="${esc2(a.id)}">${icon('check')}완료 확정</button><button class="btn ghost sm" data-b="fb" data-id="${esc2(a.id)}">반려·피드백</button></div>`:''}
+        ${canReview?`<div style="margin-top:8px"><button class="btn ghost sm" data-b="del" data-id="${esc2(a.id)}" style="color:var(--danger)">${icon('trash')}삭제</button></div>`:''}
+      </div>`;
+      box.querySelectorAll('[data-b]').forEach(btn=>btn.onclick=async(e)=>{ e.stopPropagation(); const act=btn.dataset.b, rec=list.find(x=>x.id===btn.dataset.id);
+        const by={by:u.loginId||'',byName:u.name||u.loginId||''};
+        if(act==='done'){ await Assign.transition(rec,'done',by); toast('완료 확정'); }
+        else if(act==='fb'){ const n=prompt('피드백/재요청 내용'); if(n==null) return; await Assign.transition(rec,'feedback',{...by,note:n}); toast('피드백 전달'); }
+        else if(act==='del'){ if(!confirm('이 지시를 삭제할까요?')) return; await Assign.remove(rec.id); toast('삭제'); }
+        document.dispatchEvent(new CustomEvent('assign:changed')); renderAssignBoard(host, opt);
+      });
+    }
+    st.querySelector('#abSt').onchange=e=>{ fSt=e.target.value; drawRows(); };
+    st.querySelector('#abWho').onchange=e=>{ fWho=e.target.value; drawRows(); };
+    st.querySelector('#abQ').oninput=e=>{ q=e.target.value; drawRows(); };
+    drawKpi(); drawAgg(); drawRows();
+  }
+  window.renderAssignBoard = renderAssignBoard;
+
   /* ─────────────────────── 우측 하단 지시함 위젯 + 알림 배지 ─────────────────────── */
   let widgetCache=[];
   function actionableCount(list, u){
