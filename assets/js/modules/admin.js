@@ -74,7 +74,7 @@
               <label class="fld">아이디<input type="text" id="fId" placeholder="cs.kim" autocomplete="off"></label>
               <label class="fld">이름<input type="text" id="fName" placeholder="김상담"></label>
               <label class="fld">부서<select id="fDept">${DEPTS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>
-              <label class="fld">역할<select id="fRole"><option value="member">팀원</option><option value="lead">파트장</option></select></label>
+              <label class="fld">역할<select id="fRole"><option value="member">팀원</option><option value="lead">파트장</option><option value="manager">팀장(전사)</option></select></label>
               <label class="fld">업무 이메일<input type="text" id="fEmail" placeholder="kim@robodyne.co.kr"></label>
               <label class="fld">접속코드
                 <span style="display:flex;gap:6px"><input type="text" id="fCode" placeholder="접속코드" style="flex:1">
@@ -102,7 +102,7 @@
 
       const $=s=>root.querySelector(s);
       let editing=null, usersCache=[];
-      const roleLabel=r=>r==='lead'?'파트장':'팀원';
+      const roleLabel=r=>r==='manager'?'팀장':r==='lead'?'파트장':'팀원';
       function renderPerms(sel, esel){ const box=$('#permPick'); const S=new Set(sel||[]), E=new Set(esel||[]);
         box.innerHTML=FEATURES.map(g=>`<div class="perm-grp"><div class="perm-gl ${g.dept}">${esc(g.name)}</div>
           <table class="perm-t"><thead><tr><th class="f">기능</th><th class="c">열람</th><th class="c">수정</th></tr></thead>
@@ -120,7 +120,7 @@
       function resetForm(){ editing=null; ['fId','fName','fEmail','fCode'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true;
         renderPerms(deptDefault('cs'), []); $('#fId').disabled=false; $('#editHint').innerHTML='<b style="color:var(--ok)">신규 계정 발급</b>'; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
-        $('#fDept').value=u.dept||'cs'; $('#fRole').value=u.role==='lead'?'lead':'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
+        $('#fDept').value=u.dept||'cs'; $('#fRole').value=(u.role==='lead'||u.role==='manager')?u.role:'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'), Array.isArray(u.editPerms)?u.editPerms:[]);
         $('#editHint').textContent=`'${u.loginId}' 수정 중`; $('#fName').focus(); }
       renderPerms(deptDefault('cs'), []);
@@ -146,14 +146,14 @@
           <tbody><tr><td colspan="6" class="muted" style="text-align:center;padding:16px">불러오는 중…</td></tr></tbody>`;
         try{
           const d=await authApi('listUsers');
-          const rank=u=>u.role==='lead'?0:1;
+          const rank=u=>u.role==='manager'?0:u.role==='lead'?1:2;
           const users=(d.users||[]).sort((a,b)=>(a.dept||'').localeCompare(b.dept||'')||rank(a)-rank(b)||a.loginId.localeCompare(b.loginId));
           usersCache=users;
           $('#uCnt').textContent=`· ${users.length}명`;
           const tb=t.querySelector('tbody'); tb.innerHTML='';
           if(!users.length){ tb.innerHTML=`<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">발급된 계정이 없습니다. 위에서 발급하세요.</td></tr>`; return; }
           users.forEach(u=>{ const tr=el('tr'); if(u.active===false) tr.className='inactive';
-            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${u.role==='lead'?'<span class="lead-badge">파트장</span>':''}${u.active===false?'<span class="off-badge">비활성</span>':''}</td>
+            tr.innerHTML=`<td class="mono"><b>${esc(u.loginId)}</b></td><td>${esc(u.name||'-')}${u.role==='manager'?'<span class="lead-badge" style="background:#ede9fe;color:#6d3fd6">팀장</span>':u.role==='lead'?'<span class="lead-badge">파트장</span>':''}${u.active===false?'<span class="off-badge">비활성</span>':''}</td>
               <td><span class="dept-badge ${esc(u.dept||'')}">${esc(deptLabel(u.dept))}</span></td>
               <td class="muted">${esc(u.email||'-')}</td>
               <td class="code-cell">${esc(u.code||'-')}</td>

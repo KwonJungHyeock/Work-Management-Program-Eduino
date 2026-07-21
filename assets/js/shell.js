@@ -30,7 +30,7 @@ function bootShell(){
       <div class="navtoggle" id="navToggle" title="메뉴 접기/펼치기">${icon('menu')}</div>
       <div class="crumb" id="crumb"></div>
       <div class="sp"></div>
-      ${(me.user&&(me.user.role==='lead'||me.user.role==='admin'))?`<button class="btn pri sm" id="btnAssign" title="담당자에게 업무 지시" style="margin-right:8px">${icon('send')}<span>업무요청</span></button>`:''}
+      ${(me.user&&(me.user.role==='admin'||me.user.role==='manager'))?`<button class="btn pri sm" id="btnAssign" title="담당자에게 업무 지시" style="margin-right:8px">${icon('send')}<span>업무요청</span></button>`:''}
       <button class="topsearch" id="btnSearch" title="전역 검색 (Ctrl+K)">${icon('search')}<span>검색</span><kbd>Ctrl K</kbd></button>
       <button class="navtoggle" id="btnBell" title="브라우저 알림 켜기/끄기">${icon('bell')}</button>
       <button class="navtoggle" id="btnSound" title="알림 소리 켜기/끄기" style="font-size:15px">🔔</button>

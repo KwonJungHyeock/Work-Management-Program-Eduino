@@ -90,8 +90,8 @@ module.exports = async function handler(req, res) {
       if (!String(u.code || '').trim()) return res.status(400).json({ ok: false, error: '접속코드를 입력하세요' });
       const perms = Array.isArray(u.perms) ? u.perms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
       const editPerms = Array.isArray(u.editPerms) ? u.editPerms.filter(k => typeof k === 'string' && /^[a-z]+\.[a-z]+$/i.test(k)).slice(0, 50) : [];
-      const role = u.role === 'lead' ? 'lead' : 'member';
-      // 파트장은 직무별 1명 제한 (서버 측 이중 방어)
+      const role = (u.role === 'lead' || u.role === 'manager') ? u.role : 'member';   // manager=팀장(전사)
+      // 파트장은 직무별 1명 제한 (서버 측 이중 방어) · 팀장(manager)은 제한 없음
       if (role === 'lead') {
         const dup = (await allAccounts()).find(a => a.loginId !== loginId && (a.dept || '') === String(u.dept || '') && a.role === 'lead');
         if (dup) return res.status(400).json({ ok: false, error: '해당 직무에 이미 파트장이 있습니다 (기존 파트장을 팀원으로 변경 후 지정하세요)' });

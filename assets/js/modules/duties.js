@@ -28,6 +28,21 @@
         .du-p:hover{background:var(--hover)} .du-p.on{background:var(--info-bg)}
         .du-p .nm{font-weight:700;font-size:13px} .du-p .rl{font-size:10.5px;color:var(--muted)}
         .du-dept{font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;background:var(--chip,#eef);color:var(--ink-2)}
+        /* 직무 편집 — 가로 3열(상시/담당/서브) 카드 레이아웃 */
+        .du-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;align-items:start}
+        @media(max-width:1080px){.du-cols{grid-template-columns:1fr}}
+        .du-col{border:1px solid var(--line);border-top-width:3px;border-radius:11px;background:var(--panel);overflow:hidden}
+        .du-col.tier-a{border-top-color:var(--info)} .du-col.tier-b{border-top-color:var(--ok)} .du-col.tier-c{border-top-color:var(--muted)}
+        .du-col-hd{padding:9px 12px;font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line-2)}
+        .du-col.tier-a .du-col-hd{background:var(--info-bg);color:var(--info)}
+        .du-col.tier-b .du-col-hd{background:var(--ok-bg,#e9f9f0);color:#2f8f4e}
+        .du-col.tier-c .du-col-hd{background:var(--panel-2,#f4f6fa);color:var(--ink-2)}
+        .du-col-hd span{margin-left:auto;font-size:11px;font-weight:700;opacity:.85}
+        .du-col-body{padding:8px 9px}
+        .du-sec2{border:1px solid var(--line-2);border-radius:9px;margin-bottom:8px;background:var(--panel)}
+        .du-sec2 .s2h{display:flex;gap:5px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line-2);background:var(--panel-2,#f7f9fc)}
+        .du-sec2 .s2h input.lab{font:inherit;font-weight:800;font-size:12px;border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 6px;flex:1;min-width:0}
+        .du-sec2 .s2h input.lab:focus{border-color:var(--line-2);background:var(--panel)}
         /* 구분(tier) 색상 — 상시(파랑)·담당(초록)·서브(회색) */
         .du-sec{border:1px solid var(--line);border-left-width:4px;border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--panel)}
         .du-sec .sh{display:flex;gap:7px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line-2)}
@@ -71,25 +86,24 @@
       <div class="mbody wide" id="duBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#duBody');
 
-      // 편집 DOM → cur 모델 반영(재렌더/저장 전)
+      // 편집 DOM → cur 모델 반영(재렌더/저장 전) — data-si/gi 로 매핑(구조는 add/remove가 관리)
       function syncDom(){
         if(!cur) return;
-        const secEls=body.querySelectorAll('.du-sec'); const secs=[];
-        secEls.forEach(se=>{
-          const label=se.querySelector('.lab').value.trim();
-          const w=+se.querySelector('.wsel').value||1;
-          const groups=[];
+        body.querySelectorAll('.du-sec2').forEach(se=>{
+          const sec=cur.sections[+se.dataset.si]; if(!sec) return;
+          const lab=se.querySelector('.lab'); if(lab) sec.label=lab.value.trim();
           se.querySelectorAll('.du-grp').forEach(ge=>{
-            const name=ge.querySelector('.gname').value.trim();
-            const items=[]; ge.querySelectorAll('.du-it input').forEach(ii=>{ const v=ii.value.trim(); if(v) items.push(v); });
-            if(name||items.length) groups.push({name,items});
+            const gr=sec.groups[+ge.dataset.gi]; if(!gr) return;
+            const gn=ge.querySelector('.gname'); if(gn) gr.name=gn.value.trim();
+            const items=[]; ge.querySelectorAll('.du-it input').forEach(ii=>{ items.push(ii.value.trim()); });
+            gr.items=items;
           });
-          if(label||groups.length) secs.push({label,w,groups});
         });
-        cur.sections=secs;
         const dn=body.querySelector('#duName'), dd=body.querySelector('#duDept'), dr=body.querySelector('#duRole');
         if(dn) cur.name=dn.value.trim(); if(dd) cur.dept=dd.value; if(dr) cur.role=dr.value;
       }
+      // 저장 직전 빈 세부업무/빈 그룹 정리
+      function cleanup(){ (cur.sections||[]).forEach(s=>{ (s.groups||[]).forEach(g=>{ g.items=(g.items||[]).filter(x=>String(x).trim()); }); s.groups=(s.groups||[]).filter(g=>String(g.name).trim()||g.items.length); }); cur.sections=(cur.sections||[]).filter(s=>String(s.label).trim()||s.groups.length); }
 
       function draw(){ drawEdit(); }
 
@@ -136,32 +150,38 @@
             <button class="btn ghost" id="duDel" style="color:var(--danger)">${icon('trash')}직원 삭제</button>
             <button class="btn pri" id="duSave">${icon('save')}저장</button>
           </div>
-          <div id="duSecs">${(cur.sections||[]).map(secHtml).join('')}</div>
-          <button class="du-add" id="duAddSec" style="margin-top:4px">${icon('plus')} 구분(상시/담당/서브) 추가</button>
+          <div class="du-cols">${TIERS.map(colHtml).join('')}</div>
           <div id="duMsg" class="muted" style="font-size:12.5px;margin-top:8px;min-height:16px"></div>`;
       }
-      const tierCls = w=> w>=3?'tier-a':w===2?'tier-b':'tier-c';
-      function secHtml(sec){
-        const gc=(sec.groups||[]).length, ic=(sec.groups||[]).reduce((a,g)=>a+(g.items||[]).length,0);
-        return `<div class="du-sec ${tierCls(sec.w||1)}">
-          <div class="sh"><span class="cv" data-act="collapse">▾</span><input class="lab" value="${esc(sec.label||'')}" placeholder="구분 (예: 상시-담당)">
-            <span class="cnt">${gc}그룹·${ic}업무</span>
-            <select class="wsel" style="font:inherit;font-size:11.5px;border:1px solid var(--line-2);border-radius:6px;padding:3px 5px">${WOPT.map(o=>`<option value="${o.v}" ${(sec.w||1)===o.v?'selected':''}>${o.t}</option>`).join('')}</select>
-            <button class="du-x" data-act="delsec" title="구분 삭제">✕</button></div>
-          <div class="grps">${(sec.groups||[]).map(grpHtml).join('')}</div>
-          <div class="gadd" style="padding:5px 10px 6px 12px"><button class="du-add" data-act="addgrp">${icon('plus')} 업무그룹</button></div>
+      const TIERS=[{w:3,label:'상시',cls:'tier-a'},{w:2,label:'담당',cls:'tier-b'},{w:1,label:'서브',cls:'tier-c'}];
+      const tierW = w=> w>=3?3:w===2?2:1;
+      function colHtml(t){
+        const secs=(cur.sections||[]).map((s,i)=>({s,i})).filter(x=>tierW(x.s.w||1)===t.w);
+        const cnt=secs.reduce((a,x)=>a+(x.s.groups||[]).reduce((b,g)=>b+(g.items||[]).length,0),0);
+        return `<div class="du-col ${t.cls}">
+          <div class="du-col-hd">${esc(t.label)} <span>${cnt}업무</span></div>
+          <div class="du-col-body">
+            ${secs.map(x=>secHtml(x.s,x.i)).join('')||'<div class="muted" style="font-size:11.5px;padding:8px 4px">구분 없음</div>'}
+            <button class="du-add" data-act="addsec" data-w="${t.w}" style="width:100%;justify-content:center;margin-top:2px">${icon('plus')} 구분 추가</button>
+          </div></div>`;
+      }
+      function secHtml(sec,si){
+        return `<div class="du-sec2" data-si="${si}">
+          <div class="s2h"><input class="lab" value="${esc(sec.label||'')}" placeholder="구분 이름(예: 상시-공통)"><button class="du-x" data-act="delsec" data-si="${si}" title="구분 삭제">✕</button></div>
+          <div class="grps">${(sec.groups||[]).map((g,gi)=>grpHtml(g,si,gi)).join('')}</div>
+          <div style="padding:4px 8px 7px"><button class="du-add" data-act="addgrp" data-si="${si}" style="padding:2px 8px;font-size:11px">${icon('plus')} 업무그룹</button></div>
         </div>`;
       }
-      function grpHtml(gr){
-        return `<div class="du-grp">
-          <div class="gh"><input class="gname" value="${esc(gr.name||'')}" placeholder="업무그룹 (예: 주문관리-카페24/오픈마켓)"><button class="du-x" data-act="delgrp" title="그룹 삭제">✕</button></div>
-          ${(gr.items||[]).map(it=>`<div class="du-it"><span style="color:var(--faint);font-size:10px">•</span><input value="${esc(it)}" placeholder="세부업무"><button class="du-x" data-act="delit" title="삭제">✕</button></div>`).join('')}
-          <div style="margin:2px 0 2px 12px"><button class="du-add" data-act="addit" style="padding:2px 8px;font-size:11px">${icon('plus')} 세부업무</button></div>
+      function grpHtml(gr,si,gi){
+        return `<div class="du-grp" data-si="${si}" data-gi="${gi}">
+          <div class="gh"><input class="gname" value="${esc(gr.name||'')}" placeholder="업무그룹"><button class="du-x" data-act="delgrp" data-si="${si}" data-gi="${gi}" title="그룹 삭제">✕</button></div>
+          ${(gr.items||[]).map((it,ii)=>`<div class="du-it"><span style="color:var(--faint);font-size:10px">•</span><input value="${esc(it)}" placeholder="세부업무"><button class="du-x" data-act="delit" data-si="${si}" data-gi="${gi}" data-ii="${ii}" title="삭제">✕</button></div>`).join('')}
+          <div style="margin:2px 0 2px 12px"><button class="du-add" data-act="addit" data-si="${si}" data-gi="${gi}" style="padding:1px 7px;font-size:10.5px">${icon('plus')} 세부업무</button></div>
         </div>`;
       }
       function wireEditor(){
         const m=body.querySelector('#duMain');
-        m.querySelector('#duSave').onclick=async()=>{ syncDom(); const msg=body.querySelector('#duMsg');
+        m.querySelector('#duSave').onclick=async()=>{ syncDom(); cleanup(); const msg=body.querySelector('#duMsg');
           if(!cur.name){ msg.innerHTML='<span style="color:var(--danger)">이름을 입력하세요.</span>'; return; }
           cur.updatedBy=me().name||me().loginId||''; cur.updatedAt=new Date().toISOString();
           msg.innerHTML='<span style="color:var(--info)">저장 중…</span>';
@@ -171,18 +191,16 @@
         m.querySelector('#duDel').onclick=async()=>{ if(!confirm(`'${cur.name}' 직무 데이터를 삭제할까요?`)) return;
           if(seeded){ toast('시드는 [시드 서버 저장] 후 삭제하세요'); return; }
           const ok=await Duties.remove(cur.id); if(ok){ toast('삭제'); selId=null; cur=null; await reload(); } else toast('삭제 실패'); };
-        m.querySelector('#duAddSec').onclick=()=>{ syncDom(); cur.sections.push({label:'',w:2,groups:[]}); drawEdit(); };
         m.querySelectorAll('[data-act]').forEach(btn=>{ btn.onclick=()=>{
-          const act=btn.dataset.act;
-          if(act==='collapse'){ btn.closest('.du-sec').classList.toggle('col'); return; }   // 접기(뷰 전용)
-          syncDom();
-          const secEl=btn.closest('.du-sec'); const secIdx=[...m.querySelectorAll('.du-sec')].indexOf(secEl);
-          if(act==='delsec'){ cur.sections.splice(secIdx,1); }
-          else { const grpEl=btn.closest('.du-grp'); const grpIdx=grpEl?[...secEl.querySelectorAll('.du-grp')].indexOf(grpEl):-1; const sec=cur.sections[secIdx];
+          const act=btn.dataset.act; syncDom();
+          if(act==='addsec'){ cur.sections.push({label:'',w:+btn.dataset.w||2,groups:[{name:'',items:['']}]}); drawEdit(); return; }
+          const si=+btn.dataset.si, sec=cur.sections[si]; if(!sec) return;
+          if(act==='delsec'){ cur.sections.splice(si,1); }
+          else { const gi=+btn.dataset.gi;
             if(act==='addgrp') sec.groups.push({name:'',items:['']});
-            else if(act==='delgrp') sec.groups.splice(grpIdx,1);
-            else if(act==='addit') sec.groups[grpIdx].items.push('');
-            else if(act==='delit'){ const itEl=btn.closest('.du-it'); const itIdx=[...grpEl.querySelectorAll('.du-it')].indexOf(itEl); sec.groups[grpIdx].items.splice(itIdx,1); }
+            else if(act==='delgrp') sec.groups.splice(gi,1);
+            else if(act==='addit') sec.groups[gi].items.push('');
+            else if(act==='delit') sec.groups[gi].items.splice(+btn.dataset.ii,1);
           }
           drawEdit();
         }; });

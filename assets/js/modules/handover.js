@@ -90,9 +90,22 @@
           const bulk=body.querySelector('#hvBulk'); if(bulk) bulk.onclick=()=>openBulk();
           body.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{ const v=list.find(x=>x.id===c.dataset.id); if(v) openCard(v); });
         }
+        // 정산유형(월정산/선결제 등)·상태별 배지 색상 — 가시성 향상
+        function badgeStyle(f,val){ const s=String(val||'');
+          if(f.k==='gradeSettle'){
+            if(/선결제/.test(s)) return 'background:#fff1e6;color:#c2570a';          // 선결제 · 주황
+            if(/월\s*정산|월정산/.test(s)) return 'background:#e6f0ff;color:#1f57c3'; // 월정산 · 파랑
+            if(/위탁/.test(s)) return 'background:#ede9fe;color:#6d3fd6';            // 위탁 · 보라
+          }
+          if(f.k==='status'){
+            if(/중단|해지|종료/.test(s)) return 'background:#fdeaea;color:#c53434';
+            return 'background:#e8f7ee;color:#2f8f4e';                               // 거래중/입점 · 초록
+          }
+          return ''; }
+        function badgeIcon(f){ return f.k==='gradeSettle'?icon('check2'):f.k==='status'?icon('folder'):icon('users'); }
         function cardHtml(v){
           const badges=FIELDS.filter(f=>f.badge && String(v[f.k]||'').trim())
-            .map(f=>`<span class="hv-mgr">${icon('users')}${esc(v[f.k])}</span>`).join(' ');
+            .map(f=>{ const st=badgeStyle(f,v[f.k]); return `<span class="hv-mgr"${st?` style="${st}"`:''}>${badgeIcon(f)}${esc(v[f.k])}</span>`; }).join(' ');
           const lines=FIELDS.filter(f=>!f.badge && String(v[f.k]||'').trim()).slice(0,4)
             .map(f=>`<div class="hv-line"><b>${esc(f.label)}</b> ${esc(snippet(v[f.k],48))}</div>`).join('');
           return `<div class="hv-card" data-id="${esc(v.id)}">
