@@ -123,15 +123,16 @@
       const deptVal=()=>{ const v=$('#fDept').value; return v==='__custom' ? $('#fDeptCustom').value.trim() : v; };
       const setDept=d=>{ if(d && !DEPT_CODES.includes(d)){ $('#fDept').value='__custom'; $('#fDeptCustom').value=d; } else { $('#fDept').value=d||'cs'; $('#fDeptCustom').value=''; } toggleCustomDept(); };
       $('#fDept').onchange=()=>{ toggleCustomDept(); const cur=new Set(collectPerms()), eCur=collectEditPerms(); deptDefault($('#fDept').value).forEach(k=>cur.add(k)); renderPerms([...cur], eCur); };
-      const setMasterLock=on=>{ ['fRole','fCode','genCode','fActive'].forEach(id=>{ const e=$('#'+id); if(e) e.disabled=on; });
-        $('#fDept').disabled=on; $('#fDeptCustom').disabled=on; const pp=$('#permPick'); if(pp) pp.style.opacity=on?'.5':''; if(pp) pp.style.pointerEvents=on?'none':''; };
+      // 대표 계정: 역할·활성만 잠금(이름·이메일·부서·접속코드는 수정 가능)
+      const setMasterLock=on=>{ ['fRole','fActive'].forEach(id=>{ const e=$('#'+id); if(e) e.disabled=on; });
+        const pp=$('#permPick'); if(pp){ pp.style.opacity=on?'.5':''; pp.style.pointerEvents=on?'none':''; } };
       function resetForm(){ editing=null; ['fId','fName','fEmail','fCode','fDeptCustom'].forEach(i=>$('#'+i).value=''); $('#fDept').value='cs'; $('#fRole').value='member'; $('#fActive').checked=true; toggleCustomDept(); setMasterLock(false);
         renderPerms(deptDefault('cs'), []); $('#fId').disabled=false; $('#editHint').innerHTML='<b style="color:var(--ok)">신규 계정 발급</b>'; $('#fId').focus(); }
       function fillForm(u){ editing=u.loginId; $('#fId').value=u.loginId; $('#fId').disabled=true; $('#fName').value=u.name||'';
         setDept(u.dept||'cs'); $('#fRole').value=(u.role==='lead'||u.role==='manager')?u.role:'member'; $('#fActive').checked=u.active!==false; $('#fEmail').value=u.email||''; $('#fCode').value=u.code||'';
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'), Array.isArray(u.editPerms)?u.editPerms:[]);
         setMasterLock(!!u.isMaster);
-        $('#editHint').innerHTML=u.isMaster?`<b style="color:var(--warn)">대표 계정 · 이름/이메일만 수정</b>`:`'${esc(u.loginId)}' 수정 중`; $('#fName').focus(); }
+        $('#editHint').innerHTML=u.isMaster?`<b style="color:var(--warn)">대표 계정 · 이름/이메일/부서/접속코드 수정</b>`:`'${esc(u.loginId)}' 수정 중`; $('#fName').focus(); }
       renderPerms(deptDefault('cs'), []);
       // 신규 계정: 폼을 빈 상태로 초기화(수정 모드 해제) + 접속코드 자동 생성 → 바로 발급 가능
       $('#newUser').onclick=()=>{ resetForm(); $('#fCode').value=randCode(); $('#admStat').textContent=''; root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };

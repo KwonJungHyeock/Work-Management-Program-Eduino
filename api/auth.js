@@ -62,9 +62,13 @@ module.exports = async function handler(req, res) {
       const loginId = String(body.loginId || '').trim();
       const code = String(body.code || '');
       if (!loginId || !code) return res.status(200).json({ ok: false, error: '아이디와 접속코드를 입력하세요' });
-      if (loginId === ADMIN_ID && code === ADMIN_CODE) {
+      if (loginId === ADMIN_ID) {
         const prof = await getAdminProfile();
-        return res.status(200).json({ ok: true, user: { loginId: ADMIN_ID, name: prof.name || '관리자', dept: 'admin', role: 'admin', email: prof.email || '' } });
+        // 환경변수 코드는 항상 유효(복구용) + 대표가 바꾼 코드도 허용
+        if (code === ADMIN_CODE || (prof.code && code === String(prof.code))) {
+          return res.status(200).json({ ok: true, user: { loginId: ADMIN_ID, name: prof.name || '관리자', dept: prof.dept || '(주)로보다인시스템', role: 'admin', email: prof.email || '' } });
+        }
+        return res.status(200).json({ ok: false, error: '아이디 또는 접속코드가 올바르지 않습니다' });
       }
       const acc = await getAccount(loginId);
       if (!acc || acc.active === false || String(acc.code) !== code) {
@@ -76,8 +80,8 @@ module.exports = async function handler(req, res) {
     if (op === 'listUsers') {
       if (!isAdmin(body)) return res.status(403).json({ ok: false, error: '관리자 권한이 필요합니다' });
       const prof = await getAdminProfile();
-      // 대표(마스터 관리자) 계정도 목록에 표시 — 이름/이메일만 수정 가능(삭제·비활성 불가)
-      const adminRow = { loginId: ADMIN_ID, name: prof.name || '관리자', dept: 'admin', role: 'admin', email: prof.email || '', active: true, code: '(고정 · 환경변수)', isMaster: true };
+      // 대표(마스터 관리자) 계정도 목록에 표시 — 이름/이메일/부서/접속코드 수정 가능(역할 고정·삭제/비활성 불가)
+      const adminRow = { loginId: ADMIN_ID, name: prof.name || '관리자', dept: prof.dept || '(주)로보다인시스템', role: 'admin', email: prof.email || '', active: true, code: prof.code || ADMIN_CODE, isMaster: true };
       return res.status(200).json({ ok: true, users: [adminRow, ...await allAccounts()], adminId: ADMIN_ID });
     }
 
@@ -92,8 +96,15 @@ module.exports = async function handler(req, res) {
       const u = body.user || {};
       const loginId = String(u.loginId || '').trim();
       if (!/^[a-zA-Z0-9._-]{2,30}$/.test(loginId)) return res.status(400).json({ ok: false, error: '아이디는 영문/숫자/._- 2~30자' });
-      if (loginId === ADMIN_ID) {   // 대표 계정: 이름·이메일만 수정(코드/역할/부서는 환경변수 고정)
-        await putAdminProfile({ name: String(u.name || '').slice(0, 40), email: String(u.email || '').slice(0, 120) });
+      if (loginId === ADMIN_ID) {   // 대표 계정: 이름·이메일·부서·접속코드 수정(역할은 admin 고정)
+        const prev = await getAdminProfile();
+        const newCode = String(u.code || '').trim();
+        await putAdminProfile({
+          name: String(u.name || '').slice(0, 40),
+          email: String(u.email || '').slice(0, 120),
+          dept: String(u.dept || '').slice(0, 60) || prev.dept || '(주)로보다인시스템',
+          code: newCode || prev.code || '',   // 비우면 기존 유지 · 환경변수 코드는 항상 복구용으로 유효
+        });
         return res.status(200).json({ ok: true });
       }
       if (!String(u.code || '').trim()) return res.status(400).json({ ok: false, error: '접속코드를 입력하세요' });
