@@ -168,6 +168,7 @@ const TS_SHEET_MAP = {
 const NAV = [
   { dept:'home', name:'홈', full:'공통', icon:'dashboard', common:true, items:[
       { key:'home.dash',   name:'홈 대시보드', icon:'dashboard' },
+      { key:'home.mytasks', name:'내 업무',     icon:'inbox' },
       { key:'home.alerts', name:'알림',        icon:'bell' },
       { key:'home.notice', name:'공지사항',   icon:'megaphone' },
       { key:'home.calendar', name:'일정·달력',  icon:'check2' },

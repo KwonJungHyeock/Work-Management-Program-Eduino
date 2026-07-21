@@ -118,4 +118,149 @@
     };
   }
   window.openAssignComposer = openAssignComposer;
+
+  /* ─────────────────────── 우측 하단 지시함 위젯 + 알림 배지 ─────────────────────── */
+  let widgetCache=[];
+  function actionableCount(list, u){
+    const mine=Assign.mine(list,u).filter(a=>a.status==='sent').length;         // 수락 대기
+    const rev =Assign.fromMe(list,u).filter(a=>a.status==='submitted').length;  // 완료보고 확인 대기
+    return { mine, rev, total:mine+rev };
+  }
+  function setNavBadge(n){ const s=document.querySelector('.nav-item[data-key="home.mytasks"] .nav-badge'); if(s){ if(n>0){ s.textContent=n>99?'99+':n; s.style.display='inline-block'; } else s.style.display='none'; } }
+
+  async function refreshTaskWidget(){
+    const u=me(); if(!u||!u.loginId&&!u.name) return;
+    let list=null; try{ list=await Assign.all(); }catch(e){ list=null; }
+    if(list) widgetCache=list;
+    const fab=document.getElementById('taskFab'); if(!fab) return;
+    const {mine,rev,total}=actionableCount(widgetCache,u);
+    const b=fab.querySelector('.tf-badge');
+    if(total>0){ b.textContent=total>99?'99+':total; b.style.display='flex'; } else b.style.display='none';
+    setNavBadge(mine);
+    const panel=document.getElementById('taskPanel');
+    if(panel && panel.classList.contains('open')) drawPanel();
+    return {mine,rev,total};
+  }
+  window.refreshTaskWidget = refreshTaskWidget;
+
+  function drawPanel(){
+    const panel=document.getElementById('taskPanel'); if(!panel) return; const u=me();
+    const recv=Assign.mine(widgetCache,u).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+    const rev =Assign.fromMe(widgetCache,u).filter(a=>a.status==='submitted').sort((a,b)=>String(b.submittedAt).localeCompare(String(a.submittedAt)));
+    const card=a=>`<div class="tp-card" data-id="${esc2(a.id)}">
+        <div style="display:flex;gap:8px;align-items:center"><b style="flex:1;font-size:13px">${esc2(a.title)}</b>${stPill(a.status)}</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">지시: ${esc2(a.fromName||'?')}${a.due?' · 마감 '+fmtDate(a.due):''}${a.priority==='urgent'?' · <b style="color:var(--danger)">급함</b>':''}</div>
+        ${a.detail?`<div style="font-size:12px;color:var(--ink-2);margin-top:5px;line-height:1.5">${esc2(a.detail)}</div>`:''}
+        ${a.reportFormat?`<div style="font-size:11px;color:var(--muted);margin-top:4px">보고: ${esc2(a.reportFormat)}</div>`:''}
+        ${a.status==='sent'?`<div style="margin-top:8px;display:flex;gap:6px"><button class="btn pri sm" data-act="accept" data-id="${esc2(a.id)}">${icon('check')}수락</button><button class="btn ghost sm" data-act="reject" data-id="${esc2(a.id)}">반려</button></div>`:''}
+      </div>`;
+    const revCard=a=>`<div class="tp-card" data-id="${esc2(a.id)}">
+        <div style="display:flex;gap:8px;align-items:center"><b style="flex:1;font-size:13px">${esc2(a.title)}</b>${stPill(a.status)}</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">담당: ${esc2(a.toName||'?')} · 완료보고 ${fmtDT(a.submittedAt)}</div>
+        ${a.progressNote?`<div style="font-size:12px;color:var(--ink-2);margin-top:5px;line-height:1.5">${esc2(a.progressNote)}</div>`:''}
+        <div style="margin-top:8px;display:flex;gap:6px"><button class="btn pri sm" data-act="done" data-id="${esc2(a.id)}">${icon('check')}완료 확정</button><button class="btn ghost sm" data-act="feedback" data-id="${esc2(a.id)}">반려·피드백</button></div>
+      </div>`;
+    panel.querySelector('.tp-body').innerHTML=`
+      <div class="tp-sec">내게 온 업무 <span>${recv.length}</span></div>
+      ${recv.length?recv.map(card).join(''):'<div class="tp-empty">받은 업무 지시가 없습니다.</div>'}
+      ${rev.length?`<div class="tp-sec" style="margin-top:12px">내가 지시 · 완료보고 확인 <span>${rev.length}</span></div>${rev.map(revCard).join('')}`:''}`;
+    panel.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>handleAct(btn.dataset.act, btn.dataset.id));
+  }
+
+  async function handleAct(act, id){
+    const rec=widgetCache.find(a=>a.id===id); if(!rec) return; const u=me();
+    const by={by:u.loginId||'',byName:u.name||u.loginId||''};
+    if(act==='accept'){ await Assign.transition(rec,'accepted',by); toast('업무를 수락했습니다 · [내 업무]에서 진행하세요'); }
+    else if(act==='reject'){ if(!confirm('이 업무 지시를 반려할까요?')) return; await Assign.transition(rec,'feedback',{...by,note:'담당자 반려'}); toast('반려했습니다'); }
+    else if(act==='done'){ await Assign.transition(rec,'done',by); toast('완료 확정 처리했습니다'); }
+    else if(act==='feedback'){ const note=prompt('피드백/재요청 내용을 입력하세요'); if(note==null) return; await Assign.transition(rec,'feedback',{...by,note}); toast('담당자에게 피드백을 전달했습니다'); }
+    document.dispatchEvent(new CustomEvent('assign:changed')); await refreshTaskWidget();
+  }
+
+  function initTaskWidget(){
+    if(document.getElementById('taskFab')) return;
+    const wrap=el('div'); wrap.id='taskWidget';
+    wrap.innerHTML=`
+      <style>
+        #taskFab{position:fixed;right:22px;bottom:22px;z-index:9500;width:52px;height:52px;border-radius:50%;background:var(--info);color:#fff;border:none;box-shadow:0 6px 20px rgba(20,40,74,.28);cursor:pointer;display:flex;align-items:center;justify-content:center}
+        #taskFab:hover{filter:brightness(1.05)} #taskFab .ic svg{width:24px;height:24px}
+        #taskFab .tf-badge{position:absolute;top:-3px;right:-3px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid var(--panel)}
+        #taskPanel{position:fixed;right:22px;bottom:84px;z-index:9500;width:360px;max-width:calc(100vw - 32px);max-height:min(560px,calc(100vh - 120px));background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(20,40,74,.24);display:none;flex-direction:column;overflow:hidden}
+        #taskPanel.open{display:flex}
+        #taskPanel .tp-hd{padding:13px 16px;border-bottom:1px solid var(--line);font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px}
+        #taskPanel .tp-body{padding:12px 14px;overflow-y:auto}
+        #taskPanel .tp-sec{font-size:11px;font-weight:800;color:var(--muted);margin:2px 0 7px;text-transform:none}
+        #taskPanel .tp-sec span{background:var(--info-bg);color:var(--info);border-radius:8px;padding:1px 7px;margin-left:4px}
+        #taskPanel .tp-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--panel)}
+        #taskPanel .tp-empty{color:var(--muted);font-size:12.5px;padding:14px 4px;text-align:center}
+      </style>
+      <button id="taskFab" title="업무 지시함">${icon('inbox')}<span class="tf-badge"></span></button>
+      <div id="taskPanel"><div class="tp-hd">${icon('inbox')} 업무 지시함 <span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--muted)">수락하면 [내 업무]에 기록됩니다</span></div><div class="tp-body"></div></div>`;
+    document.body.appendChild(wrap);
+    const fab=document.getElementById('taskFab'), panel=document.getElementById('taskPanel');
+    fab.onclick=()=>{ const open=panel.classList.toggle('open'); if(open) drawPanel(); };
+    document.addEventListener('click',e=>{ if(panel.classList.contains('open') && !panel.contains(e.target) && e.target!==fab && !fab.contains(e.target)) panel.classList.remove('open'); });
+    document.addEventListener('assign:changed',()=>refreshTaskWidget());
+    refreshTaskWidget();
+    clearInterval(window.__taskPoll); window.__taskPoll=setInterval(refreshTaskWidget, 60000);
+  }
+  window.initTaskWidget = initTaskWidget;
+
+  /* ─────────────────────── 홈 · 내 업무(개인 업무 현황) ─────────────────────── */
+  MODULES['home.mytasks']={
+    title:'내 업무', icon:'inbox',
+    render(root){
+      const u=me();
+      root.innerHTML=`
+        <style>
+          .mt-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+          .mt-card{border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:11px;background:var(--panel);padding:13px 15px;box-shadow:var(--sh-sm)}
+          .mt-card.s-sent{border-left-color:var(--warn)} .mt-card.s-accepted{border-left-color:var(--info)}
+          .mt-card.s-submitted{border-left-color:#8b5cf6} .mt-card.s-done{border-left-color:var(--ok);opacity:.72}
+          .mt-t{font-weight:800;font-size:14px;margin-bottom:3px} .mt-meta{font-size:11.5px;color:var(--muted)}
+          .mt-detail{font-size:12.5px;color:var(--ink-2);margin:7px 0;line-height:1.55}
+          .mt-fb{font-size:12px;background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:7px 10px;margin:6px 0}
+          .mt-sechd{font-size:12.5px;font-weight:800;margin:16px 0 9px;display:flex;align-items:center;gap:7px}
+        </style>
+        <div class="mhead"><div class="tt">내 업무</div><div class="ds">내게 지시된 업무만 표시됩니다. 수락 → 진행 → 완료 순으로 처리하세요.</div>
+          <div class="mhead-act"><button class="btn ghost sm" id="mtReload">${icon('refresh')||''}새로고침</button></div></div>
+        <div class="mbody wide" id="mtBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
+      const body=root.querySelector('#mtBody');
+      root.querySelector('#mtReload').onclick=()=>load();
+      async function load(){ let list=[]; try{ list=await Assign.all()||[]; }catch(e){} if(!root.isConnected) return;
+        const mine=Assign.mine(list,u);
+        const active=mine.filter(a=>a.status!=='done').sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+        const done=mine.filter(a=>a.status==='done').sort((a,b)=>String(b.doneAt).localeCompare(String(a.doneAt)));
+        if(!mine.length){ body.innerHTML=`<div class="muted" style="padding:40px;text-align:center">${icon('inbox')}<div style="margin-top:8px">받은 업무 지시가 없습니다.</div></div>`; return; }
+        body.innerHTML=`
+          <div class="mt-sechd">${icon('clipboard')} 진행 중 · ${active.length}건</div>
+          <div class="mt-col">${active.map(cardHtml).join('')||'<div class="muted" style="font-size:12.5px">진행 중인 업무가 없습니다.</div>'}</div>
+          ${done.length?`<div class="mt-sechd">${icon('check')} 완료 · ${done.length}건</div><div class="mt-col">${done.map(cardHtml).join('')}</div>`:''}`;
+        body.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>act(btn.dataset.act, btn.dataset.id));
+      }
+      function cardHtml(a){
+        return `<div class="mt-card s-${a.status}">
+          <div style="display:flex;gap:8px;align-items:center"><div class="mt-t" style="flex:1">${esc2(a.title)}</div>${stPill(a.status)}</div>
+          <div class="mt-meta">지시: ${esc2(a.fromName||'?')} · ${fmtDate(a.createdAt)}${a.due?' · 마감 '+fmtDate(a.due):''}${a.priority==='urgent'?' · <b style="color:var(--danger)">급함</b>':''}</div>
+          ${a.detail?`<div class="mt-detail">${esc2(a.detail)}</div>`:''}
+          ${a.reportFormat?`<div class="mt-meta">보고 형태: ${esc2(a.reportFormat)}</div>`:''}
+          ${a.feedback?`<div class="mt-fb">${icon('megaphone')} 피드백: ${esc2(a.feedback)}</div>`:''}
+          <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+            ${a.status==='sent'?`<button class="btn pri sm" data-act="accept" data-id="${esc2(a.id)}">${icon('check')}수락</button><button class="btn ghost sm" data-act="reject" data-id="${esc2(a.id)}">반려</button>`:''}
+            ${a.status==='accepted'?`<button class="btn pri sm" data-act="submit" data-id="${esc2(a.id)}">${icon('check')}완료 보고</button><button class="btn ghost sm" data-act="note" data-id="${esc2(a.id)}">진행 메모</button>`:''}
+            ${a.status==='submitted'?`<span class="muted" style="font-size:12px">지시자 확인 대기 중…</span>`:''}
+            ${a.status==='done'?`<span class="muted" style="font-size:12px">완료 · ${fmtDT(a.doneAt)}</span>`:''}
+          </div></div>`;
+      }
+      async function act(action, id){ let list=[]; try{ list=await Assign.all()||[]; }catch(e){} const rec=list.find(a=>a.id===id); if(!rec) return;
+        const by={by:u.loginId||'',byName:u.name||u.loginId||''};
+        if(action==='accept'){ await Assign.transition(rec,'accepted',by); toast('수락 · 진행 상태로 이동'); }
+        else if(action==='reject'){ if(!confirm('반려할까요?')) return; await Assign.transition(rec,'feedback',{...by,note:'담당자 반려'}); toast('반려'); }
+        else if(action==='note'){ const n=prompt('진행 메모(지시자에게 함께 전달됩니다)', rec.progressNote||''); if(n==null) return; await Assign.transition(rec,'progress',{...by,note:n}); toast('진행 메모 저장'); }
+        else if(action==='submit'){ const n=prompt('완료 보고 내용(선택)', rec.progressNote||''); if(n==null) return; await Assign.transition(rec,'submitted',{...by,note:n}); toast('완료 보고 · 지시자에게 알림'); }
+        document.dispatchEvent(new CustomEvent('assign:changed')); load();
+      }
+      load();
+    }
+  };
 })();

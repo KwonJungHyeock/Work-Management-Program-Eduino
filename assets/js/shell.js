@@ -68,6 +68,7 @@ function bootShell(){
   function playIntro(then){ intro.classList.add('show'); setTimeout(()=>{ intro.classList.remove('show'); if(then)then(); }, 1400); }
   $('brandBtn').onclick=()=>playIntro(()=>{ location.hash=''; });
   { const ba=$('btnAssign'); if(ba) ba.onclick=()=>{ if(window.openAssignComposer) window.openAssignComposer(); }; }
+  if(window.initTaskWidget) window.initTaskWidget();   // 우측 하단 업무 지시함 위젯
 
   // 로그인 사용자 정보
   const deptLabel = { cs:'CS · 고객 상담', md:'MD · 상품 기획', logi:'물류 관리', admin:'관리자' };
