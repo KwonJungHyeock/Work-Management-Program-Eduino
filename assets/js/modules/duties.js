@@ -28,15 +28,26 @@
         .du-p:hover{background:var(--hover)} .du-p.on{background:var(--info-bg)}
         .du-p .nm{font-weight:700;font-size:13px} .du-p .rl{font-size:10.5px;color:var(--muted)}
         .du-dept{font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;background:var(--chip,#eef);color:var(--ink-2)}
-        .du-sec{border:1px solid var(--line);border-radius:11px;margin-bottom:12px;overflow:hidden}
-        .du-sec .sh{display:flex;gap:8px;align-items:center;padding:9px 11px;background:var(--panel-2,#f6f8fc);border-bottom:1px solid var(--line)}
-        .du-sec .sh input.lab{font:inherit;font-weight:800;font-size:13px;border:1px solid var(--line-2);border-radius:7px;padding:5px 8px;flex:1;min-width:0}
-        .du-grp{padding:8px 11px;border-bottom:1px solid var(--line-2)}
+        /* 구분(tier) 색상 — 상시(파랑)·담당(초록)·서브(회색) */
+        .du-sec{border:1px solid var(--line);border-left-width:4px;border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--panel)}
+        .du-sec .sh{display:flex;gap:7px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line-2)}
+        .du-sec .sh .cv{cursor:pointer;color:var(--muted);font-size:12px;width:16px;flex:0 0 auto;transition:transform .12s}
+        .du-sec.col .cv{transform:rotate(-90deg)} .du-sec.col .grps,.du-sec.col .gadd{display:none}
+        .du-sec .sh input.lab{font:inherit;font-weight:800;font-size:12.5px;border:1px solid transparent;background:transparent;border-radius:6px;padding:3px 6px;flex:1;min-width:0}
+        .du-sec .sh input.lab:focus{border-color:var(--line-2);background:var(--panel)}
+        .du-sec .sh .cnt{font-size:10.5px;color:var(--muted);font-weight:700}
+        .du-sec.tier-a{border-left-color:var(--info)} .du-sec.tier-a .sh{background:var(--info-bg)}
+        .du-sec.tier-b{border-left-color:var(--ok)}   .du-sec.tier-b .sh{background:var(--ok-bg,#e9f9f0)}
+        .du-sec.tier-c{border-left-color:var(--muted)}.du-sec.tier-c .sh{background:var(--panel-2,#f4f6fa)}
+        .du-grp{padding:6px 10px 6px 12px;border-bottom:1px solid var(--line-2)}
         .du-grp:last-child{border-bottom:0}
-        .du-grp .gh{display:flex;gap:6px;align-items:center;margin-bottom:5px}
-        .du-grp .gh input{font:inherit;font-weight:700;font-size:12.5px;border:1px solid var(--line-2);border-radius:7px;padding:4px 8px;flex:1;min-width:0}
-        .du-it{display:flex;gap:6px;align-items:center;margin:3px 0 3px 14px}
-        .du-it input{font:inherit;font-size:12.5px;border:1px solid var(--line-2);border-radius:7px;padding:4px 8px;flex:1;min-width:0}
+        .du-grp .gh{display:flex;gap:6px;align-items:center;margin-bottom:3px}
+        .du-grp .gh input{font:inherit;font-weight:700;font-size:12px;border:1px solid transparent;background:transparent;border-radius:6px;padding:2px 6px;flex:1;min-width:0}
+        .du-grp .gh input:focus{border-color:var(--line-2);background:var(--panel)}
+        .du-it{display:flex;gap:5px;align-items:center;margin:1px 0 1px 12px}
+        .du-it input{font:inherit;font-size:12px;border:1px solid transparent;background:transparent;border-radius:6px;padding:2px 6px;flex:1;min-width:0}
+        .du-it input:hover{background:var(--hover)} .du-it input:focus{border-color:var(--line-2);background:var(--panel)}
+        .du-it .du-x,.du-grp .gh .du-x{width:20px;height:20px;opacity:.35} .du-it:hover .du-x,.du-grp:hover .gh .du-x{opacity:1}
         .du-x{border:1px solid var(--line-2);background:var(--panel);border-radius:6px;width:24px;height:24px;line-height:1;cursor:pointer;color:var(--muted);flex:0 0 auto}
         .du-x:hover{color:var(--danger);border-color:var(--danger)}
         .du-add{font-size:11.5px;color:var(--info);background:none;border:1px dashed var(--line-2);border-radius:7px;padding:4px 9px;cursor:pointer}
@@ -119,20 +130,23 @@
           <button class="du-add" id="duAddSec" style="margin-top:4px">${icon('plus')} 구분(상시/담당/서브) 추가</button>
           <div id="duMsg" class="muted" style="font-size:12.5px;margin-top:8px;min-height:16px"></div>`;
       }
+      const tierCls = w=> w>=3?'tier-a':w===2?'tier-b':'tier-c';
       function secHtml(sec){
-        return `<div class="du-sec">
-          <div class="sh"><input class="lab" value="${esc(sec.label||'')}" placeholder="구분 (예: 상시-담당)">
-            <select class="wsel" style="font:inherit;font-size:12px;border:1px solid var(--line-2);border-radius:7px;padding:4px 6px">${WOPT.map(o=>`<option value="${o.v}" ${(sec.w||1)===o.v?'selected':''}>${o.t}</option>`).join('')}</select>
+        const gc=(sec.groups||[]).length, ic=(sec.groups||[]).reduce((a,g)=>a+(g.items||[]).length,0);
+        return `<div class="du-sec ${tierCls(sec.w||1)}">
+          <div class="sh"><span class="cv" data-act="collapse">▾</span><input class="lab" value="${esc(sec.label||'')}" placeholder="구분 (예: 상시-담당)">
+            <span class="cnt">${gc}그룹·${ic}업무</span>
+            <select class="wsel" style="font:inherit;font-size:11.5px;border:1px solid var(--line-2);border-radius:6px;padding:3px 5px">${WOPT.map(o=>`<option value="${o.v}" ${(sec.w||1)===o.v?'selected':''}>${o.t}</option>`).join('')}</select>
             <button class="du-x" data-act="delsec" title="구분 삭제">✕</button></div>
           <div class="grps">${(sec.groups||[]).map(grpHtml).join('')}</div>
-          <div style="padding:7px 11px"><button class="du-add" data-act="addgrp">${icon('plus')} 업무그룹</button></div>
+          <div class="gadd" style="padding:5px 10px 6px 12px"><button class="du-add" data-act="addgrp">${icon('plus')} 업무그룹</button></div>
         </div>`;
       }
       function grpHtml(gr){
         return `<div class="du-grp">
           <div class="gh"><input class="gname" value="${esc(gr.name||'')}" placeholder="업무그룹 (예: 주문관리-카페24/오픈마켓)"><button class="du-x" data-act="delgrp" title="그룹 삭제">✕</button></div>
-          ${(gr.items||[]).map(it=>`<div class="du-it"><input value="${esc(it)}" placeholder="세부업무"><button class="du-x" data-act="delit" title="삭제">✕</button></div>`).join('')}
-          <div style="margin:4px 0 2px 14px"><button class="du-add" data-act="addit">${icon('plus')} 세부업무</button></div>
+          ${(gr.items||[]).map(it=>`<div class="du-it"><span style="color:var(--faint);font-size:10px">•</span><input value="${esc(it)}" placeholder="세부업무"><button class="du-x" data-act="delit" title="삭제">✕</button></div>`).join('')}
+          <div style="margin:2px 0 2px 12px"><button class="du-add" data-act="addit" style="padding:2px 8px;font-size:11px">${icon('plus')} 세부업무</button></div>
         </div>`;
       }
       function wireEditor(){
@@ -148,9 +162,11 @@
           if(seeded){ toast('시드는 [시드 서버 저장] 후 삭제하세요'); return; }
           const ok=await Duties.remove(cur.id); if(ok){ toast('삭제'); selId=null; cur=null; await reload(); } else toast('삭제 실패'); };
         m.querySelector('#duAddSec').onclick=()=>{ syncDom(); cur.sections.push({label:'',w:2,groups:[]}); drawEdit(); };
-        m.querySelectorAll('[data-act]').forEach(btn=>{ btn.onclick=()=>{ syncDom();
-          const secEl=btn.closest('.du-sec'); const secIdx=[...m.querySelectorAll('.du-sec')].indexOf(secEl);
+        m.querySelectorAll('[data-act]').forEach(btn=>{ btn.onclick=()=>{
           const act=btn.dataset.act;
+          if(act==='collapse'){ btn.closest('.du-sec').classList.toggle('col'); return; }   // 접기(뷰 전용)
+          syncDom();
+          const secEl=btn.closest('.du-sec'); const secIdx=[...m.querySelectorAll('.du-sec')].indexOf(secEl);
           if(act==='delsec'){ cur.sections.splice(secIdx,1); }
           else { const grpEl=btn.closest('.du-grp'); const grpIdx=grpEl?[...secEl.querySelectorAll('.du-grp')].indexOf(grpEl):-1; const sec=cur.sections[secIdx];
             if(act==='addgrp') sec.groups.push({name:'',items:['']});
@@ -279,6 +295,31 @@
 
       (async()=>{ people=await Duties.load(); seeded=!!people._seeded; if(!root.isConnected) return;
         if(people.length){ selId=people[0].id; cur=clone(people[0]); } draw(); })();
+    }
+  };
+
+  /* ── 팀 설정 컨테이너 — 팀원 계정 + 직무 범위를 한 곳에서(탭) ── */
+  MODULES['admin.team']={
+    title:'팀 설정', icon:'users',
+    render(root){
+      if(!isAdmin()){ root.innerHTML='<div class="mhead"><div class="tt">팀 설정</div></div><div class="mbody"><div class="muted" style="padding:30px">관리자만 접근할 수 있습니다.</div></div>'; return; }
+      const SUBS=[
+        { t:'users',  key:'admin.users',  label:'팀원 계정' },
+        { t:'duties', key:'admin.duties', label:'직무 범위' },
+      ];
+      let tab=(location.hash.split('?')[1]==='duties')?'duties':'users';
+      root.innerHTML=`
+        <div class="mhead">
+          <div class="tt">팀 설정</div>
+          <div class="ds">팀원 계정·권한과 직무 범위를 한 곳에서 관리합니다.</div>
+          <div class="mtabs">${SUBS.map(s=>`<div class="t" data-t="${s.t}">${esc(s.label)}</div>`).join('')}</div>
+        </div>
+        <div class="mbody wide" id="tmBody"></div>`;
+      const body=root.querySelector('#tmBody');
+      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
+        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
+      function draw(){ const s=SUBS.find(x=>x.t===tab)||SUBS[0]; embedModule(body, s.key); }
+      draw();
     }
   };
 })();
