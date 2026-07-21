@@ -51,7 +51,10 @@
       title:cfg.title, icon:'folder',
       render(root){
         const canEdit=()=> isAdmin() || me().dept===cfg.dept;
-        let list=[], q='';
+        let list=[], q='', sf='all';   // sf: 정산유형 필터(all/월정산/선결제/위탁)
+        const hasSettle = FIELDS.some(f=>f.k==='gradeSettle');   // 입점사(정산 필드 보유) 에서만 필터 노출
+        const settleType = v=>{ const s=String(v&&v.gradeSettle||''); return /선결제/.test(s)?'선결제':/월\s*정산|월정산/.test(s)?'월정산':/위탁/.test(s)?'위탁':'기타'; };
+        const SF_TYPES = ['월정산','선결제','위탁'];
         root.innerHTML=`
         <style>
           .hv-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
@@ -64,6 +67,12 @@
           .hv-line{font-size:12.5px;color:var(--ink-2);margin:3px 0;line-height:1.5}
           .hv-line b{color:var(--muted);font-weight:700;font-size:11px}
           .hv-empty{padding:44px;text-align:center;color:var(--muted)}
+          .hv-sfbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+          .hv-sfbar .lb{font-size:11.5px;font-weight:800;color:var(--muted);margin-right:2px}
+          .hv-sf{font:inherit;font-size:12.5px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);border-radius:16px;padding:5px 13px;cursor:pointer;transition:all .12s}
+          .hv-sf:hover{border-color:var(--info)}
+          .hv-sf b{font-weight:800;color:var(--muted);margin-left:2px}
+          .hv-sf.on{background:var(--info);border-color:var(--info);color:#fff}.hv-sf.on b{color:#fff}
         </style>
         <div class="mhead">
           <div class="tt">${esc(cfg.title)}</div>
@@ -75,7 +84,11 @@
         function draw(){
           const term=q.trim().toLowerCase();
           const rows=list.filter(v=>!term || (String(v.name||'')+String(v.manager||'')).toLowerCase().includes(term))
+                         .filter(v=>!hasSettle || sf==='all' || settleType(v)===sf)
                          .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
+          // 정산유형별 개수(필터 칩 라벨용) — 검색어는 무시하고 전체 기준
+          const cnt=t=> t==='all'?list.length:list.filter(v=>settleType(v)===t).length;
+          const chip=(val,label)=>`<button class="hv-sf ${sf===val?'on':''}" data-sf="${esc(val)}">${esc(label)} <b>${cnt(val)}</b></button>`;
           body.innerHTML=`
             <div class="hv-bar">
               <input class="q" placeholder="${esc(cfg.unit)}명·담당자 검색" value="${esc(q)}">
@@ -83,9 +96,11 @@
               ${canEdit()?`<button class="btn" id="hvBulk">${icon('upload')}엑셀 일괄등록</button>`:''}
               <span class="muted" style="font-size:12.5px">${rows.length}곳</span>
             </div>
+            ${hasSettle?`<div class="hv-sfbar">${icon('check2')}<span class="lb">정산 구분</span>${chip('all','전체')}${SF_TYPES.map(t=>chip(t,t)).join('')}</div>`:''}
             ${rows.length?`<div class="hv-grid">${rows.map(cardHtml).join('')}</div>`
-              :`<div class="hv-empty">${icon('folder')}<div style="margin-top:8px">등록된 ${esc(cfg.unit)}가 없습니다.${canEdit()?` <b>[새 ${esc(cfg.unit)}]</b>로 추가하세요.`:''}</div></div>`}`;
+              :`<div class="hv-empty">${icon('folder')}<div style="margin-top:8px">${sf!=='all'?`'${esc(sf)}' 구분에 해당하는 ${esc(cfg.unit)}가 없습니다.`:`등록된 ${esc(cfg.unit)}가 없습니다.${canEdit()?` <b>[새 ${esc(cfg.unit)}]</b>로 추가하세요.`:''}`}</div></div>`}`;
           const qi=body.querySelector('.q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=body.querySelector('.q'); n.focus(); try{n.setSelectionRange(p,p);}catch(e){} };
+          body.querySelectorAll('.hv-sf').forEach(b=>b.onclick=()=>{ sf=b.dataset.sf; draw(); });
           const add=body.querySelector('#hvAdd'); if(add) add.onclick=()=>openCard(null);
           const bulk=body.querySelector('#hvBulk'); if(bulk) bulk.onclick=()=>openBulk();
           body.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{ const v=list.find(x=>x.id===c.dataset.id); if(v) openCard(v); });
