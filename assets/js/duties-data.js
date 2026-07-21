@@ -205,4 +205,45 @@
 
   window.DUTY_SEED = DUTY_SEED;
   window.Duties = { load, save, remove, seedToServer, match, tokens, DEPT_LABEL, withIds };
+
+  /* =========================================================================
+     업무 지시(Assignments) — 팀장/관리자 → 담당자 지시, 상태 추적
+     상태: sent(요청) → accepted(진행) → submitted(완료보고) → done(완료)
+           · 지시자가 완료보고를 반려하면 feedback 남기고 accepted 로 복귀
+     저장: 서버 공용 컬렉션 'assignments'
+     ======================================================================= */
+  const STATUS = { sent:'요청', accepted:'진행', submitted:'완료보고', done:'완료' };
+  async function aGet(){ try{ const r=await fetch('/api/store?type=coll&coll=assignments'); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items||[]).filter(x=>x&&x.id); }catch(e){ return null; } }
+  async function aPush(item){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'assignments',item})}); return r.ok; }catch(e){ return false; } }
+  async function aDel(id){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collDel',coll:'assignments',id})}); return r.ok; }catch(e){ return false; } }
+  const nowISO = ()=> new Date().toISOString();
+
+  const Assign = {
+    STATUS,
+    all: aGet,
+    async send(rec){
+      const id = 'a'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
+      const full = { id, title:rec.title||'', detail:rec.detail||'', reportFormat:rec.reportFormat||'',
+        fromId:rec.fromId||'', fromName:rec.fromName||'', toId:rec.toId||'', toName:rec.toName||'', toDept:rec.toDept||'',
+        priority:rec.priority||'normal', due:rec.due||'', status:'sent', createdAt:nowISO(),
+        acceptedAt:'', submittedAt:'', doneAt:'', progressNote:'', feedback:'',
+        timeline:[{ at:nowISO(), by:rec.fromId||'', byName:rec.fromName||'', act:'sent', note:'' }] };
+      const ok = await aPush(full); return ok?full:null;
+    },
+    // 상태 전이(현재 레코드를 받아 patch 후 저장) — 호출부가 최신 레코드 보유
+    async transition(rec, act, opt){
+      opt=opt||{}; const t={ at:nowISO(), by:opt.by||'', byName:opt.byName||'', act, note:opt.note||'' };
+      const r={ ...rec, timeline:(rec.timeline||[]).concat([t]) };
+      if(act==='accepted'){ r.status='accepted'; r.acceptedAt=nowISO(); }
+      else if(act==='progress'){ r.status='accepted'; r.progressNote=opt.note||r.progressNote; }
+      else if(act==='submitted'){ r.status='submitted'; r.submittedAt=nowISO(); r.progressNote=opt.note||r.progressNote; }
+      else if(act==='feedback'){ r.status='accepted'; r.feedback=opt.note||''; }   // 반려 → 다시 진행
+      else if(act==='done'){ r.status='done'; r.doneAt=nowISO(); }
+      const ok=await aPush(r); return ok?r:null;
+    },
+    async remove(id){ return aDel(id); },
+    mine(list, me){ const id=me.loginId, nm=me.name; return (list||[]).filter(a=>a.toId===id || (nm&&a.toName===nm)); },
+    fromMe(list, me){ const id=me.loginId, nm=me.name; return (list||[]).filter(a=>a.fromId===id || (nm&&a.fromName===nm)); },
+  };
+  window.Assign = Assign;
 })();

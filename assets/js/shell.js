@@ -30,6 +30,7 @@ function bootShell(){
       <div class="navtoggle" id="navToggle" title="메뉴 접기/펼치기">${icon('menu')}</div>
       <div class="crumb" id="crumb"></div>
       <div class="sp"></div>
+      ${(me.user&&(me.user.role==='lead'||me.user.role==='admin'))?`<button class="btn pri sm" id="btnAssign" title="담당자에게 업무 지시" style="margin-right:8px">${icon('send')}<span>업무요청</span></button>`:''}
       <button class="topsearch" id="btnSearch" title="전역 검색 (Ctrl+K)">${icon('search')}<span>검색</span><kbd>Ctrl K</kbd></button>
       <button class="navtoggle" id="btnBell" title="브라우저 알림 켜기/끄기">${icon('bell')}</button>
       <button class="navtoggle" id="btnSound" title="알림 소리 켜기/끄기" style="font-size:15px">🔔</button>
@@ -66,6 +67,7 @@ function bootShell(){
   const intro=$('appIntro');
   function playIntro(then){ intro.classList.add('show'); setTimeout(()=>{ intro.classList.remove('show'); if(then)then(); }, 1400); }
   $('brandBtn').onclick=()=>playIntro(()=>{ location.hash=''; });
+  { const ba=$('btnAssign'); if(ba) ba.onclick=()=>{ if(window.openAssignComposer) window.openAssignComposer(); }; }
 
   // 로그인 사용자 정보
   const deptLabel = { cs:'CS · 고객 상담', md:'MD · 상품 기획', logi:'물류 관리', admin:'관리자' };
