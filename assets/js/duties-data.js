@@ -242,6 +242,7 @@
       const ok=await aPush(r); return ok?r:null;
     },
     async remove(id){ return aDel(id); },
+    async saveRaw(rec){ const ok=await aPush(rec); return ok?rec:null; },   // 과정기록 등 부분 갱신 저장
     mine(list, me){ const id=me.loginId, nm=me.name; return (list||[]).filter(a=>a.toId===id || (nm&&a.toName===nm)); },
     fromMe(list, me){ const id=me.loginId, nm=me.name; return (list||[]).filter(a=>a.fromId===id || (nm&&a.fromName===nm)); },
   };
