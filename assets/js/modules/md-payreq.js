@@ -83,7 +83,7 @@
           <td>${kindBadge(r.kind||'발주')}</td>
           <td style="white-space:nowrap">${esc(r.orderer||'')}</td>
           <td style="white-space:nowrap;font-weight:600;color:var(--ink)">${esc(r.vendor||'')}</td>
-          <td class="wrap">${esc(r.content||'')}</td>
+          <td class="wrap">${esc(r.content||'')}${(Number(r.ship)||0)>0?`<div class="muted" style="font-size:11px;margin-top:2px">상품 ${won(Number(r.prodAmount)||parseAmt(r.amount)-(Number(r.ship)||0))} + 배송비 ${won(Number(r.ship)||0)}</div>`:''}</td>
           <td class="num">${(r.qty!=null&&r.qty!=='')?esc(r.qty):''}</td>
           <td class="num">${won(parseAmt(r.amount))}원</td>
           <td class="wrap" style="min-width:170px;font-size:12.5px">${esc(r.account||'')}</td>

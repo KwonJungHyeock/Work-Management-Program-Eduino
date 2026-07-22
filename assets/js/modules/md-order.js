@@ -509,9 +509,10 @@
       // 선결제 발주 → 결제요청(payreq) 미러: 발주 기록에 남기고, 선결제면 결제요청 시트에도 한 번 더 올림
       const dayOfOrder=o=>/^\d{4}-\d{2}-\d{2}$/.test(o.date||'')?o.date:todayStr();
       function payreqFromOrder(o){ const ven=vendorObj(o.vendor);
+        const prod=Number(o.amount)||0, ship=Number(o.ship)||0;   // 배송비 포함해야 결제요청 합계가 실제 결제액과 일치
         return { id:o.id, day:dayOfOrder(o), date:o.date, kind:'발주',
           orderer:[o.route,o.orderer].filter(Boolean).join(' '), vendor:o.vendor||'', content:o.name||'', qty:(o.qty!=null?o.qty:''),
-          amount:Number(o.amount)||0, account:(ven&&ven.account)||'', handler:o.handler||'', whoName:o.handler||'' }; }
+          amount:prod+ship, prodAmount:prod, ship, account:(ven&&ven.account)||'', handler:o.handler||'', whoName:o.handler||'' }; }
       function syncPayreq(o){ if(!window.Records) return;
         if(normSettle(o.settle)==='선결제') Records.pushRaw('md','payreq',payreqFromOrder(o));
         else Records.del('md','payreq',o.id,dayOfOrder(o).slice(0,7));   // 선결제 아니면 제거(수정으로 바뀐 경우)
