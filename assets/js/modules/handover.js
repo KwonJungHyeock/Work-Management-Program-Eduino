@@ -38,7 +38,7 @@
     { k:'manager',    label:'담당자명', ph:'담당자', badge:true },
     { k:'contact',    label:'연락처',   ph:'연락처' },
     { k:'email',      label:'메일',     ph:'이메일' },
-    { k:'payTerms',   label:'결제조건', ph:'예: 선결제 / 월정산 / 위탁' },
+    { k:'payTerms',   label:'결제조건', ph:'예: 선결제 / 월정산 / 위탁', badge:true },
     { k:'bizNo',      label:'사업자번호', ph:'000-00-00000' },
     { k:'memo',       label:'메모',     ta:1, ph:'기타 참고·협상 이력 등' },
   ];
@@ -52,10 +52,11 @@
       title:cfg.title, icon:'folder',
       render(root){
         const canEdit=()=> isAdmin() || me().dept===cfg.dept;
-        let list=[], q='', sf='all';   // sf: 정산유형 필터(all/월정산/선결제/위탁)
-        const hasSettle = FIELDS.some(f=>f.k==='gradeSettle');   // 입점사(정산 필드 보유) 에서만 필터 노출
-        const settleType = v=>{ const s=String(v&&v.gradeSettle||''); return /선결제/.test(s)?'선결제':/월\s*정산|월정산/.test(s)?'월정산':/위탁/.test(s)?'위탁':'기타'; };
-        const SF_TYPES = ['월정산','선결제','위탁'];
+        let list=[], q='', sf='all';   // sf: 구분 필터
+        const flt = cfg.filter;        // { k, label, types:[{v,re}] } — 있으면 필터 칩 노출
+        const hasFilter = !!flt;
+        const ftype = v=>{ if(!flt) return '기타'; const s=String((v&&v[flt.k])||''); for(const t of flt.types){ if(t.re.test(s)) return t.v; } return '기타'; };
+        const F_TYPES = flt ? flt.types.map(t=>t.v) : [];
         root.innerHTML=`
         <style>
           .hv-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
@@ -85,10 +86,10 @@
         function draw(){
           const term=q.trim().toLowerCase();
           const rows=list.filter(v=>!term || (String(v.name||'')+String(v.manager||'')).toLowerCase().includes(term))
-                         .filter(v=>!hasSettle || sf==='all' || settleType(v)===sf)
+                         .filter(v=>!hasFilter || sf==='all' || ftype(v)===sf)
                          .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
-          // 정산유형별 개수(필터 칩 라벨용) — 검색어는 무시하고 전체 기준
-          const cnt=t=> t==='all'?list.length:list.filter(v=>settleType(v)===t).length;
+          // 구분별 개수(필터 칩 라벨용) — 검색어는 무시하고 전체 기준
+          const cnt=t=> t==='all'?list.length:list.filter(v=>ftype(v)===t).length;
           const chip=(val,label)=>`<button class="hv-sf ${sf===val?'on':''}" data-sf="${esc(val)}">${esc(label)} <b>${cnt(val)}</b></button>`;
           body.innerHTML=`
             <div class="hv-bar">
@@ -97,7 +98,7 @@
               ${canEdit()?`<button class="btn" id="hvBulk">${icon('upload')}엑셀 일괄등록</button>`:''}
               <span class="muted" style="font-size:12.5px">${rows.length}곳</span>
             </div>
-            ${hasSettle?`<div class="hv-sfbar">${icon('check2')}<span class="lb">정산 구분</span>${chip('all','전체')}${SF_TYPES.map(t=>chip(t,t)).join('')}</div>`:''}
+            ${hasFilter?`<div class="hv-sfbar">${icon('check2')}<span class="lb">${esc(flt.label)}</span>${chip('all','전체')}${F_TYPES.map(t=>chip(t,t)).join('')}</div>`:''}
             ${rows.length?`<div class="hv-grid">${rows.map(cardHtml).join('')}</div>`
               :`<div class="hv-empty">${icon('folder')}<div style="margin-top:8px">${sf!=='all'?`'${esc(sf)}' 구분에 해당하는 ${esc(cfg.unit)}가 없습니다.`:`등록된 ${esc(cfg.unit)}가 없습니다.${canEdit()?` <b>[새 ${esc(cfg.unit)}]</b>로 추가하세요.`:''}`}</div></div>`}`;
           const qi=body.querySelector('.q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=body.querySelector('.q'); n.focus(); try{n.setSelectionRange(p,p);}catch(e){} };
@@ -117,12 +118,21 @@
             if(/중단|해지|종료/.test(s)) return 'background:#fdeaea;color:#c53434';
             return 'background:#e8f7ee;color:#2f8f4e';                               // 거래중/입점 · 초록
           }
+          if(f.k==='grade'){   // 파트너사 등급 색상
+            if(/플랫폼|platform/i.test(s)) return 'background:#e6f7f0;color:#12886a';                        // 플랫폼 · 초록
+            if(/a\s*등급|(?:^|[^a-z0-9])a(?:$|[^a-z0-9])/i.test(s)) return 'background:#e6f0ff;color:#1f57c3';// A등급 · 파랑
+            if(/b\s*등급|(?:^|[^a-z0-9])b(?:$|[^a-z0-9])/i.test(s)) return 'background:#fff1e6;color:#c2570a';// B등급 · 주황
+          }
+          if(f.k==='payTerms') return 'background:var(--panel-2,#eef1f6);color:#5a6474';                     // 결제조건 · 회색 칩
           return ''; }
-        function badgeIcon(f){ return f.k==='gradeSettle'?icon('check2'):f.k==='status'?icon('folder'):icon('users'); }
+        function badgeIcon(f){ return f.k==='gradeSettle'?icon('check2'):f.k==='status'?icon('folder'):f.k==='payTerms'?icon('check2'):f.k==='grade'?icon('folder'):icon('users'); }
         function cardHtml(v){
           const badges=FIELDS.filter(f=>f.badge && String(v[f.k]||'').trim())
             .map(f=>{ const st=badgeStyle(f,v[f.k]); return `<span class="hv-mgr"${st?` style="${st}"`:''}>${badgeIcon(f)}${esc(v[f.k])}</span>`; }).join(' ');
-          const lines=FIELDS.filter(f=>!f.badge && String(v[f.k]||'').trim()).slice(0,4)
+          const lineFields = (cfg.cardLines && cfg.cardLines.length)
+            ? cfg.cardLines.map(k=>FIELDS.find(f=>f.k===k)).filter(Boolean)
+            : FIELDS.filter(f=>!f.badge).slice(0,4);
+          const lines=lineFields.filter(f=>String(v[f.k]||'').trim())
             .map(f=>`<div class="hv-line"><b>${esc(f.label)}</b> ${esc(snippet(v[f.k],48))}</div>`).join('');
           return `<div class="hv-card" data-id="${esc(v.id)}">
             <div class="hv-nm">${esc(v.name||'(이름 없음)')}</div>
@@ -307,9 +317,15 @@
 
   // ── MD: 입점사 관리 (신규/변동사항 + 입점사 관리 카드) ──
   buildHandover({ key:'md.vendorcards', coll:'handover_md', unit:'입점사', dept:'md',
+    filter:{ k:'gradeSettle', label:'정산 구분', types:[{v:'월정산',re:/월\s*정산|월정산/},{v:'선결제',re:/선결제/},{v:'위탁',re:/위탁/}] },
     title:'입점사 관리', desc:'입점사별 담당자·결제조건·중요/주의사항·메모를 카드로 관리합니다(인수인계).' });
-  // CS: 파트너사 관리 (단독 페이지)
+  // CS: 파트너사 관리 (단독 페이지) — 등급별 필터·색상, 카드에 결제조건·메모 노출
   buildHandover({ key:'cs.partners', coll:'handover_cs', unit:'파트너사', dept:'cs', fields:PARTNER_FIELDS,
+    filter:{ k:'grade', label:'등급', types:[
+      {v:'A등급', re:/a\s*등급|(?:^|[^a-z0-9])a(?:$|[^a-z0-9])/i},
+      {v:'B등급', re:/b\s*등급|(?:^|[^a-z0-9])b(?:$|[^a-z0-9])/i},
+      {v:'플랫폼', re:/플랫폼|platform/i} ] },
+    cardLines:['supplyRate','site','contact','email','memo'],
     title:'파트너사 관리', desc:'파트너사별 등급·공급율·사이트·담당자·연락처·메일·결제조건·메모를 카드로 관리합니다.' });
 
   // MD '입점사 관리' 컨테이너 — 서브탭: 신규/변동사항(먼저) + 입점사 관리(카드)
