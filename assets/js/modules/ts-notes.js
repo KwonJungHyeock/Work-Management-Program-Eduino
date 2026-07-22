@@ -115,7 +115,7 @@
       // 옛 레코드 보정
       (function migrate(){ const all=getNotes(); let ch=false;
         all.forEach(r=>{ if(r.date==null){ r.date=todayStr(r.createdAt); ch=true; }
-          ['platform','prodType','prodCode','prodName','customer','content','answerSummary','answer','remark'].forEach(k=>{ if(r[k]==null){ r[k]=''; ch=true; } }); });
+          ['platform','prodType','status','prodCode','prodName','customer','content','answerSummary','answer','remark'].forEach(k=>{ if(r[k]==null){ r[k]=''; ch=true; } }); });
         if(ch) setNotes(all); })();
 
       let tab='memo', filter='전체', lastAgent=store(STORE.tsAgent).get(getAgents()[0]);
@@ -124,7 +124,8 @@
       // 담당자가 TS 담당자 목록에 있으면 본인으로 기본선택
       if(!isAdmin && meName && getAgents().includes(meName)) lastAgent=meName;
       let typeEdit=false, agentEdit=false;
-      let form={ platform:getTypes()[0], prodType:'', date:todayStr(), agent:lastAgent };
+      let form={ platform:getTypes()[0], prodType:'', status:'', date:todayStr(), agent:lastAgent };
+      const TS_STATUS=[{v:'해결완료',c:'done'},{v:'처리중',c:'wip'},{v:'키트or상세 수정필요',c:'fix'}];
 
       root.innerHTML=`
       <style>
@@ -157,6 +158,9 @@
         .chip .q-del{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
           background:var(--line-strong);color:#fff;font-size:10px;font-weight:800}
         .chip.on .q-del{background:var(--red);color:#fff}
+        /* 처리상태 칩 색상 — 해결완료(초록)·처리중(주황)·수정필요(빨강) */
+        .chip.st-done.on{border-color:#12886a;background:#e6f7f0;color:#12886a;box-shadow:inset 0 0 0 1px #12886a,0 1px 3px rgba(18,136,106,.2)}
+        .chip.st-wip.on{border-color:#b4530a;background:#fff4e6;color:#b4530a;box-shadow:inset 0 0 0 1px #b4530a,0 1px 3px rgba(180,83,10,.2)}
         .sec-edit{margin-left:auto;background:none;border:0;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px;text-transform:none;letter-spacing:0}
         .sec-edit:hover{background:var(--hover);color:var(--red)} .sec-edit.on{color:var(--red)}
         .chip-add{display:flex;gap:6px;align-items:center}
@@ -229,6 +233,10 @@
                       <div class="q-sec-cap">상품구분 <span class="opt">선택 · 다시 누르면 해제</span>
                         ${isAdmin?'<button type="button" class="sec-edit" id="ptypeEdit">편집</button>':''}</div>
                       <div class="chips" id="ptypeGroup"></div>
+                    </div>
+                    <div>
+                      <div class="q-sec-cap">처리상태 <span class="opt">선택 · 다시 누르면 해제</span></div>
+                      <div class="chips" id="statusGroup"></div>
                     </div>
                     <div>
                       <div class="q-sec-cap">문의사항 <span class="req">필수</span></div>
@@ -329,6 +337,14 @@
         { const pe=body.querySelector('#ptypeEdit'); if(pe) pe.onclick=(e)=>{ ptypeEdit=!ptypeEdit;
           e.currentTarget.classList.toggle('on',ptypeEdit); e.currentTarget.textContent=ptypeEdit?'완료':'편집'; renderChoice('#ptypeGroup',null,'prodType'); }; }
 
+        /* --- 처리상태 칩 (해결완료/처리중/키트or상세 수정필요) — 색상 구분 --- */
+        function renderStatus(){ const g=body.querySelector('#statusGroup'); if(!g) return; g.innerHTML='';
+          TS_STATUS.forEach(s=>{ const b=el('button','chip st-'+s.c+(form.status===s.v?' on':'')); b.type='button';
+            b.innerHTML=`<span>${esc(s.v)}</span>`;
+            b.onclick=()=>{ form.status=(form.status===s.v?'':s.v); renderStatus(); };
+            g.appendChild(b); }); }
+        renderStatus();
+
         /* --- 상품코드 → 제품명 자동연동 --- */
         (function(){
           const codeEl=body.querySelector('#fProdCode'), nameEl=body.querySelector('#fProdName'), hint=body.querySelector('#pnameHint');
@@ -409,14 +425,15 @@
             prodType:form.prodType,
             prodName:body.querySelector('#fProdName').value.trim(),
             customer:body.querySelector('#fCustomer').value.trim(),
+            status:form.status,
             content, answerSummary:body.querySelector('#fAnsSum').value.trim(),
             answer:body.querySelector('#fAnswer').value.trim(),
             remark:body.querySelector('#fRemark').value.trim(), syncedAt:null };
           const all=getNotes(); all.push(rec); setNotes(all);
           if(window.Records) Records.pushTS(rec);
           // 폼 초기화 (플랫폼·담당자·날짜 유지)
-          form.prodType='';
-          renderChoice('#ptypeGroup', TS_PRODUCT_TYPES, 'prodType');
+          form.prodType=''; form.status='';
+          renderChoice('#ptypeGroup', TS_PRODUCT_TYPES, 'prodType'); renderStatus();
           ['fContent','fAnsSum','fAnswer','fProdCode','fProdName','fCustomer','fRemark'].forEach(id=>{ const e2=body.querySelector('#'+id); if(e2){ e2.value=''; e2.dataset.auto=''; } });
           body.querySelector('#pnameHint').textContent='';
           body.querySelector('#fContent').focus();

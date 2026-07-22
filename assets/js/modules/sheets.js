@@ -132,8 +132,10 @@
           // 담당자 컬러 배지(상담사별 색 구분)
           if(c.color && v){ const col=colorForName(v);
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:800;color:${col};background:${col}1a;border-radius:6px;padding:2px 9px">${esc(v)}</span></td>`; }
-          // 구분/분류/상태 값별 색상 배지 (출고지연·발주취소는 빨강 강조)
-          if(c.tag && v && typeof tagBadge==='function'){ const cl=(v==='출고지연'||v==='발주취소')?{bg:'#fdeaea',fg:'#c53434'}:tagColor(v);
+          // 구분/분류/상태 값별 색상 배지 (지연·취소·수정필요=빨강 · 해결완료=초록 · 처리중=주황)
+          if(c.tag && v && typeof tagBadge==='function'){
+            const cl=(v==='출고지연'||v==='발주취소'||v==='키트or상세 수정필요')?{bg:'#fdeaea',fg:'#c53434'}
+              :v==='해결완료'?{bg:'#e6f7f0',fg:'#12886a'}:v==='처리중'?{bg:'#fff4e6',fg:'#b4530a'}:tagColor(v);
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;background:${cl.bg};color:${cl.fg}">${esc(v)}</span></td>`; }
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
@@ -320,7 +322,8 @@
   build({ key:'md.tsrecords', dept:'md', sheet:'tsnotes', title:'TS상담 기록', icon:'sheet',
     desc:'전 담당자의 TS(기술상담) 기록이 서버에 누적됩니다. 저장 시 자동 반영되며 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자',
-    filters:[ {k:'platform',label:'문의플랫폼'}, {k:'prodType',label:'상품구분'} ],
+    filters:[ {k:'platform',label:'문의플랫폼'}, {k:'prodType',label:'상품구분'}, {k:'status',label:'처리상태'} ],
+    rowFlag:r=>String(r.status||'')==='키트or상세 수정필요'?'sv-late':'',   // 수정필요 건 빨강 강조
     sheetPush:{ tab:'TS상담메모', urlKey:STORE.tsNoteCfg,
       row:r=>{ const o={id:r.id}; for(const k in TS_SHEET_MAP) o[TS_SHEET_MAP[k]] = (k==='agent'?(r.agent||r.whoName||''):(r[k]!=null?r[k]:'')); return o; } },
     onSave: async(rec, old)=>{
@@ -331,7 +334,8 @@
       if(window.TSSheet && TSSheet.configured()) TSSheet.send([rec]); // 구글시트 갱신(id 기준 upsert)
     },
     cols:[ {k:'date',h:'날짜',w:96}, {k:'whoName',h:'담당자',w:80,color:true}, {k:'platform',h:'문의플랫폼',w:90},
-      {k:'prodType',h:'상품구분',w:90}, {k:'prodCode',h:'상품코드',w:90}, {k:'prodName',h:'제품명',w:180,wrap:true},
+      {k:'prodType',h:'상품구분',w:90}, {k:'status',h:'처리상태',w:96,tag:true,options:['','해결완료','처리중','키트or상세 수정필요']},
+      {k:'prodCode',h:'상품코드',w:90}, {k:'prodName',h:'제품명',w:180,wrap:true},
       {k:'customer',h:'고객정보',w:140,wrap:true}, {k:'content',h:'문의사항',w:240,wrap:true},
       {k:'answerSummary',h:'답변요약',w:200,wrap:true}, {k:'answer',h:'답변원본',w:240,wrap:true}, {k:'remark',h:'비고',w:120,wrap:true} ] });
 
