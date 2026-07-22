@@ -125,7 +125,7 @@
       if(!isAdmin && meName && getAgents().includes(meName)) lastAgent=meName;
       let typeEdit=false, agentEdit=false;
       let form={ platform:getTypes()[0], prodType:'', status:'', date:todayStr(), agent:lastAgent };
-      const TS_STATUS=[{v:'해결완료',c:'done'},{v:'처리중',c:'wip'},{v:'키트or상세 수정필요',c:'fix'}];
+      const TS_STATUS=[{v:'해결완료',c:'done'},{v:'처리중',c:'wip'},{v:'교육자료 수정필요',c:'fix'},{v:'상세페이지 수정필요',c:'fix'}];
 
       root.innerHTML=`
       <style>
