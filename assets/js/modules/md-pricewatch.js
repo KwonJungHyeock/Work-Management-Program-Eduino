@@ -162,8 +162,17 @@
       function openMailApp(m){ const url=`mailto:${encodeURIComponent(m.to)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
         try{ const a=document.createElement('a'); a.href=url; a.click(); }catch(e){ location.href=url; } }
       // 발송 전 확인 팝업 — 미리보기 확인 후에만 실제 발송(오발송 방지)
-      async function confirmSend(v,p){
-        const link=v.site(p.ntx); const cfg=mailCfg(v); const m=fillMail(cfg,p,link); const toName=cfg.toName||'';
+      // 여러 상품을 한 통에 담는 일괄 공급가 요청 본문
+      function fillMailBatch(cfg, list, v){
+        const lines=list.map((p,i)=>`${i+1}. ${p.name||''}  (엔티렉스 ${p.ntx||''}${p.ed?` · ${p.ed}`:''})${v.site(p.ntx)?`\n   ${v.site(p.ntx)}`:''}`).join('\n');
+        const head=String(cfg.body||'').replace(/\{[^}]+\}/g,'').replace(/\n{3,}/g,'\n\n').trim();   // 템플릿 인사말(토큰 제거)
+        const body=`${head?head+'\n\n':''}아래 상품들의 최신 공급가 확인 부탁드립니다. (총 ${list.length}건)\n\n${lines}\n\n감사합니다.`;
+        const subject=`[에듀이노] 공급가 확인 요청 · ${list.length}건`;
+        return { to:cfg.to, subject, body };
+      }
+      async function confirmSend(v,p,batch){
+        const isBatch=Array.isArray(batch)&&batch.length; const cfg=mailCfg(v); const toName=cfg.toName||'';
+        const link=isBatch?'':v.site(p.ntx); const m=isBatch?fillMailBatch(cfg,batch,v):fillMail(cfg,p,link);
         const svc=await loadMailSvc();
         const configured=!!(svc&&svc.configured);
         const fromLine=configured
@@ -179,7 +188,7 @@
             <div style="display:grid;grid-template-columns:64px 1fr;gap:6px 10px;font-size:13px;margin-bottom:12px">
               <div class="muted">받는사람</div><div><b>${esc(toName)}</b> ${esc(m.to||'(미지정)')}</div>
               <div class="muted">보내는이</div><div>${fromLine}</div>
-              <div class="muted">대상상품</div><div><b class="mono">${esc(p.ed||'-')}</b> · ${esc(p.name||'')} <span class="muted">(${esc(v.name)} ${esc(p.ntx||'')})</span></div>
+              <div class="muted">대상상품</div><div>${isBatch?`<b>${batch.length}건</b> <span class="muted">일괄 요청 (본문 목록 참조)</span>`:`<b class="mono">${esc(p.ed||'-')}</b> · ${esc(p.name||'')} <span class="muted">(${esc(v.name)} ${esc(p.ntx||'')})</span>`}</div>
             </div>
             <div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:4px">제목 <span style="font-weight:500">(수정 가능)</span></div>
             <input id="csSubj" value="${esc(m.subject||'')}" style="width:100%;font:inherit;font-size:13px;border:1px solid var(--line-2);border-radius:8px;padding:9px 11px;margin-bottom:12px">
@@ -218,22 +227,49 @@
       }
       function diffRow(v,d,demo){ const prodMap={}; effectiveProducts(v).forEach(p=>prodMap[String(p.ntx)]=p);
         const p=prodMap[String(d.ntx)]||d; const up=(d.newPrice||0)>=(d.oldPrice||0); const link=v.site(d.ntx);
-        return `<div class="nx-card${demo?' demo':''}">
-          <div>
+        return `<div class="nx-card${demo?' demo':''}" style="align-items:flex-start">
+          ${demo?'':`<label style="display:flex;align-items:center;padding-top:2px;margin-right:2px" title="일괄 요청 선택"><input type="checkbox" class="nx-cb" data-ntx="${esc(d.ntx||'')}" style="width:17px;height:17px;cursor:pointer"></label>`}
+          <div style="flex:1;min-width:0">
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <span class="nx-code">${esc(p.ed||'-')}</span><span class="muted" style="font-size:12px">${esc(v.name)} ${esc(d.ntx||'')}</span>
-              ${demo?'<span class="nx-badge">예시(크롤러 연동 전 미리보기)</span>':'<span class="nx-badge">판매가 변동</span>'}</div>
+              ${demo?'<span class="nx-badge">예시(크롤러 연동 전 미리보기)</span>':'<span class="nx-badge">판매가 변동</span>'}
+              <span class="muted" style="font-size:11px">공급가 <b style="color:#FF0000">${won(p.supply)}원</b> · 소비자가 <b style="color:#0070C0">${won(p.retail)}원</b></span></div>
             <div class="nx-nm">${link?`<a href="${esc(link)}" target="_blank" rel="noopener">${esc(p.name||d.name||'')}</a>`:esc(p.name||d.name||'')}</div>
             <div class="nx-price"><span>${esc(v.name)} 판매가 <span class="old">${won(d.oldPrice)}원</span> → <span class="new">${won(d.newPrice)}원</span></span>
               <span class="${up?'up':'down'}">${up?'▲':'▼'} ${won(Math.abs((d.newPrice||0)-(d.oldPrice||0)))}원</span></div>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
             <button class="btn pri sm" data-a="mail" data-ntx="${esc(d.ntx||'')}">${icon('mail')}공급가 요청</button>
+            ${demo?'':`<button class="btn sm" data-a="apply" data-ntx="${esc(d.ntx||'')}" style="background:#eef7f0;color:#12886a;border:1px solid #bfe3d3">${icon('check')}단가 반영</button>`}
             <div style="display:flex;gap:6px">
               <button class="btn ghost sm" data-a="copy" data-ntx="${esc(d.ntx||'')}">${icon('copy')}메일 복사</button>
               ${demo?'':`<button class="btn ghost sm" data-a="del" data-ntx="${esc(d.ntx||'')}" title="이 알림 삭제(처리 완료 등)">${icon('trash')}</button>`}
             </div></div>
         </div>`; }
+      // 단가 반영 — 회신받은 공급가/소비자가를 취급 상품에 자동 반영하고 알림 정리
+      function openApplyPrice(v,p,d){
+        const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+        ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:440px;width:96%;box-shadow:var(--sh-lg)">
+          <div style="padding:16px 20px 10px;border-bottom:1px solid var(--line)"><div style="font-size:15.5px;font-weight:800">${icon('check')} 단가 반영</div>
+            <div class="muted" style="font-size:12px;margin-top:3px">회신받은 단가를 입력하면 <b>취급 상품</b>에 바로 반영됩니다.</div></div>
+          <div style="padding:16px 20px">
+            <div style="font-size:13px;margin-bottom:10px"><b class="mono">${esc(p.ed||'-')}</b> · ${esc(p.name||'')} <span class="muted">(${esc(v.name)} ${esc(p.ntx||'')})</span>${d?`<div class="muted" style="font-size:12px;margin-top:3px">크롤링 판매가 ${won(d.newPrice)}원</div>`:''}</div>
+            <div style="display:flex;gap:12px">
+              <label class="fld" style="flex:1">공급가 <span style="color:#FF0000">●</span><input id="apSupply" inputmode="numeric" value="${esc(p.supply||'')}" placeholder="공급가" style="text-align:right"></label>
+              <label class="fld" style="flex:1">소비자가 <span style="color:#0070C0">●</span><input id="apRetail" inputmode="numeric" value="${esc(p.retail||'')}" placeholder="소비자가" style="text-align:right"></label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)">
+            <button class="btn ghost" id="apCancel">취소</button><button class="btn pri" id="apSave">${icon('check')}취급상품 반영</button></div>
+        </div>`;
+        document.body.appendChild(ov); const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+        ov.querySelector('#apCancel').onclick=close;
+        ov.querySelector('#apSave').onclick=()=>{ const supply=parseNum(ov.querySelector('#apSupply').value), retail=parseNum(ov.querySelector('#apRetail').value);
+          saveOverride(v, p.ntx, {...p, ntx:p.ntx, supply, retail});
+          const dm=dismissedMap(); if(d){ dm[dkey(d)]=1; store(DISMISS_KEY).set(dm); }   // 반영 완료 → 알림 정리
+          toast('취급 상품에 단가를 반영했습니다'); close(); load();
+        };
+      }
       // 처리/불필요한 알림 삭제 = 팀 공유(다시 안 뜸) · 키 = 확인일|엔티렉스코드
       const DISMISS_KEY='eduino.ntrex.dismissed';
       const dismissedMap=()=>store(DISMISS_KEY).get({})||{};
@@ -250,9 +286,23 @@
             <div class="nx-k"><div class="l">취급 상품</div><div class="v">${prods.length}</div></div>
             <div class="nx-k warn"><div class="l">기준가 없음(비교대기)</div><div class="v">${prods.filter(p=>!p.price).length}</div></div>
           </div>
+          ${(!demo&&rows.length)?`<div class="nx-bulk" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2,#f6f8fc)">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;cursor:pointer"><input type="checkbox" id="nxAll" style="width:16px;height:16px">전체 선택</label>
+            <span class="muted" id="nxSelCnt" style="font-size:12px">0건 선택</span>
+            <button class="btn pri sm" id="nxBulkReq" style="margin-left:auto" disabled>${icon('mail')}선택 상품 공급가 일괄요청</button>
+          </div>`:''}
           <div>${rows.length?rows.map(d=>diffRow(v,d,demo)).join(''):`<div class="nx-empty">${icon('check2')}<div>표시할 가격 변동이 없습니다.</div></div>`}</div>`;
         const pm={}; prods.forEach(p=>pm[String(p.ntx)]=p);
         const diffByNtx={}; (diffs||[]).forEach(d=>diffByNtx[String(d.ntx)]=d);
+        // 선택(체크박스) → 일괄 공급가요청
+        const cbs=()=>[...sec.querySelectorAll('.nx-cb')];
+        const selectedProds=()=>cbs().filter(c=>c.checked).map(c=>pm[c.dataset.ntx]||{ntx:c.dataset.ntx});
+        const refreshSel=()=>{ const n=cbs().filter(c=>c.checked).length; const cnt=sec.querySelector('#nxSelCnt'), req=sec.querySelector('#nxBulkReq'), all=sec.querySelector('#nxAll');
+          if(cnt) cnt.textContent=`${n}건 선택`; if(req){ req.disabled=!n; req.innerHTML=`${icon('mail')}선택 ${n?n+'건 ':''}공급가 일괄요청`; } if(all) all.checked=n>0&&n===cbs().length; };
+        cbs().forEach(c=>c.onchange=refreshSel);
+        { const all=sec.querySelector('#nxAll'); if(all) all.onchange=()=>{ cbs().forEach(c=>c.checked=all.checked); refreshSel(); }; }
+        { const req=sec.querySelector('#nxBulkReq'); if(req) req.onclick=()=>{ const list=selectedProds(); if(!list.length){ toast('상품을 선택하세요'); return; } confirmSend(v,null,list); }; }
+        sec.querySelectorAll('[data-a=apply]').forEach(b=>b.onclick=()=>{ openApplyPrice(v, pm[b.dataset.ntx]||{ntx:b.dataset.ntx}, diffByNtx[b.dataset.ntx]); });
         sec.querySelectorAll('[data-a=mail]').forEach(b=>b.onclick=()=>{ confirmSend(v,pm[b.dataset.ntx]||{ntx:b.dataset.ntx}); });
         sec.querySelectorAll('[data-a=copy]').forEach(b=>b.onclick=()=>{ const m=fillMail(mailCfg(v),pm[b.dataset.ntx]||{ntx:b.dataset.ntx},v.site(b.dataset.ntx)); copyText(`받는사람: ${m.to}\n제목: ${m.subject}\n\n${m.body}`); toast('메일 내용을 복사했습니다'); });
         sec.querySelectorAll('[data-a=del]').forEach(b=>b.onclick=()=>{ const d=diffByNtx[b.dataset.ntx]||{ntx:b.dataset.ntx};
@@ -285,7 +335,7 @@
           html+=list.map(p=>{ const isUser=!!ov[String(p.ntx)]&&!ov[String(p.ntx)]._del;
             if(editNtx===String(p.ntx)) return `<tr>${formCells(p,'edit')}<td style="white-space:nowrap"><button class="btn pri sm" data-a="save" data-ntx="${esc(p.ntx)}">${icon('check')}</button> <button class="btn ghost sm" data-a="cancel">취소</button></td></tr>`;
             return `<tr><td class="nx-code">${esc(p.ed)}${isUser?'<span class="nx-usr">담당자</span>':''}</td><td>${esc(p.ntx)}</td><td>${esc(p.name)}</td>
-              <td class="num">${p.price?won(p.price)+'원':'<span class="muted">-</span>'}</td><td class="num">${won(p.supply)}원</td><td class="num">${won(p.retail)}원</td><td class="muted">${esc(p.note||'')}</td>
+              <td class="num">${p.price?won(p.price)+'원':'<span class="muted">-</span>'}</td><td class="num" style="color:#FF0000;font-weight:700">${won(p.supply)}원</td><td class="num" style="color:#0070C0;font-weight:700">${won(p.retail)}원</td><td class="muted">${esc(p.note||'')}</td>
               ${editable?`<td style="white-space:nowrap"><button class="btn ghost sm" data-a="edit" data-ntx="${esc(p.ntx)}">수정</button> <button class="btn ghost sm" data-a="del" data-ntx="${esc(p.ntx)}" data-ed="${esc(p.ed)}">${icon('trash')}</button></td>`:''}</tr>`;
           }).join('') || (addOpen?'':`<tr><td colspan="${editable?8:7}" class="nx-empty">검색 결과가 없습니다.</td></tr>`);
           tb.innerHTML=html; wire();
