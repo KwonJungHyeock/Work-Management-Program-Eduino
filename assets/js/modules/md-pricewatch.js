@@ -228,7 +228,8 @@
       function diffRow(v,d,demo){ const prodMap={}; effectiveProducts(v).forEach(p=>prodMap[String(p.ntx)]=p);
         const p=prodMap[String(d.ntx)]||d; const up=(d.newPrice||0)>=(d.oldPrice||0); const link=v.site(d.ntx);
         return `<div class="nx-card${demo?' demo':''}" style="align-items:flex-start">
-          ${demo?'':`<label style="display:flex;align-items:center;padding-top:2px;margin-right:2px" title="일괄 요청 선택"><input type="checkbox" class="nx-cb" data-ntx="${esc(d.ntx||'')}" style="width:17px;height:17px;cursor:pointer"></label>`}
+          <div style="display:flex;gap:10px;align-items:flex-start;min-width:0">
+          ${demo?'':`<label style="display:flex;align-items:center;padding-top:3px" title="일괄 요청 선택"><input type="checkbox" class="nx-cb" data-ntx="${esc(d.ntx||'')}" style="width:17px;height:17px;cursor:pointer"></label>`}
           <div style="flex:1;min-width:0">
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <span class="nx-code">${esc(p.ed||'-')}</span><span class="muted" style="font-size:12px">${esc(v.name)} ${esc(d.ntx||'')}</span>
@@ -237,7 +238,7 @@
             <div class="nx-nm">${link?`<a href="${esc(link)}" target="_blank" rel="noopener">${esc(p.name||d.name||'')}</a>`:esc(p.name||d.name||'')}</div>
             <div class="nx-price"><span>${esc(v.name)} 판매가 <span class="old">${won(d.oldPrice)}원</span> → <span class="new">${won(d.newPrice)}원</span></span>
               <span class="${up?'up':'down'}">${up?'▲':'▼'} ${won(Math.abs((d.newPrice||0)-(d.oldPrice||0)))}원</span></div>
-          </div>
+          </div></div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
             <button class="btn pri sm" data-a="mail" data-ntx="${esc(d.ntx||'')}">${icon('mail')}공급가 요청</button>
             ${demo?'':`<button class="btn sm" data-a="apply" data-ntx="${esc(d.ntx||'')}" style="background:#eef7f0;color:#12886a;border:1px solid #bfe3d3">${icon('check')}단가 반영</button>`}
