@@ -86,7 +86,7 @@
         if(s==='원'||s==='월'||s==='월정산') return '월정산';
         if(s==='선'||s==='선결제') return '선결제';
         return s; };
-      let products=getProducts(), vendors=getVendors(), orders=getOrders(), editIdx=-1;
+      let products=getProducts(), vendors=getVendors(), orders=getOrders(), editIdx=-1, ordSort='input';   // ordSort: input|desc|asc
       // 마이그레이션: 자체상품코드 비어있고 카페24코드만 있으면 왼쪽(자체)로 이동 + 정산구분 정리
       (function migrate(){ let changed=false;
         products.forEach(p=>{ if(!(p.selfCode||'').trim() && (p.code||'').trim()){ p.selfCode=p.code; p.code=''; changed=true; }
@@ -281,6 +281,7 @@
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
             <h3 style="font-size:16px">발주 목록 <span class="muted" style="font-weight:500;font-size:13.5px" id="ordCnt"></span></h3>
             <span id="sheetStat" class="muted" style="margin-left:auto;font-size:12.5px"></span>
+            <button class="btn ghost sm" id="ordSortBtn" title="일자 정렬 전환">정렬: 입력순</button>
             <button class="btn sm" id="clearOrders">${icon('trash')}비우기</button>
             <button class="btn pri" id="saveOrders">${icon('save')}저장 <span style="opacity:.75;font-weight:500;font-size:11.5px">내부+시트</span></button>
           </div>
@@ -426,6 +427,9 @@
         $f('#fDate').addEventListener('change', updateOrderHint);
         body.querySelector('.card-bd').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='fCode'){ e.preventDefault(); addOrder(); }});
         $f('#clearOrders').onclick=()=>{ if(orders.length&&confirm('발주 목록을 모두 비울까요?')){ orders=[]; saveOrders(); renderAll(); } };
+        { const sb=$f('#ordSortBtn'); if(sb){ const lbl={input:'정렬: 입력순',desc:'일자 최신순 ↓',asc:'일자 오래된순 ↑'};
+          const paint=()=>{ sb.textContent=lbl[ordSort]; sb.classList.toggle('on',ordSort!=='input'); };
+          paint(); sb.onclick=()=>{ ordSort= ordSort==='input'?'desc': ordSort==='desc'?'asc':'input'; paint(); renderOrders(); }; } }
         const rowsTSV=rows=>rows.map(r=>r.join('\t')).join('\n');
         { const sc=$f('#sheetCopy'); if(sc) sc.onclick=()=>{ const {rows}=sheetData(); if(!rows.length){ toast('발주 목록이 비어 있습니다'); return; } copyText(rowsTSV(rows)); }; }
         { const scsv=$f('#sheetCsv'); if(scsv) scsv.onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); }; }
@@ -466,7 +470,12 @@
           <th class="num">수량</th><th class="num">배송비</th><th style="width:78px">시트</th><th style="width:92px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
         if(!orders.length){ tb.innerHTML=`<tr><td colspan="12" class="muted" style="text-align:center;padding:18px">상품코드를 입력해 발주를 추가하세요.</td></tr>`; return; }
-        orders.forEach((o,i)=>{ const tr=el('tr');
+        // 표시용 정렬 — 원본 인덱스(i)는 보존해 수정/삭제가 정확히 동작
+        const dOf=o=>String(o.date||o.day||'');
+        let view=orders.map((o,i)=>({o,i}));
+        if(ordSort==='desc') view.sort((a,b)=> dOf(b.o).localeCompare(dOf(a.o)) || (Number(b.o.ord)||0)-(Number(a.o.ord)||0));
+        else if(ordSort==='asc') view.sort((a,b)=> dOf(a.o).localeCompare(dOf(b.o)) || (Number(a.o.ord)||0)-(Number(b.o.ord)||0));
+        view.forEach(({o,i})=>{ const tr=el('tr');
           if(i===editIdx){
             tr.innerHTML=`<td><input type="date" class="oe" data-k="date" value="${esc(o.date)}" style="width:130px"></td>
               <td><input class="oe" data-k="gubun" value="${esc(o.gubun||'')}" style="width:64px"></td>
