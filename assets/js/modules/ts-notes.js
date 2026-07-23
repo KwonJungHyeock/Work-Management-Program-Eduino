@@ -544,15 +544,53 @@
       }
 
       /* ---------------- TS상담검색 탭 (상품코드·키워드로 과거 이력 검색) ---------------- */
+      // 구글시트에서 가져온 과거 이력은 별도 저장소(coll 'ts_history')에 보관 — 기록/통계에는 섞지 않음
+      async function histColl(){ try{ const r=await fetch('/api/store?type=coll&coll=ts_history'); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return []; } }
+      async function histPush(item){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'ts_history',item})}); return r.ok; }catch(e){ return false; } }
+      const normDate=s=>{ s=String(s||'').trim(); const m=s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m?`${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`:s.slice(0,10); };
+      const shash=s=>{ s=String(s||''); let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h.toString(36); };
       async function loadAllTS(){
         if(tsSearchCache) return tsSearchCache;
         const now=new Date(); const months=[];
         for(let i=0;i<24;i++){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); }
         let server=[];
         if(window.Records){ const arr=await Promise.all(months.map(ym=>Records.month('md','tsnotes',ym).catch(()=>null))); server=arr.filter(Boolean).flat(); }
+        let hist=[]; try{ (await histColl()).forEach(it=>{ if(it&&Array.isArray(it.rows)) hist.push(...it.rows); }); }catch(e){}
         const seen=new Set(); const all=[];
-        [...server, ...getNotes()].forEach(r=>{ if(r&&r.id&&!seen.has(r.id)){ seen.add(r.id); all.push(r); } });
+        [...server, ...hist, ...getNotes()].forEach(r=>{ if(r&&r.id&&!seen.has(r.id)){ seen.add(r.id); all.push(r); } });
         tsSearchCache=all; return all;
+      }
+      // 구글시트(TS 상담이력) 엑셀/CSV → 이력 저장소로 가져오기
+      function parseHistoryRows(rows){
+        rows=(rows||[]).filter(r=>Array.isArray(r)&&r.some(c=>String(c==null?'':c).trim()!==''));
+        if(rows.length<2) return { err:'데이터 행이 없습니다.' };
+        const nrm=s=>String(s==null?'':s).replace(/\s/g,'');
+        const header=rows[0].map(nrm);
+        const col=names=>{ for(const n of names){ const i=header.findIndex(h=>h.includes(nrm(n))); if(i>=0) return i; } return -1; };
+        const ci={ date:col(['날짜']), platform:col(['문의플랫폼','플랫폼']), agent:col(['담당자']), prodCode:col(['상품코드']),
+          prodType:col(['상품구분']), prodName:col(['제품명']), customer:col(['고객정보','고객']), content:col(['문의사항','문의내용','문의']),
+          answerSummary:col(['답변요약']), answer:col(['답변원본','답변']) };
+        if(ci.date<0 && ci.content<0) return { err:'‘날짜’·‘문의사항’ 열을 찾지 못했습니다. 이력 시트를 그대로 올려주세요.' };
+        const g=(row,k)=> ci[k]>=0 ? String(row[ci[k]]==null?'':row[ci[k]]).trim() : '';
+        const recs=[];
+        for(let r=1;r<rows.length;r++){ const row=rows[r]||[]; const date=normDate(g(row,'date')); const content=g(row,'content');
+          if(!date && !content) continue;
+          const rec={ date, day:date||'', platform:g(row,'platform'), agent:g(row,'agent'), prodCode:g(row,'prodCode'),
+            prodType:g(row,'prodType'), prodName:g(row,'prodName'), customer:g(row,'customer'), content,
+            answerSummary:g(row,'answerSummary'), answer:g(row,'answer'), status:'', imported:true };
+          rec.id='tsh:'+shash(date+'|'+rec.prodCode+'|'+content+'|'+rec.answer);
+          recs.push(rec);
+        }
+        return { recs };
+      }
+      async function saveHistory(recs, onProg){
+        const byM={}; recs.forEach(r=>{ const ym=String(r.date||'').slice(0,7)||'0000-00'; (byM[ym]=byM[ym]||[]).push(r); });
+        // 같은 달이면 기존 이력과 병합(중복 id 제거) 후 저장
+        const existing={}; try{ (await histColl()).forEach(it=>{ if(it&&it.month) existing[it.month]=Array.isArray(it.rows)?it.rows:[]; }); }catch(e){}
+        const months=Object.keys(byM); let done=0;
+        for(const ym of months){ const prev=existing[ym]||[]; const map={}; [...prev,...byM[ym]].forEach(r=>{ if(r&&r.id) map[r.id]=r; });
+          await histPush({ id:'hist:'+ym, month:ym, rows:Object.values(map) }); done++; if(onProg) onProg(done, months.length); }
+        return recs.length;
       }
       function drawSearch(){
         body.innerHTML=`
@@ -569,13 +607,15 @@
           </style>
           <div class="q-card" style="margin-bottom:14px;padding:16px 18px">
             <div style="font-weight:800;font-size:15px;margin-bottom:3px">${icon('search')} TS 상담 검색</div>
-            <div class="muted" style="font-size:12.5px;margin-bottom:11px">상품코드(또는 제품명·키워드)로 <b>전 담당자의 과거 TS 상담 이력</b>을 찾습니다.</div>
+            <div class="muted" style="font-size:12.5px;margin-bottom:11px">상품코드(또는 제품명·키워드)로 <b>전 담당자의 과거 TS 상담 이력</b>을 찾습니다. 프로그램 기록 + 가져온 구글시트 이력을 함께 검색합니다.</div>
             <div class="tsq-bar">
               <input id="tsqCode" list="tsqCodes" placeholder="상품코드 (예: P-AA1)" style="min-width:180px">
               <datalist id="tsqCodes"></datalist>
               <input id="tsqKw" placeholder="제품명·문의 키워드 (선택)" style="flex:1;min-width:180px">
               <button class="btn pri" id="tsqBtn">${icon('search')}검색</button>
+              ${isAdmin?`<button class="btn" id="tsqImport" title="구글시트 TS 상담이력을 엑셀/CSV로 가져오기">${icon('upload')}이력 가져오기</button><input type="file" id="tsqFile" accept=".xlsx,.csv,.tsv,.txt" style="display:none">`:''}
             </div>
+            ${isAdmin?`<div class="muted" id="tsqImpMsg" style="font-size:11.5px;margin-top:8px">과거 구글시트 <b>‘TS 상담이력’ 탭</b>을 엑셀/CSV로 내려받아 <b>[이력 가져오기]</b>로 올리면, 이후 검색에서 함께 조회됩니다(1회).</div>`:''}
           </div>
           <div id="tsqOut"><div class="muted" style="padding:20px;text-align:center">상품코드를 입력하고 <b>[검색]</b>을 누르세요.</div></div>`;
         const codes=[...new Set(getNotes().map(r=>r.prodCode).filter(Boolean))].slice(-60).reverse();
@@ -612,6 +652,22 @@
         };
         body.querySelector('#tsqBtn').onclick=run;
         ['tsqCode','tsqKw'].forEach(id=>{ const e2=body.querySelector('#'+id); if(e2) e2.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); run(); } }; });
+        // 구글시트 이력 가져오기(관리자)
+        const impBtn=body.querySelector('#tsqImport'), fEl=body.querySelector('#tsqFile'), impMsg=body.querySelector('#tsqImpMsg');
+        if(impBtn && fEl){ impBtn.onclick=()=>fEl.click();
+          fEl.onchange=async()=>{ const f=fEl.files&&fEl.files[0]; fEl.value=''; if(!f) return;
+            if(!window.XlsxLite){ impMsg.innerHTML='<span style="color:var(--danger)">파서를 불러오지 못했습니다(새로고침).</span>'; return; }
+            impMsg.textContent='파일 읽는 중…';
+            try{ const { rows }=await XlsxLite.parseFile(f); const { recs, err }=parseHistoryRows(rows);
+              if(err){ impMsg.innerHTML=`<span style="color:var(--danger)">${esc(err)}</span>`; return; }
+              impMsg.innerHTML=`<span style="color:var(--info)">${recs.length.toLocaleString()}건 저장 중…</span>`;
+              const n=await saveHistory(recs, (d,t)=>{ impMsg.innerHTML=`<span style="color:var(--info)">저장 중… ${d}/${t}개월</span>`; });
+              tsSearchCache=null;   // 다음 검색 시 이력 포함해 재로드
+              impMsg.innerHTML=`<span style="color:var(--ok);font-weight:700">✓ 이력 ${n.toLocaleString()}건을 가져왔습니다. 이제 검색에 함께 나옵니다.</span>`;
+              toast(`TS 상담 이력 ${n.toLocaleString()}건 가져오기 완료`);
+            }catch(e){ impMsg.innerHTML=`<span style="color:var(--danger)">파일 처리 실패: ${esc(e.message||e)}</span>`; }
+          };
+        }
         body.querySelector('#tsqCode').focus();
       }
 
