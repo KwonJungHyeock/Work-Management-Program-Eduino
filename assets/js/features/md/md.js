@@ -2,7 +2,7 @@
 
 /* ── 1) 상품 데이터시트 관리 도구 (기존 도구를 셸 안에 임베드) ── */
 function renderProductSheetTool(body){
-  body.innerHTML = `<iframe src="modules/md/product-tool.html" title="상품 데이터시트 관리 도구"
+  body.innerHTML = `<iframe src="assets/embeds/product-tool.html" title="상품 데이터시트 관리 도구"
     style="position:absolute;inset:0;width:100%;height:100%;border:0;display:block"></iframe>`;
 }
 

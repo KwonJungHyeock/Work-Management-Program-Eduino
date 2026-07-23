@@ -569,7 +569,7 @@
             <div class="card-bd" style="padding:0"><div class="ven-tbl"><table class="tbl" id="venTable"></table></div></div>
           </div>
           <div class="note" style="margin-top:12px">배송비는 <b>입점사별 고정 금액</b>(vat포함)이 기본이며 공급가·부가세는 ÷11로 자동 분리됩니다.
-            <b>무료배송조건</b>은 발주 입력 시 자동 조회에 함께 표시됩니다. 회사 배송정보 리스트(<span class="mono" style="font-size:12px">data/입점사_배송정보.csv</span>)를 <b>CSV 불러오기</b>로 한 번에 등록하세요.
+            <b>무료배송조건</b>은 발주 입력 시 자동 조회에 함께 표시됩니다. 회사 배송정보 리스트(<span class="mono" style="font-size:12px">integrations/source-data/입점사_배송정보.csv</span>)를 <b>CSV 불러오기</b>로 한 번에 등록하세요.
             헤더(입점사명/업체명·정산구분·배송비·무료배송조건/배송조건·담당자·연락처·발주메일·특이사항)를 자동 인식합니다. 수정 후 <b>저장</b>.</div>
           <div id="venPasteBox" class="hidden" style="margin-top:14px"></div>`;
         renderVen();
@@ -912,7 +912,7 @@
             이제 시트의 <b>1행 헤더 이름</b>을 읽어 열을 맞추므로, 시트 열 순서가 달라도 정확히 들어갑니다.</div>
           <div class="note" style="max-width:820px"><b>이카운트 품목 연동됨</b> · 상품코드를 입력하면 이카운트 품목(매일 00시 자동 최신화)에서 품명을 자동 조회합니다. 이카운트용 배송비는 <b>복사/CSV</b>로 내보내 붙여넣습니다.
             발주표 시트 1행 헤더에 <span class="mono" style="font-size:12px">입점사명 · 정산구분 · 상품코드(또는 자체상품코드) · 품명 · 수량 · 배송정보/비고</span> 같은 이름이 있으면 그 칸으로 채워집니다.</div>`;
-        body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
+        body.querySelector('#copyCode').onclick=async()=>{ try{ const r=await fetch('integrations/google-apps-script/main.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
         body.querySelector('#ordSave').onclick=()=>{ cfgDB().set({ ...getCfg(), sheetUrl:body.querySelector('#ordUrl').value.trim(),
           autoSend: body.querySelector('input[name=autoSend]:checked').value==='1',
           backup: body.querySelector('#ordBackup').checked }); toast('저장했습니다'); };

@@ -386,7 +386,7 @@ function bootShell(){
           </div>
           <p class="muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">팀(4명)이 같은 설정을 공유하고 캐시가 지워져도 <b>[받기]</b>로 복원됩니다. 접속자 현황도 함께 표시됩니다. 두 방식 중 하나를 URL로 지정하세요.
             <br>· <b>Vercel 백엔드(권장)</b>: 아래 <b>[Vercel 백엔드 사용]</b> 클릭 (Vercel에 KV 스토어 연결 필요, CORS 없음·자동)
-            <br>· 구글시트: <span class="mono" style="font-size:11.5px">google-apps-script-sync.gs</span> 배포 후 <span class="mono">/exec</span> URL 입력</p>
+            <br>· 구글시트: <span class="mono" style="font-size:11.5px">integrations/google-apps-script/sync.gs</span> 배포 후 <span class="mono">/exec</span> URL 입력</p>
           <label class="fld" style="margin-bottom:10px">웹 앱 URL<input type="text" id="mSyncUrl" placeholder="https://script.google.com/macros/s/……/exec"></label>
           <label class="chk" style="margin-bottom:8px;font-size:13px"><input type="checkbox" id="mAutoPull"> 접속(부팅) 시 공용 설정 자동으로 받기</label>
           <label class="chk" style="margin-bottom:10px;font-size:13px"><input type="checkbox" id="mAutoPush"> 설정 변경 시 공용에 자동으로 올리기 <span class="muted" style="font-weight:400">(수동 [올리기] 불필요)</span></label>
@@ -495,7 +495,7 @@ function bootShell(){
       try{ const r=await SyncStore.pullSettings(); sStat.textContent=`설정 ${r.applied}개 적용 · 새로고침합니다`;
         if(r.applied) setTimeout(()=>location.reload(),700); else sStat.textContent='받을 공용 설정이 없습니다'; }
       catch(err){ sStat.textContent='실패: '+err.message; b.disabled=false; } };
-    ov.querySelector('#mSyncCode').onclick = async()=>{ try{ const r=await fetch('google-apps-script-sync.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
+    ov.querySelector('#mSyncCode').onclick = async()=>{ try{ const r=await fetch('integrations/google-apps-script/sync.gs'); if(!r.ok)throw 0; copyText(await r.text()); }catch{ toast('코드 파일을 불러오지 못했습니다'); } };
     const close=()=>ov.remove();
     ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
     ov.querySelector('#mClose').onclick=close;

@@ -12,43 +12,56 @@
 <script>try{var m=localStorage.getItem('eduino.theme'),h=new Date().getHours();if(m==='dark'||(m==='auto'&&(h>=19||h<7)))document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
 </head>
 <body>
-<!-- 셸이 DOMContentLoaded 시 body 를 렌더합니다 -->
-<!-- defer: 순서 보존하며 병렬 다운로드(파싱 후 순차 실행) → 초기 로딩 단축 -->
-<script defer src="assets/js/vendors-data.js"></script>
-<script defer src="assets/js/vendors-ship-data.js"></script>
-<script defer src="assets/js/ntrex-data.js"></script>
-<script defer src="assets/js/duties-data.js"></script>
-<script defer src="assets/js/config.js"></script>
-<script defer src="assets/js/app.js"></script>
-<script defer src="assets/js/worklog.js"></script>
-<script defer src="assets/js/xlsxlite.js"></script>
-<script defer src="assets/js/zip.js"></script>
-<script defer src="assets/js/modules/cs.js"></script>
-<script defer src="assets/js/modules/cs-notes.js"></script>
-<script defer src="assets/js/modules/cs-lookup.js"></script>
-<script defer src="assets/js/modules/cs-custdb.js"></script>
-<script defer src="assets/js/modules/cs-china.js"></script>
-<script defer src="assets/js/modules/md.js"></script>
-<script defer src="assets/js/modules/md-order.js"></script>
-<script defer src="assets/js/modules/md-payreq.js"></script>
-<script defer src="assets/js/modules/ts-notes.js"></script>
-<script defer src="assets/js/modules/ts-templates.js"></script>
-<script defer src="assets/js/modules/md-boards.js"></script>
-<script defer src="assets/js/modules/handover.js"></script>
-<script defer src="assets/js/modules/manual.js"></script>
-<script defer src="assets/js/modules/md-pricewatch.js"></script>
-<script defer src="assets/js/modules/cs-exchange.js"></script>
-<script defer src="assets/js/modules/cs-postpay.js"></script>
-<script defer src="assets/js/modules/home.js"></script>
-<script defer src="assets/js/modules/calendar.js"></script>
-<script defer src="assets/js/modules/settle.js"></script>
-<script defer src="assets/js/modules/admin.js"></script>
-<script defer src="assets/js/modules/insights.js"></script>
-<script defer src="assets/js/modules/duties.js"></script>
-<script defer src="assets/js/modules/tasks.js"></script>
-<script defer src="assets/js/modules/admin-sales.js"></script>
-<script defer src="assets/js/modules/sheets.js"></script>
-<script defer src="assets/js/sync.js"></script>
-<script defer src="assets/js/shell.js"></script>
+<!-- 셸이 DOMContentLoaded 시 body 를 렌더합니다. -->
+<!-- defer: 순서 보존하며 병렬 다운로드(파싱 후 문서순 실행) → 초기 로딩 단축. -->
+<!-- ⚠️ 로드 순서 = 실행 순서. data → core(config·app·worklog) → lib → features → sync → shell. -->
+<!--    features 는 window.MODULES 에 자기 화면을 등록만 하므로 상호 순서는 무관하나, core 이후여야 함. -->
+<!--    새 기능 추가 시: assets/js/features/<부서>/ 에 파일 만들고 이 목록 features 구역에 한 줄 추가. -->
+
+<!-- ── 시드 데이터 (전 직원 기본 탑재값) ── -->
+<script defer src="assets/js/data/vendors-data.js"></script>
+<script defer src="assets/js/data/vendors-ship-data.js"></script>
+<script defer src="assets/js/data/ntrex-data.js"></script>
+<script defer src="assets/js/data/duties-data.js"></script>
+
+<!-- ── 코어 런타임 (설정·앱기반·기록API) ── -->
+<script defer src="assets/js/core/config.js"></script>
+<script defer src="assets/js/core/app.js"></script>
+<script defer src="assets/js/core/worklog.js"></script>
+
+<!-- ── 범용 라이브러리 ── -->
+<script defer src="assets/js/lib/xlsxlite.js"></script>
+<script defer src="assets/js/lib/zip.js"></script>
+
+<!-- ── 기능 모듈 (부서별 · window.MODULES 등록) ── -->
+<script defer src="assets/js/features/cs/cs.js"></script>
+<script defer src="assets/js/features/cs/cs-notes.js"></script>
+<script defer src="assets/js/features/cs/cs-lookup.js"></script>
+<script defer src="assets/js/features/cs/cs-custdb.js"></script>
+<script defer src="assets/js/features/cs/cs-china.js"></script>
+<script defer src="assets/js/features/md/md.js"></script>
+<script defer src="assets/js/features/md/md-order.js"></script>
+<script defer src="assets/js/features/md/md-payreq.js"></script>
+<script defer src="assets/js/features/ts/ts-notes.js"></script>
+<script defer src="assets/js/features/ts/ts-templates.js"></script>
+<script defer src="assets/js/features/md/md-boards.js"></script>
+<script defer src="assets/js/features/shared/handover.js"></script>
+<script defer src="assets/js/features/shared/manual.js"></script>
+<script defer src="assets/js/features/md/md-pricewatch.js"></script>
+<script defer src="assets/js/features/cs/cs-exchange.js"></script>
+<script defer src="assets/js/features/cs/cs-postpay.js"></script>
+<script defer src="assets/js/features/home/home.js"></script>
+<script defer src="assets/js/features/home/calendar.js"></script>
+<script defer src="assets/js/features/admin/settle.js"></script>
+<script defer src="assets/js/features/admin/admin.js"></script>
+<script defer src="assets/js/features/admin/insights.js"></script>
+<script defer src="assets/js/features/admin/duties.js"></script>
+<script defer src="assets/js/features/home/tasks.js"></script>
+<script defer src="assets/js/features/admin/admin-sales.js"></script>
+<script defer src="assets/js/features/shared/sheets.js"></script>
+
+<!-- ── 동기화 + 셸(마지막: body 렌더) ── -->
+<script defer src="assets/js/core/sync.js"></script>
+<script defer src="assets/js/core/shell.js"></script>
 </body>
 </html>

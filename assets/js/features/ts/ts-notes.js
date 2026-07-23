@@ -814,8 +814,8 @@
             </div>
           </div>`;
         body.querySelector('#copyCode').onclick=async(e)=>{
-          try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; const t=await r.text(); copyText(t); }
-          catch{ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 를 사용하세요'); } };
+          try{ const r=await fetch('integrations/google-apps-script/main.gs'); if(!r.ok) throw 0; const t=await r.text(); copyText(t); }
+          catch{ toast('코드 파일을 불러오지 못했습니다 — 저장소의 integrations/google-apps-script/main.gs 를 사용하세요'); } };
         body.querySelector('#cfgSave').onclick=()=>{
           const url=body.querySelector('#cfgUrl').value.trim();
           const backup=body.querySelector('#cfgBackup').checked;

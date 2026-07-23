@@ -428,7 +428,7 @@
               <div class="note" style="margin-top:10px;font-size:12px"><b>백필</b>: 지금 <b>조회된 기간</b>의 기록을 원장으로 한 번에 전송합니다(과거 입력분 이관용). 기간을 넓게(예: 30일) 잡고 누르세요. id 기준이라 <b>중복 없음</b> · 전송 후 고객DB에서 <b>[재집계]</b> 실행.</div>
             </div></div>`:''}`;
           if(cfg.ledger){
-            panel.querySelector('#cdbCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script-customerdb.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('고객DB Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script-customerdb.gs 사용'); } };
+            panel.querySelector('#cdbCopyCode').onclick=async()=>{ try{ const r=await fetch('integrations/google-apps-script/customerdb.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('고객DB Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 integrations/google-apps-script/customerdb.gs 사용'); } };
             panel.querySelector('#cdbSave').onclick=()=>{ store(STORE.custDbCfg).set({ sheetUrl:panel.querySelector('#cdbUrl').value.trim() }); panel.querySelector('#cdbStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('고객DB 연동 저장'); };
             panel.querySelector('#cdbTest').onclick=async()=>{ const url=panel.querySelector('#cdbUrl').value.trim(), st=panel.querySelector('#cdbStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
               try{ const res=await fetch(url+(url.includes('?')?'&':'?')+'sheet='+encodeURIComponent(cfg.ledger.tab)); let d=null; try{d=await res.json();}catch(e){}
@@ -449,7 +449,7 @@
             };
           }
           panel.querySelector('#syncClose').onclick=()=>{ panel.classList.add('hidden'); panel.innerHTML=''; };
-          panel.querySelector('#syncCopyCode').onclick=async()=>{ try{ const r=await fetch('google-apps-script.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 google-apps-script.gs 사용'); } };
+          panel.querySelector('#syncCopyCode').onclick=async()=>{ try{ const r=await fetch('integrations/google-apps-script/main.gs'); if(!r.ok) throw 0; copyText(await r.text()); toast('Apps Script 코드 복사됨'); }catch(e){ toast('코드 파일을 불러오지 못했습니다 — 저장소의 integrations/google-apps-script/main.gs 사용'); } };
           panel.querySelector('#syncSave').onclick=()=>{ setSyncCfg({ sheetUrl:panel.querySelector('#syncUrl').value.trim(), backup:panel.querySelector('#syncBackup').checked }); panel.querySelector('#syncStat').innerHTML='<span style="color:var(--ok)">✓ 저장됨(팀 공유)</span>'; toast('연동 설정 저장'); };
           panel.querySelector('#syncTest').onclick=async()=>{ const url=panel.querySelector('#syncUrl').value.trim(), st=panel.querySelector('#syncStat'); if(!url){ st.textContent='URL을 입력하세요'; return; } st.textContent='테스트 중…';
             // 이 모듈이 실제로 기록하는 탭(tabName)을 함께 조회 — 표시도 그 탭으로

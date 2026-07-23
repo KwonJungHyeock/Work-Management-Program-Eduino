@@ -12,7 +12,7 @@
 >
 > **공용 저장소(설정 공유 · 접속자 현황)**: 팀(4명)이 **같은 설정을 공유**하고 캐시가 지워져도 **[공용 설정 받기]** 로 복원됩니다. 상단바에 **실시간 접속자 수**(클릭 시 목록)도 표시됩니다. 무거운 데이터(상담·발주)는 각자 시트에 쌓이고 여기엔 작은 설정·하트비트만 저장합니다. 백엔드는 두 가지 중 선택:
 > - **Vercel 백엔드(권장)**: 서버리스 함수 [`api/store.js`](api/store.js) + **Vercel KV(Upstash)**. 같은 도메인이라 CORS 없이 응답을 읽고, `[설정 백업] → [Vercel 백엔드 사용]` 한 번이면 URL(`/api/store`) 설정 완료. Vercel 대시보드에서 **KV 스토어를 프로젝트에 연결**(환경변수 `KV_REST_API_URL`·`KV_REST_API_TOKEN` 자동 주입)하면 됩니다.
-> - **구글시트**: 백엔드 없이 [`google-apps-script-sync.gs`](google-apps-script-sync.gs) 를 배포해 `/exec` URL 입력. (무료·라이선스 이슈 없음)
+> - **구글시트**: 백엔드 없이 [`integrations/google-apps-script/sync.gs`](integrations/google-apps-script/sync.gs) 를 배포해 `/exec` URL 입력. (무료·라이선스 이슈 없음)
 
 ## 실행 방법
 
@@ -59,7 +59,7 @@ index.html (아이디·접속코드 로그인 · 서버 검증)
 - **처리 대기(후속조치 큐)**: 콜백 필요로 체크한 건이 모이는 탭. 대기 일수 표시·처리 메모·완료/되돌리기, 탭에 대기 건수 배지.
 - **일일 결산**: 날짜별 총건수·**분류별·고객유형별·상담사별** 집계 + 콜백 목록. **결산 텍스트 복사·메모장(.txt) 저장**, 저장 **양식(토큰)** 을 직접 편집(`{날짜}{총건수}{분류별}{고객유형별}{상담사별}{콜백건수}{콜백목록}`).
 - **구글 시트 연동**: Apps Script 웹앱(`doPost`)으로 전송. 시트 **1행 헤더 이름**을 읽어 열을 맞추므로 열 순서가 달라도 정확히 들어갑니다. 엔드포인트 URL은 설정 화면에서 입력(하드코딩 없음). **실시간/일괄** 전송, 전송 실패 시 로컬 보존·재시도(데이터 무손실). 각 기록은 숨은 `id` 열로 **upsert**라 재전송/수정해도 중복 없음.
-- **연동 코드**: 저장소 루트 [`google-apps-script.gs`](google-apps-script.gs) 를 시트의 Apps Script에 붙여넣고, 상단 `SHEET_NAME` 을 기록할 탭(예: `상담test` / `2026 CS 상담이력`)으로 맞춘 뒤 웹 앱으로 배포하면 연동됩니다.
+- **연동 코드**: 저장소 루트 [`integrations/google-apps-script/main.gs`](integrations/google-apps-script/main.gs) 를 시트의 Apps Script에 붙여넣고, 상단 `SHEET_NAME` 을 기록할 탭(예: `상담test` / `2026 CS 상담이력`)으로 맞춘 뒤 웹 앱으로 배포하면 연동됩니다.
 - **노션 연동**: 저장/전송을 destination 추상화(`DESTINATIONS`)로 설계 — 이후 노션 대상만 추가하면 됩니다. (현재 인터페이스만, `cs-notes.js`)
 
 레코드 스키마: `{ id, createdAt, date, category, contact, customerType, name, prodCategory, prodCode, content, answer, agent, callback, syncedAt }`
@@ -71,9 +71,9 @@ index.html (아이디·접속코드 로그인 · 서버 검증)
 - **자동채움**: 자체상품코드 → 입점사명·정산구분·품명(구글시트용) + 배송비·**무료배송조건**(이카운트/확인용). 코드 입력 후 Enter로 발주 목록에 추가. `A~E`로 시작하는 자체상품코드는 **자사** 상품으로 자동 표기(배송비 3,000원).
 - **구글시트용 출력**: 발주표 컬럼 순서(`ORDER_SHEET_COLS`)대로 → 복사(TSV)·CSV·Apps Script 자동전송.
 - **이카운트용 배송비**: 입점사(거래처)마다 배송비 1줄 자동 생성, 단가(vat포함)→공급가·부가세 ÷11 자동 분리 → 복사·CSV.
-- **마스터 관리**: 상품(자체상품코드→입점사·정산구분·품명·배송비 예외) / **입점사 정보**(배송비·무료배송조건·담당자·연락처·발주메일·특이사항) 테이블. 엑셀/구글시트에서 **붙여넣기(TSV) 또는 CSV 불러오기**(헤더 자동 인식). 회사 배송정보 리스트는 [`data/입점사_배송정보.csv`](data/입점사_배송정보.csv)(120개 입점사)를 한 번에 불러올 수 있습니다.
+- **마스터 관리**: 상품(자체상품코드→입점사·정산구분·품명·배송비 예외) / **입점사 정보**(배송비·무료배송조건·담당자·연락처·발주메일·특이사항) 테이블. 엑셀/구글시트에서 **붙여넣기(TSV) 또는 CSV 불러오기**(헤더 자동 인식). 회사 배송정보 리스트는 [`integrations/source-data/입점사_배송정보.csv`](integrations/source-data/입점사_배송정보.csv)(120개 입점사)를 한 번에 불러올 수 있습니다.
 - **배송비 정책**: 입점사별 고정 금액이 기본이며(무료배송조건은 자동 조회에 함께 표시), 특정 상품만 다르면 상품 마스터의 “배송비 예외”로 개별 지정.
-- **연동 코드**: [`google-apps-script-orders.gs`](google-apps-script-orders.gs) — 시트에 붙여 웹 앱 배포. (이카운트는 현재 복사/CSV, API 연동은 추후 어댑터로)
+- **연동 코드**: [`integrations/google-apps-script/orders.gs`](integrations/google-apps-script/orders.gs) — 시트에 붙여 웹 앱 배포. (이카운트는 현재 복사/CSV, API 연동은 추후 어댑터로)
 
 ### MD · 상세이미지 변환기
 
@@ -97,34 +97,45 @@ index.html (아이디·접속코드 로그인 · 서버 검증)
 ## 폴더 구조
 
 ```
-index.html                 접속코드 로그인 + 기기 등록
-app.html                   앱 셸
+index.html                     접속코드 로그인 + 기기 등록 (core/config.js + core/app.js 로드)
+app.html                       앱 셸 (전 스크립트 로드 · 로드=실행 순서 주석 참조)
 assets/
-  favicon.svg              에듀이노 전극 마크
-  brand/eduino-mark.svg    브랜드 로고(마크) · 로그인/인트로/사이드바에 사용
-  platform-logos/          플랫폼 로고(naver·coupang·st11·gmarket·auction).svg
-  css/  theme.css          디자인 시스템(엔터프라이즈 톤)
-        shell.css          셸 레이아웃
-        login.css          로그인 화면
-  js/   config.js          접속코드·플랫폼 프리셋·내비  ← 실서비스 전환 시 교체 지점
-        app.js             아이콘·인증(코드/기기)·유틸·MODULES 레지스트리
-        shell.js           사이드바/상단바/상태바 렌더 + 라우팅
-        zip.js             의존성 없는 ZIP 생성기(store 방식)
-        sync.js            공용 저장소 클라이언트 — 팀 설정 공유 + 접속자 현황
-api/  store.js           Vercel 서버리스 — 공용 설정·접속자(Vercel KV, 의존성 없음)
-        modules/cs.js      CS 답변 템플릿
-        modules/cs-notes.js CS 상담 메모 & 일일 결산 (구글 시트 연동)
-        modules/md.js      MD 상품도구(iframe) + 상세이미지 변환기
-modules/md/product-tool.html   기존 상품 데이터 관리 도구
-google-apps-script.gs          CS 상담 메모 → 구글 시트 연동용 Apps Script
-backup/first-draft/            1차 초안(대시보드·디자인·경리 등) 보존
+  favicon.svg                  에듀이노 전극 마크
+  brand/eduino-mark.svg        브랜드 로고(마크) · 로그인/인트로/사이드바
+  platform-logos/              플랫폼 로고(naver·coupang·st11·gmarket·auction).svg
+  css/    theme.css            디자인 시스템 / shell.css 셸 레이아웃 / login.css 로그인
+  embeds/ product-tool.html    MD 상품 데이터시트 관리 도구 (md.js 가 iframe 로드)
+  js/
+    core/     config.js        접속코드·플랫폼 프리셋·내비  ← 실서비스 전환 시 교체 지점
+              app.js           아이콘·인증(코드/기기)·store()·MODULES 레지스트리
+              shell.js         사이드바/상단바/상태바 렌더 + 해시 라우팅
+              worklog.js       Records API — 서버 기록 읽기/쓰기(월버킷)
+              sync.js          공용 저장소 클라이언트 — 팀 설정 공유 + 접속자 현황
+    lib/      xlsxlite.js      의존성 없는 XLSX/CSV 파서 · zip.js ZIP 생성기
+    data/     ntrex-data.js    시드 데이터(자동생성) — 엔티렉스 공급가표·입점사·배송·직무
+    features/                  기능 모듈 (window.MODULES 에 화면 등록)
+      home/   home·calendar·tasks.js       홈 대시보드·알림·공지·일정·내 업무
+      cs/     cs·cs-notes·cs-lookup…       CS 상담/조회/고객DB/중국발주/교환/후불
+      md/     md·md-order·md-payreq…       MD 발주/결제요청/상품허브/가격비교
+      ts/     ts-notes·ts-templates.js     TS 상담메모·검색·기술상담 템플릿
+      admin/  admin·settle·insights…       계정/권한·결재·통계·직무·매출
+      shared/ sheets·handover·manual.js    공용 빌더(누적시트뷰·입점사관리)·업무매뉴얼
+api/    store.js·auth.js·…       Vercel 서버리스 — 공용설정·인증·카탈로그·메일·백업
+integrations/
+  google-apps-script/          구글시트 연동 Apps Script (앱이 fetch 로 코드 제공)
+    main.gs  sync.gs  orders.gs  customerdb.gs
+  source-data/입점사_배송정보.csv   vendors-ship-data.js 자동생성 원본
+docs/                          기능목록·구글시트 연동 가이드·ARCHITECTURE.md
+scripts/                       개발용 스크립트(엔티렉스 수집·이카운트 동기화)
 ```
 
 ## 새 기능 추가 방법
 
-1. `assets/js/config.js` 의 `NAV` 에 메뉴 항목 추가 (`key`, `name`)
-2. `assets/js/modules/<부서>.js` 에서 `MODULES['<key>'] = { title, icon, render(el){...} }` 등록
-3. `app.html` 에 해당 모듈 스크립트 `<script>` 추가
+1. `assets/js/core/config.js` 의 `NAV` 에 메뉴 항목 추가 (`key`, `name`)
+2. `assets/js/features/<부서>/<기능>.js` 에서 `MODULES['<key>'] = { title, icon, render(el){...} }` 등록
+3. `app.html` 의 features 구역에 해당 모듈 `<script>` 한 줄 추가 (core 이후면 순서 무관)
+
+> 구조·데이터 흐름·유지보수 체크리스트는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 참조.
 
 ## 다음 단계 (제안)
 

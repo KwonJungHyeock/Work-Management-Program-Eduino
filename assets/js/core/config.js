@@ -107,7 +107,7 @@ const DEFAULT_MD_PRODUCTS = [
   { selfCode:'P-AJ64', code:'', vendor:'삼쩜일사',   settle:'선결제', name:'[로봇과 함께하는 인공지능 교육 12차시 태블릿&크롬북 활용 교재] 카미봇파이 워크북', ship:'' },
 ];
 /* 입점사 정보 (배송비 vat포함 + 무료배송조건/담당자/연락처/발주메일/특이사항)
-   · 상품에 개별 배송비가 있으면 그 값이 우선 · 전 직원 기본 탑재값은 vendors-ship-data.js(=data/입점사_배송정보.csv 자동생성)
+   · 상품에 개별 배송비가 있으면 그 값이 우선 · 전 직원 기본 탑재값은 vendors-ship-data.js(=integrations/source-data/입점사_배송정보.csv 자동생성)
    · 관리자가 [입점사 정보]에서 저장/임포트하면 그 값이 우선(팀 동기화). 번들 기본값 덕분에 동기화 전에도 배송비가 정확히 표시됨 */
 const DEFAULT_MD_VENDORS = (typeof window!=='undefined' && Array.isArray(window.MD_VENDORS_DEFAULT) && window.MD_VENDORS_DEFAULT.length)
   ? window.MD_VENDORS_DEFAULT
