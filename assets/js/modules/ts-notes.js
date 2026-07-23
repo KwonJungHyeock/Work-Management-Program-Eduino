@@ -588,13 +588,12 @@
         }
         return { recs };
       }
+      // 연도 단위로 저장(hist:2025, hist:2026 …) — 항목 수가 적어 로드/삭제가 간단·안정적
       async function saveHistory(recs, onProg){
-        const byM={}; recs.forEach(r=>{ const ym=String(r.date||'').slice(0,7)||'0000-00'; (byM[ym]=byM[ym]||[]).push(r); });
-        // 같은 달이면 기존 이력과 병합(중복 id 제거) 후 저장
-        const existing={}; try{ (await histColl()).forEach(it=>{ if(it&&it.month) existing[it.month]=Array.isArray(it.rows)?it.rows:[]; }); }catch(e){}
-        const months=Object.keys(byM); let done=0;
-        for(const ym of months){ const prev=existing[ym]||[]; const map={}; [...prev,...byM[ym]].forEach(r=>{ if(r&&r.id) map[r.id]=r; });
-          await histPush({ id:'hist:'+ym, month:ym, rows:Object.values(map) }); done++; if(onProg) onProg(done, months.length); }
+        const byY={}; recs.forEach(r=>{ const y=/^\d{4}/.test(String(r.date||''))?String(r.date).slice(0,4):'기타'; (byY[y]=byY[y]||[]).push(r); });
+        const years=Object.keys(byY); let done=0;
+        for(const y of years){ const map={}; byY[y].forEach(r=>{ if(r&&r.id) map[r.id]=r; });
+          await histPush({ id:'hist:'+y, year:y, rows:Object.values(map) }); done++; if(onProg) onProg(done, years.length); }
         return recs.length;
       }
       function drawSearch(){
@@ -627,8 +626,6 @@
         const codes=[...new Set(getNotes().map(r=>r.prodCode).filter(Boolean))].slice(-60).reverse();
         const dl=body.querySelector('#tsqCodes'); if(dl) dl.innerHTML=codes.map(c=>`<option value="${esc(c)}">`).join('');
         const out=body.querySelector('#tsqOut');
-        const stBadge=s=>{ if(!s) return ''; const st=/수정필요/.test(s)?'background:#fdeaea;color:#c53434':s==='해결완료'?'background:#e6f7f0;color:#12886a':s==='처리중'?'background:#fff4e6;color:#b4530a':'background:var(--panel-2);color:#5a6474';
-          return `<span style="${st};font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 7px;white-space:nowrap">${esc(s)}</span>`; };
         const run=async()=>{
           const code=body.querySelector('#tsqCode').value.trim().toLowerCase();
           const kw=body.querySelector('#tsqKw').value.trim().toLowerCase();
@@ -645,14 +642,13 @@
           if(!res.length){ out.innerHTML=`<div class="muted" style="padding:24px;text-align:center">${icon('search')}<div style="margin-top:8px">해당하는 상담 이력이 없습니다.</div></div>`; return; }
           out.innerHTML=`<div class="muted" style="font-size:12.5px;margin:2px 2px 9px">검색 결과 <b style="color:var(--ink)">${res.length}건</b>${code?` · 상품코드 <b class="tsq-code">${esc(code.toUpperCase())}</b>`:''}${kw?` · '${esc(kw)}'`:''}</div>
             <div style="overflow:auto;border:1px solid var(--line);border-radius:11px;max-height:calc(100vh - 320px)">
-              <table class="tsq-tbl"><thead><tr><th style="width:72px">날짜</th><th style="width:66px">플랫폼</th><th style="width:60px">담당자</th><th style="width:74px">상품코드</th><th style="width:150px">제품명</th><th style="width:92px">처리상태</th><th>문의 · 답변</th></tr></thead>
+              <table class="tsq-tbl"><thead><tr><th style="width:78px">날짜</th><th style="width:66px">플랫폼</th><th style="width:60px">담당자</th><th style="width:74px">상품코드</th><th style="width:160px">제품명</th><th>문의 · 답변</th></tr></thead>
               <tbody>${res.map(r=>`<tr>
                 <td style="white-space:nowrap">${esc(String(r.date||r.day||'').slice(0,10))}</td>
                 <td>${esc(r.platform||'')}</td>
                 <td style="white-space:nowrap">${esc(r.agent||r.whoName||'')}</td>
                 <td class="tsq-code">${esc(r.prodCode||'')}</td>
                 <td>${esc(r.prodName||'')}</td>
-                <td>${stBadge(r.status)}</td>
                 <td><div class="tsq-q">${esc(r.content||'')}</div>${(r.answerSummary||r.answer)?`<div class="tsq-a">${esc(r.answerSummary||r.answer||'')}</div>`:''}</td>
               </tr>`).join('')}</tbody></table></div>`;
         };
@@ -662,22 +658,29 @@
         const impBtn=body.querySelector('#tsqImport'), fEl=body.querySelector('#tsqFile'), impMsg=body.querySelector('#tsqImpMsg');
         if(impBtn && fEl){ impBtn.onclick=()=>fEl.click();
           fEl.onchange=async()=>{ const f=fEl.files&&fEl.files[0]; fEl.value=''; if(!f) return;
-            if(!window.XlsxLite){ impMsg.innerHTML='<span style="color:var(--danger)">파서를 불러오지 못했습니다(새로고침).</span>'; return; }
-            impMsg.textContent='파일 읽는 중…';
-            try{ const { rows }=await XlsxLite.parseFile(f); const { recs, err }=parseHistoryRows(rows);
-              if(err){ impMsg.innerHTML=`<span style="color:var(--danger)">${esc(err)}</span>`; return; }
-              impMsg.innerHTML=`<span style="color:var(--info)">${recs.length.toLocaleString()}건 저장 중…</span>`;
-              const n=await saveHistory(recs, (d,t)=>{ impMsg.innerHTML=`<span style="color:var(--info)">저장 중… ${d}/${t}개월</span>`; });
-              tsSearchCache=null;   // 다음 검색 시 이력 포함해 재로드
-              impMsg.innerHTML=`<span style="color:var(--ok);font-weight:700">✓ 이력 ${n.toLocaleString()}건을 가져왔습니다. 이제 검색에 함께 나옵니다.</span>`;
+            if(!window.XlsxLite || !XlsxLite.parseSheets){ impMsg.innerHTML='<span style="color:var(--danger)">파서를 불러오지 못했습니다(새로고침).</span>'; return; }
+            impBtn.disabled=true; impMsg.textContent='파일 읽는 중… (모든 연도 탭)';
+            try{
+              const sheets=await XlsxLite.parseSheets(f);   // 2025·2026 등 모든 탭
+              let all=[], used=[];
+              for(const sh of (sheets||[])){ const { recs }=parseHistoryRows(sh.rows); if(recs&&recs.length){ all.push(...recs); used.push(`${sh.name||'시트'}(${recs.length})`); } }
+              const map={}; all.forEach(r=>{ if(r&&r.id) map[r.id]=r; }); all=Object.values(map);   // 탭 간 중복 제거
+              if(!all.length){ impMsg.innerHTML='<span style="color:var(--danger)">인식된 이력이 없습니다. 시트에 ‘날짜’·‘문의사항’ 열이 있는지 확인하세요.</span>'; return; }
+              impMsg.innerHTML=`<span style="color:var(--info)">${all.length.toLocaleString()}건 저장 중… (기존 이력 갱신)</span>`;
+              await clearHistory();               // 이전/중복 저장분 정리 → 항상 최신 상태(유지보수 안정)
+              const n=await saveHistory(all);
+              tsSearchCache=null;
+              impMsg.innerHTML=`<span style="color:var(--ok);font-weight:700">✓ 이력 ${n.toLocaleString()}건 가져오기 완료</span> <span class="muted">· ${esc(used.join(', '))}</span>`;
               toast(`TS 상담 이력 ${n.toLocaleString()}건 가져오기 완료`);
             }catch(e){ impMsg.innerHTML=`<span style="color:var(--danger)">파일 처리 실패: ${esc(e.message||e)}</span>`; }
+            finally{ impBtn.disabled=false; }
           };
         }
         const clrBtn=body.querySelector('#tsqClear');
         if(clrBtn) clrBtn.onclick=async()=>{ if(!confirm('가져온 TS 상담 이력을 모두 삭제할까요? (프로그램 기록은 유지됩니다)')) return;
-          clrBtn.disabled=true; impMsg.textContent='이력 삭제 중…'; const n=await clearHistory();
-          impMsg.innerHTML=`<span style="color:var(--ok)">이력 ${n}건 저장분을 삭제했습니다. 다시 가져오려면 [이력 가져오기]를 눌러주세요.</span>`; clrBtn.disabled=false; };
+          clrBtn.disabled=true; impMsg.textContent='이력 삭제 중…'; const n=await clearHistory(); tsSearchCache=null;
+          out.innerHTML='<div class="muted" style="padding:20px;text-align:center">이력을 초기화했습니다. 검색어를 입력하고 [검색]을 누르세요.</div>';
+          impMsg.innerHTML=`<span style="color:var(--ok)">가져온 이력을 모두 삭제했습니다(저장분 ${n}개). 다시 올리려면 [이력 가져오기]를 눌러주세요.</span>`; clrBtn.disabled=false; };
         body.querySelector('#tsqCode').focus();
       }
 
