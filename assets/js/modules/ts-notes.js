@@ -547,7 +547,12 @@
       // 구글시트에서 가져온 과거 이력은 별도 저장소(coll 'ts_history')에 보관 — 기록/통계에는 섞지 않음
       async function histColl(){ try{ const r=await fetch('/api/store?type=coll&coll=ts_history'); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return []; } }
       async function histPush(item){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'ts_history',item})}); return r.ok; }catch(e){ return false; } }
-      const normDate=s=>{ s=String(s||'').trim(); const m=s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m?`${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`:s.slice(0,10); };
+      const normDate=s=>{ s=String(s||'').trim();
+        const m=s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+        if(/^\d{4,6}(\.0+)?$/.test(s)){ const n=Math.round(Number(s)); if(n>=20000 && n<=80000){ const d=new Date(Math.round((n-25569)*86400000)); if(!isNaN(d)) return d.toISOString().slice(0,10); } }   // 엑셀 날짜 시리얼 → YYYY-MM-DD
+        return s.slice(0,10); };
+      async function histDel(id){ try{ const r=await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collDel',coll:'ts_history',id})}); return r.ok; }catch(e){ return false; } }
+      async function clearHistory(){ const items=await histColl(); for(const it of items){ if(it&&it.id) await histDel(it.id); } tsSearchCache=null; return items.length; }
       const shash=s=>{ s=String(s||''); let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h.toString(36); };
       async function loadAllTS(){
         if(tsSearchCache) return tsSearchCache;
@@ -613,7 +618,8 @@
               <datalist id="tsqCodes"></datalist>
               <input id="tsqKw" placeholder="제품명·문의 키워드 (선택)" style="flex:1;min-width:180px">
               <button class="btn pri" id="tsqBtn">${icon('search')}검색</button>
-              ${isAdmin?`<button class="btn" id="tsqImport" title="구글시트 TS 상담이력을 엑셀/CSV로 가져오기">${icon('upload')}이력 가져오기</button><input type="file" id="tsqFile" accept=".xlsx,.csv,.tsv,.txt" style="display:none">`:''}
+              ${isAdmin?`<button class="btn" id="tsqImport" title="구글시트 TS 상담이력을 엑셀/CSV로 가져오기">${icon('upload')}이력 가져오기</button><input type="file" id="tsqFile" accept=".xlsx,.csv,.tsv,.txt" style="display:none">
+              <button class="btn ghost" id="tsqClear" title="가져온 이력 전체 삭제" style="color:var(--danger)">${icon('trash')}이력 초기화</button>`:''}
             </div>
             ${isAdmin?`<div class="muted" id="tsqImpMsg" style="font-size:11.5px;margin-top:8px">과거 구글시트 <b>‘TS 상담이력’ 탭</b>을 엑셀/CSV로 내려받아 <b>[이력 가져오기]</b>로 올리면, 이후 검색에서 함께 조회됩니다(1회).</div>`:''}
           </div>
@@ -668,6 +674,10 @@
             }catch(e){ impMsg.innerHTML=`<span style="color:var(--danger)">파일 처리 실패: ${esc(e.message||e)}</span>`; }
           };
         }
+        const clrBtn=body.querySelector('#tsqClear');
+        if(clrBtn) clrBtn.onclick=async()=>{ if(!confirm('가져온 TS 상담 이력을 모두 삭제할까요? (프로그램 기록은 유지됩니다)')) return;
+          clrBtn.disabled=true; impMsg.textContent='이력 삭제 중…'; const n=await clearHistory();
+          impMsg.innerHTML=`<span style="color:var(--ok)">이력 ${n}건 저장분을 삭제했습니다. 다시 가져오려면 [이력 가져오기]를 눌러주세요.</span>`; clrBtn.disabled=false; };
         body.querySelector('#tsqCode').focus();
       }
 
