@@ -352,14 +352,26 @@
       /* 결제요청(선결제) 결재 카드 — 선결제 목록 확인 후 [결제완료] */
       function payreqCard(doc, after){
         const paid=doc.status==='paid'; const items=doc.items||[]; const won=n=>Number(n||0).toLocaleString();
+        // 결제요청과 동일하게 같은 업체(입점사)끼리 묶고 2건 이상이면 업체별 소계 표시(표시용 · 데이터 변경 없음)
+        const itemRow=r=>`<tr><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td style="font-weight:600">${esc(r.vendor||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td><td class="st-dt-wrap" style="min-width:150px;font-size:11.5px">${esc(r.account||'')}</td></tr>`;
+        const payItemsHtml=()=>{ if(!items.length) return `<tr><td colspan="6" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`;
+          const s=items.slice().sort((a,b)=> String(a.vendor||'').localeCompare(String(b.vendor||'')) || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1)) );
+          let html='', i=0;
+          while(i<s.length){ const v=String(s[i].vendor||'').trim(); const g=[]; let j=i;
+            while(j<s.length && String(s[j].vendor||'').trim()===v){ g.push(s[j]); j++; }
+            g.forEach(r=>{ html+=itemRow(r); });
+            if(g.length>1){ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
+              html+=`<tr style="background:var(--panel-2);font-weight:800"><td colspan="4" style="text-align:right;color:var(--muted)">${esc(v||'(미지정)')} · ${g.length}건 소계</td><td class="stnum">${won(gt)}원</td><td></td></tr>`; }
+            i=j; }
+          return html; };
         const card=el('div','st-card st-approve'+(paid?' done':''));
         card.innerHTML=`
           <div class="st-hd"><div class="st-t">${icon('stamp')} 결제요청(선결제) · ${esc(doc.date)}</div>
             <span class="st-badge" style="color:${paid?'var(--ok)':'var(--info)'};background:${paid?'var(--ok-bg)':'var(--info-bg)'}">${paid?'결제 완료':'결제 대기'}</span></div>
           <div class="st-sec-cap">선결제 결제요청 · ${items.length}건 · 합계 <b style="color:var(--ink)">${won(doc.total||0)}원</b></div>
           <div style="overflow-x:auto"><table class="st-dtl"><thead><tr><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th>금액</th><th>계좌정보</th></tr></thead><tbody>
-            ${items.length?items.map(r=>`<tr><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td style="font-weight:600">${esc(r.vendor||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td><td class="st-dt-wrap" style="min-width:150px;font-size:11.5px">${esc(r.account||'')}</td></tr>`).join(''):`<tr><td colspan="6" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`}
-          </tbody></table></div>
+            ${payItemsHtml()}
+          </tbody><tfoot><tr style="border-top:2px solid var(--line-2);font-weight:800"><td colspan="4" style="text-align:right">합계</td><td class="stnum">${won(doc.total||0)}원</td><td></td></tr></tfoot></table></div>
           <div class="st-cr" style="margin-top:10px"><div class="at" style="margin:0">상신 ${esc(doc.submittedByName||'')} · ${esc((doc.submittedAt||'').slice(0,16).replace('T',' '))}</div></div>
           <div class="st-actions">
             ${paid?`<span class="st-meta" style="color:var(--ok);font-weight:700">✓ ${esc(doc.paidByName||'')} 결제완료 · ${esc((doc.paidAt||'').slice(0,16).replace('T',' '))}</span>`

@@ -12,6 +12,7 @@
     desc:'견적·발주·후불 접수 건을 팀 공유로 기록·관리합니다. (구분·금액으로 진행 현황 파악 · 저장 시 고객 데이터베이스에 자동 누적)',
     dateField:'rdate', whoField:'agent',
     filterFields:[{k:'gubun',label:'구분'}],
+    rowCopy:true,   // 행 [복사] → 동일 값으로 접수일자만 오늘로 새 건 생성(반복 접수 편의)
     fields:[
       { k:'rdate',    label:'접수일자',  type:'date' },
       { k:'gubun',    label:'구분',      type:'select', options:['견적','발주','후불','개인결제','결제요청','기타'], req:true },

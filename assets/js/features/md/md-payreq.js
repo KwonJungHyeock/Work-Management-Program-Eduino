@@ -65,7 +65,8 @@
 
       function addFormHtml(){
         if(!editable) return '';
-        return `<div class="pq-card"><div class="pq-hdrow">${icon('plus')}수동 항목 추가 <span class="muted" style="font-weight:500;font-size:12.5px">· 택배운임 · 환불 등</span></div>
+        return `<div class="pq-card"><div class="pq-hdrow">${icon('plus')}수동 항목 추가 <span class="muted" style="font-weight:500;font-size:12.5px">· 택배운임 · 환불 등</span>
+          <button class="btn ghost sm" id="pqVenMgr" style="margin-left:auto" title="입점사 배송비·계좌정보(입점사 정보 DB) 수정">${icon('edit')||''}업체 계좌·배송비 관리</button></div>
           <div class="pq-grid">
             <div class="pq-f"><label>구분</label><select class="pq-in" id="pfKind">${KIND.map(k=>`<option ${k===form.kind?'selected':''}>${k}</option>`).join('')}</select></div>
             <div class="pq-f"><label>주문자명</label><input class="pq-in" id="pfOrderer" value="${esc(form.orderer)}" placeholder="예: 스팜 김은정"></div>
@@ -148,7 +149,59 @@
           </table></div>`;
         wire();
       }
+      // 업체 계좌·배송비 관리 — 입점사 정보 DB(STORE.mdVendors)를 그대로 수정(별도 DB 아님).
+      // 저장 시 이후 선결제 발주의 결제요청에 자동 반영되고, 옵션으로 현재 목록의 계좌도 동기화.
+      const venStore=()=> (typeof STORE!=='undefined'&&STORE.mdVendors) ? store(STORE.mdVendors) : null;
+      function openVendorEditor(){
+        const vs=venStore(); const dbList=(vs&&vs.get(null))||[]; const list=Array.isArray(dbList)?dbList:[];
+        const byName={}; list.forEach(v=>{ if(v&&v.name) byName[String(v.name).trim()]=v; });
+        // 현재 결제요청에 등장하는 업체(중복 제거·순서 유지) — 실제 수정이 필요한 대상
+        const names=[]; const seen=new Set();
+        all.forEach(r=>{ const n=String(r.vendor||'').trim(); if(n&&!seen.has(n)){ seen.add(n); names.push(n); } });
+        if(!names.length){ toast('현재 결제요청에 업체가 없습니다'); return; }
+        const rowFor=n=>{ const v=byName[n]||{}; const ship=(v.ship!=null&&v.ship!=='')?v.ship:'';
+          const acct=(v.account!=null&&v.account!=='')?v.account : ((all.find(r=>String(r.vendor||'').trim()===n && r.account)||{}).account||'');
+          const inDb=!!byName[n];
+          return `<tr><td style="font-weight:600;white-space:nowrap">${esc(n)}${inDb?'':' <span class="muted" style="font-size:10.5px;font-weight:600">신규</span>'}</td>
+            <td><input class="pq-in" data-vn="${esc(n)}" data-vk="ship" value="${esc(ship)}" inputmode="numeric" style="width:100px;text-align:right" placeholder="배송비"></td>
+            <td><input class="pq-in" data-vn="${esc(n)}" data-vk="account" value="${esc(acct)}" style="min-width:240px" placeholder="은행 / 계좌번호 / 예금주"></td></tr>`; };
+        const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+        ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:680px;width:97%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+          <div style="padding:18px 22px 12px;border-bottom:1px solid var(--line)">
+            <div style="font-size:16px;font-weight:800">${icon('truck')||''} 업체 계좌·배송비 관리</div>
+            <div class="muted" style="font-size:12.5px;margin-top:4px"><b>입점사 정보</b> DB(입점사 발주 › 입점사 정보와 동일)를 수정합니다. 저장하면 이후 <b>선결제 발주의 결제요청</b>에 자동 반영됩니다.</div>
+          </div>
+          <div style="padding:8px 22px;overflow-y:auto;flex:1">
+            <table class="pq" style="min-width:0"><thead><tr><th>업체명</th><th style="text-align:right">배송비</th><th>계좌정보</th></tr></thead>
+              <tbody>${names.map(rowFor).join('')}</tbody></table>
+            <label style="display:flex;align-items:center;gap:7px;margin-top:12px;font-size:12.5px;cursor:pointer">
+              <input type="checkbox" id="venApplyAcct" checked style="width:15px;height:15px">현재 결제요청 목록의 <b>계좌정보</b>도 함께 갱신 <span class="muted">(이미 집계된 건)</span></label>
+            <div class="muted" style="font-size:11.5px;margin-top:6px">※ 배송비 변경은 <b>이후 발주</b>부터 반영됩니다. 이미 집계된 건의 금액은 행 [수정]에서 조정하세요.</div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)">
+            <button class="btn ghost" id="venCancel">취소</button><button class="btn pri" id="venSave">${icon('check')||''}저장</button></div>
+        </div>`;
+        document.body.appendChild(ov); const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+        ov.querySelector('#venCancel').onclick=close;
+        ov.querySelector('#venSave').onclick=async()=>{
+          const edits={}; ov.querySelectorAll('[data-vn]').forEach(inp=>{ const n=inp.dataset.vn; (edits[n]=edits[n]||{})[inp.dataset.vk]=inp.value; });
+          const next=list.slice();
+          Object.keys(edits).forEach(n=>{ const e=edits[n]; const ship=parseAmt(e.ship); const account=(e.account||'').trim();
+            let v=next.find(x=>String(x.name||'').trim()===n);
+            if(v){ v.ship=ship; v.account=account; }
+            else next.push({ name:n, settle:'', ship, policy:'', manager:'', contact:'', email:'', account, note:'' }); });
+          if(vs) vs.set(next);
+          if(ov.querySelector('#venApplyAcct').checked){
+            const changed=[];
+            all.forEach(r=>{ const n=String(r.vendor||'').trim(); const e=edits[n];
+              if(e && e.account!=null){ const na=(e.account||'').trim(); if(na!==(r.account||'')){ r.account=na; changed.push(r); } } });
+            for(const r of changed){ if(window.Records) await Records.pushRaw('md','payreq',r); }
+          }
+          close(); paint(); toast('업체 정보를 저장했습니다 (입점사 정보 DB 반영)');
+        };
+      }
       function wire(){
+        const vm=body.querySelector('#pqVenMgr'); if(vm) vm.onclick=openVendorEditor;
         // 결제 상신(파트장급) — 그 날짜 결제요청 목록을 스냅샷해 대표 결재함으로 올림
         const sub=body.querySelector('#pqSubmit');
         if(sub) sub.onclick=async()=>{ const msg=body.querySelector('#pqSubMsg'); sub.disabled=true; if(msg) msg.textContent='상신 중…';

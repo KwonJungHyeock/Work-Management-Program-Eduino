@@ -287,6 +287,7 @@
         }
         function actionCell(r){ return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
           <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
+          ${cfg.rowCopy?`<button class="btn ghost sm" data-a="copy" data-id="${esc(r.id)}" title="이 행과 동일한 값으로 오늘 날짜 새 건 생성">${icon('copy')}복사</button>`:''}
           ${canDel?`<button class="bd-del" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button>`:''}</span></td>`; }
         function editRow(r,hasAct){
           const cells=showCols.map(c=>{
@@ -305,6 +306,17 @@
         function wire(){
           $('#tbl').querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
           $('#tbl').querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
+          // 복사(opt-in) — 원본은 그대로 두고 동일 값의 새 건을 오늘 날짜로 생성(순수 추가 · 기존 데이터 불변)
+          $('#tbl').querySelectorAll('[data-a=copy]').forEach(b=>b.onclick=async()=>{
+            const src=all.find(x=>x.id===b.dataset.id); if(!src) return;
+            const today=todayStr(); const rec={...src, id:uuid(), createdAt:nowISO(), day:today };
+            if(cfg.dateField) rec[cfg.dateField]=today;                 // 접수일자 = 오늘
+            rec.who=me.loginId||('@'+(rec.whoName||'?'));               // 생성자 귀속(담당자 표시값은 원본 유지)
+            all.unshift(rec); editId=null; paintWho(); paint();
+            if(window.Records) await Records.pushRaw(cfg.dept||'md',cfg.sheet,rec);
+            backupOne(rec); ledgerUpsert(rec);                          // 백업·원장도 동일 경로로 반영
+            toast('오늘 날짜로 복사했습니다');
+          });
           $('#tbl').querySelectorAll('[data-a=save]').forEach(b=>b.onclick=async(e)=>{
             const tr=e.currentTarget.closest('tr'); const old=all.find(x=>x.id===editId); if(!old) return;
             const prevDay=String(old.day||old[cfg.dateField]||old.date||'');   // 삭제 대상(옛 달 버킷)
