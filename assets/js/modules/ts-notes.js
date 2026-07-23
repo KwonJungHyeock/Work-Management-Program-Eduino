@@ -119,6 +119,7 @@
         if(ch) setNotes(all); })();
 
       let tab='memo', filter='전체', lastAgent=store(STORE.tsAgent).get(getAgents()[0]);
+      let tsSearchCache=null;   // 전체 TS 상담 이력(검색용) 캐시
       const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
       const meName=((Auth.user&&Auth.user())||{}).name||'';
       // 담당자가 TS 담당자 목록에 있으면 본인으로 기본선택
@@ -202,6 +203,7 @@
         <div class="mtabs">
           <div class="t" data-t="memo">TS 상담 메모</div>
           <div class="t" data-t="records">TS 상담 기록</div>
+          <div class="t" data-t="search">TS상담검색</div>
           <div class="t" data-t="summary">일일 결산</div>
           ${isAdmin?'<div class="t" data-t="settings">연동 설정</div>':''}
         </div>
@@ -211,7 +213,7 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       const draw=()=>{ if(tab==='settings' && !isAdmin) tab='memo';
-        return tab==='memo'?drawMemo(): tab==='records'?embedModule(body,'md.tsrecords'): tab==='summary'?drawSummary(): drawSettings(); };
+        return tab==='memo'?drawMemo(): tab==='records'?embedModule(body,'md.tsrecords'): tab==='search'?drawSearch(): tab==='summary'?drawSummary(): drawSettings(); };
 
       /* ---------------- TS 상담 메모 탭 ---------------- */
       function drawMemo(){
@@ -539,6 +541,78 @@
         slot.querySelector('#syncNow').onclick=async(e)=>{ const btn=e.currentTarget; btn.disabled=true; btn.textContent='전송 중…';
           const r=await syncRecords(unsynced()); renderList(); renderSyncBar();
           toast(r.ok?`구글시트에 ${r.synced}건 전송`:'전송 실패: '+(r.error||'')); };
+      }
+
+      /* ---------------- TS상담검색 탭 (상품코드·키워드로 과거 이력 검색) ---------------- */
+      async function loadAllTS(){
+        if(tsSearchCache) return tsSearchCache;
+        const now=new Date(); const months=[];
+        for(let i=0;i<24;i++){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); }
+        let server=[];
+        if(window.Records){ const arr=await Promise.all(months.map(ym=>Records.month('md','tsnotes',ym).catch(()=>null))); server=arr.filter(Boolean).flat(); }
+        const seen=new Set(); const all=[];
+        [...server, ...getNotes()].forEach(r=>{ if(r&&r.id&&!seen.has(r.id)){ seen.add(r.id); all.push(r); } });
+        tsSearchCache=all; return all;
+      }
+      function drawSearch(){
+        body.innerHTML=`
+          <style>
+            .tsq-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+            .tsq-bar input{font:inherit;font-size:14px;border:1px solid var(--line-2);border-radius:9px;padding:9px 12px}
+            .tsq-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+            .tsq-tbl th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:7px 9px;border-bottom:1px solid var(--line)}
+            .tsq-tbl td{padding:8px 9px;border-bottom:1px solid var(--line-2);vertical-align:top}
+            .tsq-tbl tr:hover td{background:var(--hover)}
+            .tsq-code{font-family:var(--mono);font-weight:800;color:var(--info)}
+            .tsq-q{color:var(--ink);line-height:1.5} .tsq-a{color:var(--ink-2);line-height:1.5;margin-top:3px}
+            .tsq-a::before{content:"↳ ";color:var(--faint);font-weight:700}
+          </style>
+          <div class="q-card" style="margin-bottom:14px;padding:16px 18px">
+            <div style="font-weight:800;font-size:15px;margin-bottom:3px">${icon('search')} TS 상담 검색</div>
+            <div class="muted" style="font-size:12.5px;margin-bottom:11px">상품코드(또는 제품명·키워드)로 <b>전 담당자의 과거 TS 상담 이력</b>을 찾습니다.</div>
+            <div class="tsq-bar">
+              <input id="tsqCode" list="tsqCodes" placeholder="상품코드 (예: P-AA1)" style="min-width:180px">
+              <datalist id="tsqCodes"></datalist>
+              <input id="tsqKw" placeholder="제품명·문의 키워드 (선택)" style="flex:1;min-width:180px">
+              <button class="btn pri" id="tsqBtn">${icon('search')}검색</button>
+            </div>
+          </div>
+          <div id="tsqOut"><div class="muted" style="padding:20px;text-align:center">상품코드를 입력하고 <b>[검색]</b>을 누르세요.</div></div>`;
+        const codes=[...new Set(getNotes().map(r=>r.prodCode).filter(Boolean))].slice(-60).reverse();
+        const dl=body.querySelector('#tsqCodes'); if(dl) dl.innerHTML=codes.map(c=>`<option value="${esc(c)}">`).join('');
+        const out=body.querySelector('#tsqOut');
+        const stBadge=s=>{ if(!s) return ''; const st=/수정필요/.test(s)?'background:#fdeaea;color:#c53434':s==='해결완료'?'background:#e6f7f0;color:#12886a':s==='처리중'?'background:#fff4e6;color:#b4530a':'background:var(--panel-2);color:#5a6474';
+          return `<span style="${st};font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 7px;white-space:nowrap">${esc(s)}</span>`; };
+        const run=async()=>{
+          const code=body.querySelector('#tsqCode').value.trim().toLowerCase();
+          const kw=body.querySelector('#tsqKw').value.trim().toLowerCase();
+          if(!code && !kw){ out.innerHTML='<div class="muted" style="padding:16px;text-align:center">검색어를 입력하세요.</div>'; return; }
+          out.innerHTML='<div class="muted" style="padding:20px;text-align:center">전체 상담 이력을 불러오는 중…</div>';
+          const all=await loadAllTS(); if(!body.isConnected) return;
+          const res=all.filter(r=>{
+            const c=String(r.prodCode||'').toLowerCase();
+            const okCode=!code || c.includes(code);
+            const hay=(String(r.prodName||'')+' '+String(r.content||'')+' '+String(r.answerSummary||'')+' '+String(r.answer||'')+' '+String(r.customer||'')).toLowerCase();
+            const okKw=!kw || hay.includes(kw);
+            return okCode && okKw;
+          }).sort((a,b)=>String(b.date||b.day||'').localeCompare(String(a.date||a.day||'')));
+          if(!res.length){ out.innerHTML=`<div class="muted" style="padding:24px;text-align:center">${icon('search')}<div style="margin-top:8px">해당하는 상담 이력이 없습니다.</div></div>`; return; }
+          out.innerHTML=`<div class="muted" style="font-size:12.5px;margin:2px 2px 9px">검색 결과 <b style="color:var(--ink)">${res.length}건</b>${code?` · 상품코드 <b class="tsq-code">${esc(code.toUpperCase())}</b>`:''}${kw?` · '${esc(kw)}'`:''}</div>
+            <div style="overflow:auto;border:1px solid var(--line);border-radius:11px;max-height:calc(100vh - 320px)">
+              <table class="tsq-tbl"><thead><tr><th style="width:72px">날짜</th><th style="width:66px">플랫폼</th><th style="width:60px">담당자</th><th style="width:74px">상품코드</th><th style="width:150px">제품명</th><th style="width:92px">처리상태</th><th>문의 · 답변</th></tr></thead>
+              <tbody>${res.map(r=>`<tr>
+                <td style="white-space:nowrap">${esc(String(r.date||r.day||'').slice(0,10))}</td>
+                <td>${esc(r.platform||'')}</td>
+                <td style="white-space:nowrap">${esc(r.agent||r.whoName||'')}</td>
+                <td class="tsq-code">${esc(r.prodCode||'')}</td>
+                <td>${esc(r.prodName||'')}</td>
+                <td>${stBadge(r.status)}</td>
+                <td><div class="tsq-q">${esc(r.content||'')}</div>${(r.answerSummary||r.answer)?`<div class="tsq-a">${esc(r.answerSummary||r.answer||'')}</div>`:''}</td>
+              </tr>`).join('')}</tbody></table></div>`;
+        };
+        body.querySelector('#tsqBtn').onclick=run;
+        ['tsqCode','tsqKw'].forEach(id=>{ const e2=body.querySelector('#'+id); if(e2) e2.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); run(); } }; });
+        body.querySelector('#tsqCode').focus();
       }
 
       /* ---------------- 일일 결산 탭 ---------------- */
