@@ -45,6 +45,11 @@
           table.sv tbody tr:hover td{background:var(--hover)}
           table.sv td.num{text-align:right;font-variant-numeric:tabular-nums}
           table.sv td.wrap{white-space:pre-wrap;word-break:break-word;line-height:1.38}
+          /* 긴 내용은 2줄로 접고 [더보기]로 펼침 — 답변원본 등 길어져도 행 높이 균일 */
+          table.sv td .sv-clip{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+          table.sv td .sv-clip.open{-webkit-line-clamp:unset;overflow:visible}
+          .sv-more{margin-top:2px;border:0;background:none;color:var(--info);font-size:11px;font-weight:700;cursor:pointer;padding:0;line-height:1.3}
+          .sv-more:hover{text-decoration:underline}
           table.sv td.who{font-weight:700;color:var(--ink)}
           .sv-del{border:0;background:none;color:var(--faint);cursor:pointer;padding:2px 5px;border-radius:5px}
           .sv-del:hover{background:var(--danger-soft);color:var(--danger)}
@@ -139,7 +144,9 @@
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;background:${cl.bg};color:${cl.fg}">${esc(v)}</span></td>`; }
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
-          return `<td class="${cls.trim()}" ${c.wrap?`style="min-width:${c.w||180}px"`:`style="white-space:nowrap"`}>${esc(v)}</td>`;
+          // 긴 내용은 2줄 클램프 + [더보기] 토글 → 행 높이가 균일하게 정렬됨
+          if(c.wrap) return `<td class="${cls.trim()}" style="min-width:${c.w||180}px"><div class="sv-clip">${esc(v)}</div><button type="button" class="sv-more" hidden>더보기</button></td>`;
+          return `<td class="${cls.trim()}" style="white-space:nowrap">${esc(v)}</td>`;
         }
         function editCell(r,c){
           if(c.compute) return cell(r,c);   // 계산 컬럼은 편집 불가 — 그대로 표시(저장 후 자동 갱신)
@@ -194,6 +201,16 @@
           if(!show.length){ $('#tbl').innerHTML=`<tbody><tr><td class="sv-empty" colspan="${cfg.cols.length+1}">해당 기간의 기록이 없습니다.</td></tr></tbody>`; }
           if(rows.length>CAP) $('#meta').textContent+=` (앞 ${CAP}건 표시 · 기간을 좁혀 보세요)`;
           wireRowActions();
+          applyClamps();
+        }
+        // 2줄 넘는 wrap 칸에만 [더보기] 노출(실제 넘칠 때만) + 펼침/접기 토글
+        function applyClamps(){
+          $('#tbl').querySelectorAll('td .sv-clip').forEach(clip=>{
+            const btn=clip.parentElement.querySelector('.sv-more'); if(!btn) return;
+            const overflow=clip.scrollHeight > clip.clientHeight + 2;
+            btn.hidden=!overflow;
+            btn.onclick=()=>{ const open=clip.classList.toggle('open'); btn.textContent=open?'접기':'더보기'; };
+          });
         }
         function wireRowActions(){
           $('#tbl').querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
