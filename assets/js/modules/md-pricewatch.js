@@ -44,6 +44,48 @@
   function fillMail(cfg,p,link){ const rep=s=>String(s||'').replace(/\{ntx\}/g,p.ntx||'').replace(/\{name\}/g,p.name||'').replace(/\{ed\}/g,p.ed||'').replace(/\{link\}/g,link||'');
     return { to:cfg.to, subject:rep(cfg.subject), body:rep(cfg.body) }; }
 
+  /* ── 엑셀 공급가표 일괄 업데이트 (검토 → 확인 → 반영 + 변경이력) ── */
+  // 헤더 이름으로 열을 매핑 → 열 순서가 바뀌어도 인식. 공급가표 원본을 그대로 올려도 동작.
+  function parsePriceTable(rows){
+    rows=(rows||[]).map(r=>Array.isArray(r)?r:[]);
+    const norm=s=>String(s==null?'':s).replace(/\s+/g,'');
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,20);i++){ const line=rows[i].map(norm);
+      if(line.some(c=>c.includes('엔티렉스')&&c.includes('상품코드')) || (line.some(c=>c.includes('공급가'))&&line.some(c=>c.includes('상품코드')))){ hi=i; break; } }
+    if(hi<0) return { err:'엑셀에서 헤더(엔티렉스 상품코드·공급가 등)를 찾지 못했습니다. 공급가표 원본을 그대로 올려주세요.' };
+    const H=rows[hi].map(norm);
+    const find=keys=>{ for(let c=0;c<H.length;c++){ if(keys.every(k=>H[c].includes(k))) return c; } return -1; };
+    const findAny=alts=>{ for(const a of alts){ const i=find(Array.isArray(a)?a:[a]); if(i>=0) return i; } return -1; };
+    const ci={ ed:findAny([['에듀이노','상품코드'],['에듀이노코드']]), ntx:findAny([['엔티렉스','상품코드'],['엔티렉스코드']]),
+      name:findAny(['제품명','상품명']), price:findAny(['판매가']), supply:findAny(['공급가']), retail:findAny(['소비자가']), note:findAny(['비고']) };
+    if(ci.ntx<0) return { err:'‘엔티렉스 상품코드’ 열을 찾지 못했습니다.' };
+    const get=(row,k)=> ci[k]>=0 ? String(row[ci[k]]==null?'':row[ci[k]]).trim() : '';
+    const items=[]; const seen=new Set();
+    for(let r=hi+1;r<rows.length;r++){ const row=rows[r]||[]; const ntx=get(row,'ntx'); if(!ntx||seen.has(ntx)) continue; seen.add(ntx);
+      items.push({ ed:get(row,'ed'), ntx, name:get(row,'name'),
+        price:parseNum(get(row,'price')), supply:parseNum(get(row,'supply')), retail:parseNum(get(row,'retail')), note:get(row,'note') }); }
+    if(!items.length) return { err:'데이터 행을 찾지 못했습니다. (엔티렉스 상품코드가 있는 행이 없습니다)' };
+    return { items };
+  }
+  const CMP_FIELDS=[['name','상품명'],['price','판매가'],['supply','공급가'],['retail','소비자가'],['note','비고']];
+  const isTxt=f=>f==='name'||f==='note';
+  function buildPriceDiff(v, items){
+    const cur={}; effectiveProducts(v).forEach(p=>cur[String(p.ntx)]=p);
+    const added=[], changed=[]; const fileNtx=new Set();
+    items.forEach(it=>{ const k=String(it.ntx); fileNtx.add(k); const ex=cur[k];
+      if(!ex){ added.push(it); return; }
+      const chg=[];
+      CMP_FIELDS.forEach(([f])=>{ const a=isTxt(f)?String(ex[f]==null?'':ex[f]).trim():Number(ex[f]||0);
+        const b=isTxt(f)?String(it[f]==null?'':it[f]).trim():Number(it[f]||0);
+        if(String(a)!==String(b)) chg.push({f, from:ex[f], to:it[f]}); });
+      if(chg.length) changed.push({ ...it, _ed:ex.ed, _before:ex, fields:chg }); });
+    const removed=Object.keys(cur).filter(k=>!fileNtx.has(k)).length;
+    return { added, changed, same: items.length-added.length-changed.length, removed };
+  }
+  const PRICELOG_KEY=v=>`eduino.${v.key}.pricelog`;
+  const getPriceLog=v=> store(PRICELOG_KEY(v)).get([])||[];
+  function pushPriceLog(v, entry){ const log=getPriceLog(v); log.unshift(entry); store(PRICELOG_KEY(v)).set(log.slice(0,200)); }
+
   MODULES['md.pricewatch'] = {
     title:'가격비교', icon:'chart',
     render(root){
@@ -322,7 +364,9 @@
         sec.innerHTML=`
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
             <input type="search" id="nxQ" placeholder="에듀이노코드·엔티렉스코드·상품명 검색" style="height:40px;flex:1;min-width:240px;max-width:460px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px" value="${esc(q)}">
-            ${editable?`<button class="btn pri" id="nxAdd" style="margin-left:auto">${icon('plus')}상품 추가</button>`:''}</div>
+            <button class="btn ghost" id="nxHist" style="margin-left:auto" title="공급가 변경이력">${icon('refresh')}변경이력${getPriceLog(v).length?` (${getPriceLog(v).length})`:''}</button>
+            ${editable?`<button class="btn" id="nxBulk" title="공급가표 엑셀을 통으로 올려 변경분만 확인 후 반영">${icon('upload')}엑셀 일괄 업데이트</button><input type="file" id="nxFile" accept=".xlsx,.csv,.tsv,.txt" style="display:none">`:''}
+            ${editable?`<button class="btn pri" id="nxAdd">${icon('plus')}상품 추가</button>`:''}</div>
           <div class="nx-wrap"><table class="nx-t">
             <thead><tr><th>에듀이노코드</th><th>엔티렉스코드</th><th>상품명</th><th style="text-align:right">판매가(기준)</th><th style="text-align:right">공급가</th><th style="text-align:right">소비자가</th><th>비고</th>${editable?'<th></th>':''}</tr></thead>
             <tbody id="nxTb"></tbody></table></div>`;
@@ -356,8 +400,107 @@
             if(inBundle) cur[String(b.dataset.ntx)]={_del:true}; else delete cur[String(b.dataset.ntx)];
             store(v.productsKey).set(cur); toast('삭제했습니다'); draw(); });
         }
+        const bulkBtn=sec.querySelector('#nxBulk'); const fileIn=sec.querySelector('#nxFile');
+        if(bulkBtn&&fileIn){ bulkBtn.onclick=()=>fileIn.click();
+          fileIn.onchange=async()=>{ const f=fileIn.files&&fileIn.files[0]; fileIn.value=''; if(!f) return; openBulkReview(v,f); }; }
+        const histBtn=sec.querySelector('#nxHist'); if(histBtn) histBtn.onclick=()=>openHistory(v);
         sec.querySelector('#nxQ').oninput=e=>{ q=e.target.value; paint(); };
         paint();
+      }
+
+      /* -------- 엑셀 일괄 업데이트: 파일 → 변경분 미리보기 → 담당자 확인 → 최종 반영 -------- */
+      const fmtV=(f,val)=> isTxt(f)?(String(val==null?'':val).trim()||'-'):(won(val)+'원');
+      const fFg=f=> f==='supply'?'#FF0000':f==='retail'?'#0070C0':'var(--ink)';
+      async function openBulkReview(v,file){
+        let parsed; try{ parsed=await XlsxLite.parseFile(file); }catch(e){ toast('엑셀을 읽지 못했습니다'); return; }
+        const pr=parsePriceTable(parsed.rows||[]);
+        if(pr.err){ toast(pr.err); return; }
+        const diff=buildPriceDiff(v, pr.items);
+        const chgAll=[ ...diff.added.map(it=>({kind:'added',it})), ...diff.changed.map(it=>({kind:'changed',it})) ];
+        const CAP=600; const show=chgAll.slice(0,CAP);
+        const badge=k=> k==='added'?'<span style="font-size:10.5px;font-weight:800;color:#12886a;background:#e6f7f0;border-radius:5px;padding:1px 7px">신규</span>'
+                                   :'<span style="font-size:10.5px;font-weight:800;color:#b4530a;background:#fff4e6;border-radius:5px;padding:1px 7px">변경</span>';
+        const cellFor=(row,f)=>{ if(row.kind==='added'){ return `<span style="color:${fFg(f)};font-weight:700">${esc(fmtV(f,row.it[f]))}</span>`; }
+          const ch=(row.it.fields||[]).find(x=>x.f===f); if(!ch) return `<span class="muted">${esc(fmtV(f,row.it[f]))}</span>`;
+          return `<span class="muted" style="text-decoration:line-through">${esc(fmtV(f,ch.from))}</span> → <span style="color:${fFg(f)};font-weight:800">${esc(fmtV(f,ch.to))}</span>`; };
+        const bodyRows=show.map(row=>{ const it=row.it; return `<tr>
+            <td style="white-space:nowrap">${badge(row.kind)}</td>
+            <td class="nx-code">${esc(it.ed||it._ed||'-')}</td>
+            <td style="max-width:280px">${esc(it.name||'')}</td>
+            <td class="num">${cellFor(row,'supply')}</td>
+            <td class="num">${cellFor(row,'retail')}</td>
+            <td class="num">${cellFor(row,'price')}</td></tr>`; }).join('');
+        const nChg=chgAll.length;
+        const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+        ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:900px;width:97%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+          <div style="padding:18px 22px 12px;border-bottom:1px solid var(--line)">
+            <div style="font-size:16px;font-weight:800">${icon('upload')} 공급가표 일괄 업데이트 — 변경분 확인</div>
+            <div class="muted" style="font-size:12.5px;margin-top:4px"><b>${esc(file.name)}</b> · 총 ${pr.items.length.toLocaleString()}행. 아래 변경 내용을 확인하고 <b>[최종 반영]</b>을 눌러야 취급 상품에 적용됩니다.</div>
+            <div class="nx-kpi" style="margin:12px 0 0">
+              <div class="nx-k"><div class="l">신규</div><div class="v" style="color:#12886a">${diff.added.length}</div></div>
+              <div class="nx-k"><div class="l">변경</div><div class="v" style="color:#b4530a">${diff.changed.length}</div></div>
+              <div class="nx-k"><div class="l">동일(변화없음)</div><div class="v">${diff.same}</div></div>
+              <div class="nx-k warn"><div class="l">파일에 없는 기존상품</div><div class="v">${diff.removed}<span style="font-size:12px"> 유지</span></div></div>
+            </div>
+          </div>
+          <div style="padding:6px 22px;overflow-y:auto;flex:1">
+            ${nChg? `<div class="nx-wrap" style="max-height:none;border:0"><table class="nx-t">
+              <thead><tr><th>구분</th><th>에듀이노코드</th><th>상품명</th><th style="text-align:right">공급가</th><th style="text-align:right">소비자가</th><th style="text-align:right">판매가</th></tr></thead>
+              <tbody>${bodyRows}</tbody></table></div>
+              ${nChg>CAP?`<div class="muted" style="font-size:12px;padding:8px 2px">…외 ${nChg-CAP}건 더 있음 (모두 반영됩니다)</div>`:''}`
+              : `<div class="nx-empty" style="padding:30px">${icon('check2')}<div>변경할 내용이 없습니다. 기존 취급 상품과 모두 동일합니다.</div></div>` }
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:14px 22px;border-top:1px solid var(--line)">
+            <span class="muted" style="margin-right:auto;font-size:12px">${nChg?`반영 대상 <b style="color:var(--ink)">${nChg.toLocaleString()}건</b> (신규 ${diff.added.length} · 변경 ${diff.changed.length})`:''}</span>
+            <button class="btn ghost" id="buCancel">취소</button>
+            ${nChg?`<button class="btn pri" id="buApply">${icon('check')}최종 반영 (${nChg.toLocaleString()}건)</button>`:''}
+          </div></div>`;
+        document.body.appendChild(ov); const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+        ov.querySelector('#buCancel').onclick=close;
+        const applyBtn=ov.querySelector('#buApply');
+        if(applyBtn) applyBtn.onclick=()=>{
+          const targets=chgAll.map(r=>r.it);
+          targets.forEach(it=>saveOverride(v, it.ntx, { ed:it.ed||it._ed||'', ntx:String(it.ntx), name:it.name, price:it.price, supply:it.supply, retail:it.retail, note:it.note }));
+          const who=(Auth.user&&Auth.user())||{};
+          const changes=chgAll.slice(0,300).map(r=>({ ntx:String(r.it.ntx), ed:r.it.ed||r.it._ed||'', name:r.it.name||'',
+            kind:r.kind, fields:(r.kind==='changed'?(r.it.fields||[]).map(x=>({f:x.f,from:x.from,to:x.to})):[]) }));
+          pushPriceLog(v, { id:uuid(), at:nowISO(), by:who.name||who.loginId||'', source:'excel', file:file.name,
+            added:diff.added.length, changed:diff.changed.length, same:diff.same, removed:diff.removed, changes });
+          toast(`공급가표를 반영했습니다 (${nChg.toLocaleString()}건)`); close(); load();
+        };
+      }
+
+      /* -------- 변경이력 (일괄 업데이트/단가 반영 기록) -------- */
+      function openHistory(v){
+        const log=getPriceLog(v);
+        const fFrom=(f,val)=> isTxt(f)?(String(val==null?'':val).trim()||'-'):won(val)+'원';
+        const fLabel=f=>({name:'상품명',price:'판매가',supply:'공급가',retail:'소비자가',note:'비고'}[f]||f);
+        const fmtAt=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return iso||''; } };
+        const entryHtml=(e,idx)=>{ const chs=e.changes||[];
+          const rows=chs.map(c=>{ const flds=(c.kind==='added')?'<span style="color:#12886a;font-weight:700">신규 등록</span>'
+              :(c.fields||[]).map(x=>`<span style="display:inline-block;margin-right:10px">${esc(fLabel(x.f))} <span style="white-space:nowrap"><span class="muted" style="text-decoration:line-through">${esc(fFrom(x.f,x.from))}</span> → <b style="color:${fFg(x.f)}">${esc(fFrom(x.f,x.to))}</b></span></span>`).join('');
+            return `<tr><td class="nx-code" style="white-space:nowrap;vertical-align:top">${esc(c.ed||c.ntx||'')}</td><td style="max-width:220px;vertical-align:top">${esc(c.name||'')}</td><td style="white-space:normal;word-break:break-word;line-height:1.6">${flds}</td></tr>`; }).join('');
+          return `<div class="rp-card"><div class="rp-hd" data-toggle>
+              <span class="rp-date">${esc(fmtAt(e.at))}</span>
+              <span class="rp-stats"><span>신규 <b>${e.added||0}</b></span><span class="rp-chg">변경 <b>${e.changed||0}</b></span><span class="muted">${esc(e.file||e.source||'')}${e.by?` · ${esc(e.by)}`:''}</span></span>
+              <span class="rp-rev"><span class="rp-cv">${idx===0?'▲':'▼'}</span></span></div>
+            <div class="rp-bd" style="display:${idx===0?'block':'none'}">
+              ${rows?`<table class="nx-t"><thead><tr><th>에듀이노코드</th><th>상품명</th><th>변경 내용</th></tr></thead><tbody>${rows}</tbody></table>${(e.changes||[]).length<(e.added+e.changed)?`<div class="muted" style="font-size:11.5px;padding:6px 2px">…상세는 최근 300건까지 보관됩니다.</div>`:''}`:`<div class="muted" style="padding:12px">상세 내역 없음</div>`}
+            </div></div>`; };
+        const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+        ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:820px;width:97%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+          <div style="padding:18px 22px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+            <div><div style="font-size:16px;font-weight:800">${icon('history')||icon('refresh')} 공급가 변경이력</div>
+              <div class="muted" style="font-size:12.5px;margin-top:3px">일괄 업데이트로 반영된 공급가/소비자가 변경 기록입니다.</div></div>
+            <button class="btn ghost sm" id="hClose" style="margin-left:auto">닫기</button></div>
+          <div style="padding:12px 22px;overflow-y:auto;flex:1">
+            ${log.length? `<div id="hList">${log.map((e,i)=>entryHtml(e,i)).join('')}</div>`
+              : `<div class="nx-empty" style="padding:34px">${icon('info')}<div>아직 변경이력이 없습니다.<br>엑셀 일괄 업데이트를 반영하면 여기에 기록됩니다.</div></div>` }
+          </div></div>`;
+        document.body.appendChild(ov); const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+        ov.querySelector('#hClose').onclick=close;
+        ov.querySelectorAll('.rp-hd[data-toggle]').forEach(h=>h.onclick=()=>{ const bd=h.parentElement.querySelector('.rp-bd'), cv=h.querySelector('.rp-cv');
+          const s=bd.style.display==='none'; bd.style.display=s?'block':'none'; if(cv) cv.textContent=s?'▲':'▼'; });
       }
 
       /* -------- 메일 양식(관리자) -------- */
