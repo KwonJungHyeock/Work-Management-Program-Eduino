@@ -6,6 +6,9 @@
    - 상품코드(자체코드) 입력 시 제품명 자동연동(카탈로그 API)
    =========================================================================== */
 (function(){
+  // 필드 서식(입력 편의): phone=한국 전화 하이픈(CS 상담메모와 동일) · amount=천단위 콤마
+  const fmtField=(fmt,v)=> fmt==='phone' ? (typeof fmtPhone==='function'?fmtPhone(v):v)
+    : fmt==='amount' ? (typeof fmtAmountInput==='function'?fmtAmountInput(v):v) : v;
   const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const addDays=(s,n)=>{ const d=new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return ymd(d); };
   const monthsBetween=(from,to)=>{ const out=[]; let y=+from.slice(0,4), m=+from.slice(5,7);
@@ -183,11 +186,13 @@
             wrap.querySelector('input').oninput=e=>form[f.k]=e.target.value;
           } else { // text / date / code
             const t = f.type==='date'?'date':'text';
-            wrap.innerHTML=lab+`<input type="${t}" data-k="${esc(f.k)}" ${f.type==='date'?`value="${esc(form[f.k])}"`:''} placeholder="${esc(f.ph||'')}" ${f.k===cfg.codeField?'autocomplete="off"':''}>`+
+            // 연락처(phone)·금액(amount)은 입력 즉시 서식 적용
+            const fmtAttr = f.format==='phone' ? ' inputmode="numeric" maxlength="13"' : f.format==='amount' ? ' inputmode="numeric" style="text-align:right"' : '';
+            wrap.innerHTML=lab+`<input type="${t}" data-k="${esc(f.k)}"${fmtAttr} ${f.type==='date'?`value="${esc(form[f.k])}"`:''} placeholder="${esc(f.ph||'')}" ${f.k===cfg.codeField?'autocomplete="off"':''}>`+
               (f.k===cfg.codeField?`<div class="bd-code-hint" data-codehint></div>`:'');
             grid.appendChild(wrap);
             const inp=wrap.querySelector('input');
-            inp.oninput=e=>form[f.k]=e.target.value;
+            inp.oninput=e=>{ if(f.format){ e.target.value=fmtField(f.format,e.target.value); } form[f.k]=e.target.value; };
             if(f.k===cfg.codeField) wireCodeLookup(inp, wrap.querySelector('[data-codehint]'));
           }
         });
@@ -304,6 +309,10 @@
             <button class="btn ghost sm" data-a="cancel">취소</button></span></td>`:''}</tr>`;
         }
         function wire(){
+          // 편집 행의 연락처·금액 입력칸도 입력 즉시 서식 적용(신규 입력폼과 동일)
+          $('#tbl').querySelectorAll('[data-k]').forEach(inp=>{ const f=cfg.fields.find(x=>x.k===inp.dataset.k);
+            if(f&&f.format){ inp.value=fmtField(f.format,inp.value); inp.oninput=()=>{ inp.value=fmtField(f.format,inp.value); };
+              if(f.format==='amount') inp.style.textAlign='right'; if(f.format==='phone') inp.maxLength=13; } });
           $('#tbl').querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
           $('#tbl').querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
           // 복사(opt-in) — 원본은 그대로 두고 동일 값의 새 건을 오늘 날짜로 생성(순수 추가 · 기존 데이터 불변)

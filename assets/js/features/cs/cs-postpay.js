@@ -21,9 +21,9 @@
       { k:'custType', label:'고객유형',  type:'select', options:CS_CUSTOMER_TYPES },
       { k:'vendor',   label:'거래처명',  type:'text', ph:'학교/기관/업체명', newRow:true },  // 거래처명·이름·연락처는 둘째 줄
       { k:'name',     label:'이름',      type:'text', ph:'담당자/주문자명' },
-      { k:'contact',  label:'연락처',    type:'text', ph:'연락처' },
+      { k:'contact',  label:'연락처',    type:'text', ph:'010-0000-0000', format:'phone' },   // 입력 즉시 하이픈(CS상담메모와 동일)
       { k:'email',    label:'이메일',    type:'text', ph:'이메일' },
-      { k:'amount',   label:'금액',      type:'text', ph:'예: 266,400' },
+      { k:'amount',   label:'금액',      type:'text', ph:'예: 1,234,000', format:'amount' },   // 입력 즉시 천단위 콤마
       { k:'content',  label:'내용',      type:'textarea', ph:'품목 및 내용' },
       { k:'memo',     label:'메모',      type:'textarea', ph:'특이사항/메모' },
     ],

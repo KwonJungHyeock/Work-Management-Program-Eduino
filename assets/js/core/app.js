@@ -97,6 +97,21 @@ function fbCopy(text,done){ const ta=el('textarea'); ta.value=text; ta.style.css
   document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch{ toast('복사 실패'); } ta.remove(); }
 function bytes(n){ if(n<1024)return n+' B'; if(n<1048576)return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(2)+' MB'; }
 function fmtNum(n){ return (Number(n)||0).toLocaleString('ko-KR'); }
+// 한국 전화번호 서식(서울 02 포함) — CS 상담메모 연락처와 동일 로직(전역 공유)
+function fmtPhone(v){
+  let d=String(v||'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.startsWith('02')){ d=d.slice(0,10); const r=d.slice(2);
+    if(d.length<=2) return '02';
+    if(d.length<=8) return '02-'+r;
+    return '02-'+r.slice(0,r.length-4)+'-'+r.slice(-4); }
+  d=d.slice(0,11);
+  if(d.length<=3) return d;
+  if(d.length<=7) return d.slice(0,3)+'-'+d.slice(3);
+  return d.slice(0,3)+'-'+d.slice(3,d.length-4)+'-'+d.slice(-4);
+}
+// 금액 천단위 콤마 서식(입력용 · 빈값은 빈값 유지)
+function fmtAmountInput(v){ const d=String(v==null?'':v).replace(/[^\d]/g,''); return d?Number(d).toLocaleString('ko-KR'):''; }
 function uuid(){ try{ if(crypto?.randomUUID) return crypto.randomUUID(); }catch{}
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:(r&0x3|0x8)).toString(16);}); }
 function nowISO(){ return new Date().toISOString(); }
