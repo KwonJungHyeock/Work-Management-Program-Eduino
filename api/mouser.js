@@ -36,6 +36,8 @@ async function lookupOne(key, no) {
 module.exports = async function handler(req, res) {
   // 통합키 1개면 충분 — 어떤 이름으로 넣어도 동작(MOUSER_API_KEY 권장)
   const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
+  // 진단용 GET — 브라우저에서 /api/mouser 열면 이 배포에 키가 잡히는지 확인(키 값은 노출 안 함)
+  if (req.method === 'GET') return res.status(200).json({ ok: true, api: 'search', configured: !!key, note: key ? 'MOUSER_API_KEY 감지됨' : 'MOUSER_API_KEY 미감지(이 배포 환경) — 환경변수 스코프/재배포 확인' });
   if (!key) return res.status(200).json({ configured: false });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
