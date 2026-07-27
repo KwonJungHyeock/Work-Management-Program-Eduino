@@ -91,6 +91,9 @@
     render(root){
       let vKey=VENDORS[0].key, section='alerts', q='', addOpen=false, editNtx=null;
       const vendor=()=>VENDORS.find(x=>x.key===vKey)||VENDORS[0];
+      // 외부 등록 탭(마우저 등 다른 소싱처) — window.PriceTabs 에 {key,name,render(container)} 로 등록
+      const extraTabs=()=>Array.isArray(window.PriceTabs)?window.PriceTabs:[];
+      const curExtra=()=>extraTabs().find(t=>t.key===vKey);
       root.innerHTML=`
       <style>
         .pw-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden;margin-bottom:16px}
@@ -136,7 +139,7 @@
       <div class="mhead">
         <div class="tt">가격비교</div>
         <div class="ds">업체별 판매가를 매일 확인해 <b>변동된 상품</b>을 알려드립니다. 확인 후 <b>[공급가 요청]</b>으로 담당자에게 메일을 보내세요.</div>
-        <div class="mtabs">${VENDORS.map(v=>`<div class="t" data-v="${v.key}">${esc(v.name)}</div>`).join('')}</div>
+        <div class="mtabs">${VENDORS.map(v=>`<div class="t" data-v="${v.key}">${esc(v.name)}</div>`).join('')}${extraTabs().map(t=>`<div class="t" data-v="${esc(t.key)}">${esc(t.name)}</div>`).join('')}</div>
       </div>
       <div class="mbody wide" id="pwBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#pwBody');
@@ -519,7 +522,10 @@
           sec.querySelector('#mPrevBox').innerHTML=`<div class="nx-card" style="display:block"><div class="muted" style="font-size:12px">받는사람: ${esc(m.to)} · 제목: ${esc(m.subject)}</div><pre style="white-space:pre-wrap;font:inherit;margin:8px 0 0">${esc(m.body)}</pre></div>`; };
       }
 
-      async function load(){ const v=vendor(); const items=await collGet(v.coll);
+      async function load(){
+        const ex=curExtra();
+        if(ex){ if(!root.isConnected) return; body.innerHTML=''; try{ ex.render(body); }catch(e){ body.innerHTML='<div class="muted" style="padding:18px">탭을 불러오지 못했습니다.</div>'; } return; }
+        const v=vendor(); const items=await collGet(v.coll);
         if(!root.isConnected) return;
         const list=(items||[]).filter(d=>d&&d.type!=='mailcfg'&&d.day); list.sort((a,b)=>String(b.day||'').localeCompare(String(a.day||'')));
         history=list; const latest=list[0]; diffs=(latest&&latest.items)||[]; apDay=(latest&&latest.day)||''; draw();
