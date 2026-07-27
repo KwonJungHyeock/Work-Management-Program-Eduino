@@ -46,8 +46,16 @@
         .mo-lead{font-size:11px;color:var(--muted);margin-top:1px}
         .mo-price{font-weight:800;color:#0a3d62} .mo-base{color:var(--muted);font-size:11px}
         .mo-code{font-family:var(--mono);font-weight:800;font-size:12px;color:#0a3d62}
-        .mo-ed input{width:118px;font:inherit;border:1px dashed var(--line-2);border-radius:6px;padding:4px 6px;font-size:12px}
-        .mo-qty{width:52px;text-align:right;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:4px 6px}
+        .mo-ed input{width:100%;min-width:70px;font:inherit;border:1px dashed var(--line-2);border-radius:6px;padding:4px 6px;font-size:12px}
+        .mo-qty{width:38px;text-align:center;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:4px 3px}
+        /* 마우저 표 — 공간 효율: 상품명이 남는 폭 흡수, 숫자·액션 칸은 최소폭 */
+        table.mo-t{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:fixed}
+        table.mo-t th{position:sticky;top:0;background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+        table.mo-t td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+        table.mo-t td.num{text-align:right;font-variant-numeric:tabular-nums}
+        table.mo-t .c-no{width:112px} table.mo-t .c-ed{width:96px} table.mo-t .c-stk{width:66px} table.mo-t .c-pr{width:84px} table.mo-t .c-act{width:104px}
+        .mo-req{background:#0a3d62;color:#fff;border:0;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+        .mo-req:hover{background:#0c4b78}
       </style>
       <div class="nx-note" id="moNote" style="border-left-color:#0a3d62;background:#eef4fb">
         ${icon('truck')} <b>마우저 직소싱</b> — 즐겨찾기 <b>${all.length}</b>품목의 재고·가격을 확인하고, <b>[결제요청]</b>으로 구매 요청을 올립니다.
@@ -74,21 +82,22 @@
     function paint(){
       if(view==='orders'){ paintOrders(); return; }
       const list=rows(); const em=edMap();
-      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px)"><table class="nx-t">
+      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px)"><table class="mo-t">
+        <colgroup><col class="c-no"><col class="c-ed"><col><col class="c-stk"><col class="c-pr"><col class="c-act"></colgroup>
         <thead><tr>
-          <th>마우저 번호</th><th>자사코드 <span class="muted" style="font-weight:600">(있으면)</span></th><th>상품명</th>
-          <th style="text-align:right">재고 / 입고</th><th style="text-align:right">가격(KRW)</th><th></th></tr></thead>
+          <th>마우저 번호</th><th>자사코드</th><th>상품명</th>
+          <th style="text-align:right">재고/입고</th><th style="text-align:right">가격</th><th style="text-align:center">요청</th></tr></thead>
         <tbody>${list.length?list.map(p=>{
           const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||'');
           return `<tr data-no="${esc(p.mouserNo)}">
-            <td><a class="mo-code" href="${esc(prodUrl(p.mouserNo))}" target="_blank" rel="noopener">${esc(p.mouserNo)}</a><div class="muted" style="font-size:11px">${esc(p.mfrNo||'')}</div></td>
+            <td><a class="mo-code" href="${esc(prodUrl(p.mouserNo))}" target="_blank" rel="noopener">${esc(p.mouserNo)}</a><div class="muted" style="font-size:10.5px">${esc(p.mfrNo||'')}</div></td>
             <td class="mo-ed">${canEdit()?`<input data-ed="${esc(p.mouserNo)}" value="${esc(ed)}" placeholder="미보유">`:esc(ed||'-')}</td>
-            <td style="max-width:340px;white-space:normal;line-height:1.4">${esc(p.name||'')}</td>
+            <td style="white-space:normal;word-break:break-word;line-height:1.35">${esc(p.name||'')}</td>
             <td class="num" data-stk><span class="mo-stk wait">–</span></td>
-            <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}원</span><div class="mo-base">기준가</div></td>
-            <td style="white-space:nowrap;text-align:right">
-              <input class="mo-qty" data-qty="${esc(p.mouserNo)}" value="1" inputmode="numeric">
-              <button class="btn pri sm" data-req="${esc(p.mouserNo)}" style="margin-left:4px;background:#0a3d62">${icon('stamp')}결제요청</button>
+            <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}</span><div class="mo-base">기준가</div></td>
+            <td style="white-space:nowrap;text-align:center">
+              <input class="mo-qty" data-qty="${esc(p.mouserNo)}" value="1" inputmode="numeric" maxlength="2">
+              <button class="mo-req" data-req="${esc(p.mouserNo)}" title="결제요청에 추가 + 마우저 열기">요청</button>
             </td></tr>`; }).join('')
           :`<tr><td colspan="6" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
       // 자사코드 인라인 편집
@@ -112,7 +121,7 @@
         if(d.found){
           if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유</div>`;
           else stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${esc(d.lead||d.availability||'입고 문의')}</div>`;
-          if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}원</span><div class="mo-base">마우저 현재가</div>`;
+          if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">현재가</div>`;
         } else stkTd.innerHTML=`<span class="mo-stk wait">확인불가</span>`;
       });
     }
