@@ -42,8 +42,8 @@ function summarize(d, fallbackKey) {
 }
 
 module.exports = async function handler(req, res) {
-  // 통합키 1개면 충분 — Search 와 동일 키 사용 가능(MOUSER_API_KEY 하나만 넣어도 됨)
-  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
+  // 장바구니는 Order/Cart API 키 — 검색(Search) 키와 다름. Cart/Order 키 우선, 없으면 MOUSER_API_KEY.
+  const key = process.env.MOUSER_CART_API_KEY || process.env.MOUSER_ORDER_API_KEY || process.env.MOUSER_API_KEY;
   // 진단용 GET — /api/mouser-cart 를 브라우저로 열면 키 감지 여부 확인(키 값 미노출)
   if (req.method === 'GET') return res.status(200).json({ ok: true, api: 'cart', configured: !!key, note: key ? 'MOUSER_API_KEY 감지됨' : 'MOUSER_API_KEY 미감지(이 배포 환경)' });
   if (!key) return res.status(200).json({ configured: false });

@@ -30,7 +30,8 @@ const toObj = row => MOUSER_FIELDS.reduce((o, k, i) => (o[k] = row[i], o), {});
 async function pool(items, size, fn) { const out = {}; for (let i = 0; i < items.length; i += size) { await Promise.all(items.slice(i, i + size).map(async it => { out[it] = await fn(it); })); } return out; }
 
 module.exports = async function handler(req, res) {
-  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
+  // 검색(재고·가격)은 Search API 키
+  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_SEARCH_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
   if (!key) return res.status(200).json({ configured: false });
 
   const parts = MOUSER_PARTS.map(toObj);

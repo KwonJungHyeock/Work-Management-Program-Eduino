@@ -6,7 +6,8 @@
 const { lookupOne } = require('../lib/mouser.js');
 
 module.exports = async function handler(req, res) {
-  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
+  // 검색(재고·가격)은 Search API 키 — 주문/카트 키와 다름
+  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_SEARCH_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
 
   if (req.method === 'GET') {
     if (!key) return res.status(200).json({ configured: false, note: 'MOUSER_API_KEY 미감지(이 배포 환경) — 환경변수 스코프/재배포 확인' });
