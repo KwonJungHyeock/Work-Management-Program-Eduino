@@ -42,7 +42,8 @@ function summarize(d, fallbackKey) {
 }
 
 module.exports = async function handler(req, res) {
-  const key = process.env.MOUSER_CART_API_KEY || process.env.MOUSER_API_KEY;
+  // 통합키 1개면 충분 — Search 와 동일 키 사용 가능(MOUSER_API_KEY 하나만 넣어도 됨)
+  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
   if (!key) return res.status(200).json({ configured: false });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 

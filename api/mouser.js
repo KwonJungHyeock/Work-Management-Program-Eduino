@@ -34,7 +34,8 @@ async function lookupOne(key, no) {
 }
 
 module.exports = async function handler(req, res) {
-  const key = process.env.MOUSER_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
+  // 통합키 1개면 충분 — 어떤 이름으로 넣어도 동작(MOUSER_API_KEY 권장)
+  const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
   if (!key) return res.status(200).json({ configured: false });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
