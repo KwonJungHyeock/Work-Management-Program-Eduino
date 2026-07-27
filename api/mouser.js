@@ -1,43 +1,23 @@
-/* 마우저 실시간 재고·가격 프록시 (서버가 API 키를 보관 · 클라이언트에 키 비노출)
-   - 환경변수 MOUSER_API_KEY 필요. 미설정이면 { configured:false } 반환 → 화면은 기준가만 표시.
-   - 요청:  POST /api/mouser  { mouserNos: ["713-102010027", ...] }  (요청당 최대 25개)
-   - 응답:  { configured:true, at, data: { <mouserNo>: {found,inStock,lead,availability,priceKRW,url,...} } }
-   - Mouser Search API v1 (search/partnumber) 사용. 무료 키, 부품번호 1건/호출. */
-const MOUSER_ENDPOINT = 'https://api.mouser.com/api/v1/search/partnumber';
-
-function digits(s){ const m = String(s == null ? '' : s).replace(/[^\d]/g, ''); return m ? Number(m) : 0; }
-
-async function lookupOne(key, no) {
-  const r = await fetch(MOUSER_ENDPOINT + '?apiKey=' + encodeURIComponent(key), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ SearchByPartRequest: { mouserPartNumber: no, partSearchOptions: '' } }),
-  });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const d = await r.json();
-  const parts = (d && d.SearchResults && d.SearchResults.Parts) || [];
-  if (!parts.length) return { found: false };
-  const p = parts.find(x => String(x.MouserPartNumber || '').trim() === String(no).trim()) || parts[0];
-  const inStock = digits(p.AvailabilityInStock != null ? p.AvailabilityInStock : p.Availability);
-  const price = (p.PriceBreaks && p.PriceBreaks[0] && digits(p.PriceBreaks[0].Price)) || 0;
-  return {
-    found: true,
-    inStock,
-    availability: p.Availability || '',
-    lead: p.LeadTime || '',
-    factoryStock: digits(p.FactoryStock),
-    priceKRW: price,
-    mfr: p.Manufacturer || '',
-    mfrNo: p.ManufacturerPartNumber || '',
-    desc: p.Description || '',
-    url: p.ProductDetailUrl || '',
-  };
-}
+/* 마우저 실시간 재고·가격 프록시 (서버가 키 보관 · 클라이언트에 키 비노출)
+   - 환경변수 MOUSER_API_KEY 필요. 미설정이면 { configured:false }.
+   - POST /api/mouser  { mouserNos:[...] }  → { configured, data:{ <no>:{found,inStock,nextDate,priceKRW,...} } }
+   - 진단 GET /api/mouser            → 키 감지 여부
+     진단 GET /api/mouser?test=713-… → 실제 1건 조회 결과(에러·재고·입고예정) 확인 */
+const { lookupOne } = require('../lib/mouser.js');
 
 module.exports = async function handler(req, res) {
-  // 통합키 1개면 충분 — 어떤 이름으로 넣어도 동작(MOUSER_API_KEY 권장)
   const key = process.env.MOUSER_API_KEY || process.env.MOUSER_CART_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
-  // 진단용 GET — 브라우저에서 /api/mouser 열면 이 배포에 키가 잡히는지 확인(키 값은 노출 안 함)
-  if (req.method === 'GET') return res.status(200).json({ ok: true, api: 'search', configured: !!key, note: key ? 'MOUSER_API_KEY 감지됨' : 'MOUSER_API_KEY 미감지(이 배포 환경) — 환경변수 스코프/재배포 확인' });
+
+  if (req.method === 'GET') {
+    if (!key) return res.status(200).json({ configured: false, note: 'MOUSER_API_KEY 미감지(이 배포 환경) — 환경변수 스코프/재배포 확인' });
+    const test = req.query && (req.query.test || req.query.q);
+    if (test) {
+      const result = await lookupOne(key, String(test));
+      return res.status(200).json({ configured: true, test: String(test), result });
+    }
+    return res.status(200).json({ configured: true, note: 'MOUSER_API_KEY 감지됨 · ?test=<부품번호> 로 실조회 확인' });
+  }
+
   if (!key) return res.status(200).json({ configured: false });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
@@ -47,10 +27,6 @@ module.exports = async function handler(req, res) {
   if (!nos.length) return res.status(200).json({ configured: true, at: new Date().toISOString(), data: {} });
 
   const data = {};
-  // 순차 호출(레이트리밋 보호) — 보이는 품목(≤25)만 조회하므로 부담 적음
-  for (const no of nos) {
-    try { data[no] = await lookupOne(key, no); }
-    catch (e) { data[no] = { found: false, error: String((e && e.message) || e) }; }
-  }
+  for (const no of nos) { data[no] = await lookupOne(key, no); }
   return res.status(200).json({ configured: true, at: new Date().toISOString(), data });
 };

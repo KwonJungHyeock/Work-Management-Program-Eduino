@@ -31,16 +31,11 @@
   const canEdit = ()=> !!(Auth.isAdmin&&Auth.isAdmin()) || meU().dept==='md' || meU().role==='lead';
   const prodUrl = no => `https://www.mouser.kr/ProductDetail/${encodeURIComponent(no)}`;
 
-  // 실시간 재고·현재가 조회(서버 프록시) — 보이는 품목만 조회해 호출 최소화
-  async function fetchLive(nos){
-    try{ const r=await fetch('/api/mouser',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mouserNos:nos})});
-      if(!r.ok) return null; return await r.json(); }catch(e){ return null; }
-  }
-
   function drawMouser(root){
     const all=PARTS();
     const mfrs=[...new Set(all.map(p=>p.mfr))];
     let mfr=mfrs[0]||'', cat='', view='stock';
+    let stockMap=null, stockAt='';   // 크론이 저장한 최신 재고맵(coll mouser_stock)
     const catsOf=m=>[...new Set(all.filter(p=>p.mfr===m).map(p=>p.category).filter(Boolean))];
     cat=catsOf(mfr)[0]||'';
 
@@ -62,11 +57,12 @@
         .mo-ed input{width:100%;min-width:70px;font:inherit;border:1px dashed var(--line-2);border-radius:6px;padding:4px 6px;font-size:12px}
         .mo-qty{width:38px;text-align:center;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:4px 3px}
         /* 마우저 표 — 공간 효율: 상품명이 남는 폭 흡수, 숫자·액션 칸은 최소폭 */
-        table.mo-t{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:fixed}
+        table.mo-t{border-collapse:collapse;width:auto;font-size:12.5px;table-layout:fixed}
+        table.mo-t .c-nm{width:420px}
         table.mo-t th{position:sticky;top:0;background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mo-t td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
         table.mo-t td.num{text-align:right;font-variant-numeric:tabular-nums}
-        table.mo-t .c-no{width:112px} table.mo-t .c-ed{width:96px} table.mo-t .c-stk{width:66px} table.mo-t .c-pr{width:84px} table.mo-t .c-act{width:104px}
+        table.mo-t .c-no{width:112px} table.mo-t .c-ed{width:92px} table.mo-t .c-stk{width:104px} table.mo-t .c-pr{width:88px} table.mo-t .c-act{width:100px}
         .mo-req{background:#0a3d62;color:#fff;border:0;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
         .mo-req:hover{background:#0c4b78}
       </style>
@@ -98,7 +94,7 @@
       if(view==='changes'){ paintChanges(); return; }
       const list=rows(); const em=edMap();
       moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px)"><table class="mo-t">
-        <colgroup><col class="c-no"><col class="c-ed"><col><col class="c-stk"><col class="c-pr"><col class="c-act"></colgroup>
+        <colgroup><col class="c-no"><col class="c-ed"><col class="c-nm"><col class="c-stk"><col class="c-pr"><col class="c-act"></colgroup>
         <thead><tr>
           <th>마우저 번호</th><th>자사코드</th><th>상품명</th>
           <th style="text-align:right">재고/입고</th><th style="text-align:right">가격</th><th style="text-align:center">요청</th></tr></thead>
@@ -119,27 +115,25 @@
       moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>setEd(inp.dataset.ed, inp.value.trim()));
       // 결제요청
       moBody.querySelectorAll('[data-req]').forEach(b=>b.onclick=()=>requestPay(b.dataset.req));
-      // 실시간 재고/가격 채우기(보이는 품목만)
-      loadLive(list.map(p=>p.mouserNo));
+      // 아침 크론이 저장한 최신 재고·가격·입고예정 표시(매 접속마다 실시간 호출 대신)
+      fillStock(list);
     }
 
-    async function loadLive(nos){
-      if(!nos.length) return;
-      const st=root.querySelector('#moLiveState'); if(st) st.textContent=' · 실시간 조회 중…';
-      const res=await fetchLive(nos);
-      if(!root.isConnected) return;
-      if(!res || res.configured===false){ if(st) st.innerHTML=' · <b style="color:var(--warn)">실시간 연동 대기</b> (서버에 MOUSER_API_KEY 설정 시 자동 표시 · 현재는 기준가)'; return; }
-      if(st) st.textContent=' · 실시간 재고·가격 반영됨';
-      const data=res.data||{};
-      nos.forEach(no=>{ const d=data[no]; const tr=moBody.querySelector(`tr[data-no="${CSS.escape(no)}"]`); if(!tr||!d) return;
+    function fillStock(list){
+      const st=root.querySelector('#moLiveState');
+      if(!stockMap){ if(st) st.innerHTML=' · <b style="color:var(--warn)">자동갱신 대기</b> — 매일 아침 자동조사 후 표시 (지금 즉시: <a href="/api/mouser-cron" target="_blank" rel="noopener">/api/mouser-cron</a> 1회 실행)'; return; }
+      if(st) st.innerHTML=` · 자동갱신 <b>${esc((stockAt||'').slice(0,10))}</b> <a href="/api/mouser-cron" target="_blank" rel="noopener" title="지금 최신화" style="font-size:11px">↻ 지금</a>`;
+      list.forEach(p=>{ const d=stockMap[p.mouserNo]; const tr=moBody.querySelector(`tr[data-no="${CSS.escape(p.mouserNo)}"]`); if(!tr) return;
         const stkTd=tr.querySelector('[data-stk]'), prTd=tr.querySelector('[data-price]');
-        if(d.found){
-          if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유</div>`;
-          else stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${esc(d.lead||d.availability||'입고 문의')}</div>`;
-          if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">현재가</div>`;
-        } else stkTd.innerHTML=`<span class="mo-stk wait">확인불가</span>`;
+        if(!d || !d.found){ stkTd.innerHTML='<span class="mo-stk wait">확인불가</span>'; return; }
+        if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유</div>`;
+        else{ const info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}`:''}` : esc(d.availability||d.lead||'입고 문의');
+          stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}</div>`; }
+        if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">현재가</div>`;
       });
     }
+    async function loadStock(){ try{ const r=await fetch('/api/store?type=coll&coll=mouser_stock'); if(!r.ok) return;
+      const dd=await r.json(); const it=(dd&&dd.items||[]).find(x=>x&&x.id==='latest'); if(it){ stockMap=it.parts||{}; stockAt=it.at||''; } }catch(e){} }
 
     // 장바구니 배지 표시(현재 담긴 수량)
     async function refreshCart(){ const box=root.querySelector('#moCart'); if(!box) return;
@@ -185,7 +179,7 @@
             <span>${icon('chart')} <b>${esc(rep.day)}</b> 변동 <b>${rep.changed||0}</b>건 · 검사 ${rep.checked||0}품목</span>
             <span style="margin-left:auto">일자 <select id="moDaySel" style="height:32px;border:1px solid var(--line-2);border-radius:7px;padding:0 8px">${reports.map(r=>`<option value="${esc(r.day)}" ${r.day===day?'selected':''}>${esc(r.day)} (${r.changed||0}건)</option>`).join('')}</select></span></div>
           ${chs.length?`<div class="nx-wrap" style="max-height:calc(100vh - 340px)"><table class="mo-t">
-            <colgroup><col style="width:120px"><col style="width:96px"><col><col style="width:180px"></colgroup>
+            <colgroup><col style="width:120px"><col style="width:96px"><col style="width:380px"><col style="width:180px"></colgroup>
             <thead><tr><th>구분</th><th>마우저번호</th><th>상품명</th><th style="text-align:right">변동</th></tr></thead>
             <tbody>${chs.map(c=>{ const L=lab[c.kind]||['변동','#333'];
               const detail=c.field==='price'?`${won(c.old)} → <b style="color:${L[1]}">${won(c.new)}</b>`
@@ -218,7 +212,8 @@
     }
 
     renderCats(); paint();
-    // 팀 공유 자사코드 로드 후 반영 + 장바구니 배지
+    // 최신 재고맵(크론 저장) + 팀 공유 자사코드 로드 후 반영 + 장바구니 배지
+    loadStock().then(()=>{ if(root.isConnected && view==='stock') paint(); });
     loadEdShared().then(ch=>{ if(ch && root.isConnected && view==='stock') paint(); });
     refreshCart();
   }

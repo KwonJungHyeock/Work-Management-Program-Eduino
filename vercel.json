@@ -2,7 +2,7 @@
   "crons": [
     { "path": "/api/cron-sync", "schedule": "0 15 * * *" },
     { "path": "/api/backup-snapshot", "schedule": "10 15 1 * *" },
-    { "path": "/api/mouser-cron", "schedule": "0 16 * * *" }
+    { "path": "/api/mouser-cron", "schedule": "0 22 * * *" }
   ],
   "headers": [
     {
