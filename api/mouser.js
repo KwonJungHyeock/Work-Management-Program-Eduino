@@ -15,7 +15,26 @@ module.exports = async function handler(req, res) {
       const result = await lookupOne(key, String(test));
       return res.status(200).json({ configured: true, test: String(test), result });
     }
-    return res.status(200).json({ configured: true, note: 'MOUSER_API_KEY 감지됨 · ?test=<부품번호> 로 실조회 확인' });
+    // ?probe=1 — 이 키가 4개 API 중 어느 것에서 통과되는지 확인(읽기 전용)
+    if (req.query && req.query.probe) {
+      const K = encodeURIComponent(key);
+      const isKeyErr = j => ((j && (j.Errors || j.errors)) || []).some(e => /api key|unique identifier/i.test((e.Message || '') + '|' + (e.PropertyName || '')));
+      const probes = [
+        { api: 'Search', run: () => fetch('https://api.mouser.com/api/v1/search/partnumber?apiKey=' + K, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ SearchByPartRequest: { mouserPartNumber: '358-SC1112', partSearchOptions: '' } }) }) },
+        { api: 'Cart', run: () => fetch('https://api.mouser.com/api/v1/cart?apiKey=' + K + '&countryCode=KR&currencyCode=KRW&cartKey=00000000-0000-0000-0000-000000000000', { method: 'GET' }) },
+        { api: 'OrderHistory', run: () => fetch('https://api.mouser.com/api/v1/orderhistory/byDateRange?apiKey=' + K + '&startDate=2026-07-01&endDate=2026-07-27', { method: 'GET' }) },
+        { api: 'Order', run: () => fetch('https://api.mouser.com/api/v1/order/history?apiKey=' + K, { method: 'GET' }) },
+      ];
+      const out = [];
+      for (const pr of probes) {
+        try { const r = await pr.run(); let j = {}; try { j = await r.json(); } catch (e) {}
+          const keyRejected = isKeyErr(j);
+          out.push({ api: pr.api, http: r.status, keyRejected, verdict: (r.status === 404) ? '경로불명(판정보류)' : keyRejected ? '이 키 아님' : '이 키일 가능성', firstError: (((j && (j.Errors || j.errors)) || [])[0] || {}).Message || '' });
+        } catch (e) { out.push({ api: pr.api, error: String((e && e.message) || e) }); }
+      }
+      return res.status(200).json({ configured: true, probe: out, hint: "verdict '이 키일 가능성' 인 API 가 등록된 키의 소속. 정확한 것은 마우저 API 허브에서 키별 라벨 확인." });
+    }
+    return res.status(200).json({ configured: true, note: 'MOUSER_API_KEY 감지됨 · ?test=<부품번호> 실조회 · ?probe=1 어느 API 키인지' });
   }
 
   if (!key) return res.status(200).json({ configured: false });
