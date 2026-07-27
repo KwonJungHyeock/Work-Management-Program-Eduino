@@ -78,7 +78,7 @@
       <div class="mo-tabs" id="moMfr">${mfrs.map(m=>`<div class="mo-tab${m===mfr?' on':''}" data-m="${esc(m)}">${esc(m)} <span class="muted" style="font-weight:600;font-size:11px">${all.filter(p=>p.mfr===m).length}</span></div>`).join('')}</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
         <span class="mo-sub" id="moCat"></span>
-        <span class="mo-view" id="moView"><button data-v="stock" class="on">재고·비교</button><button data-v="orders">주문현황</button></span>
+        <span class="mo-view" id="moView"><button data-v="stock" class="on">재고·비교</button><button data-v="changes">변동 알림</button><button data-v="orders">주문현황</button></span>
       </div>
       <div id="moBody"></div>`;
 
@@ -95,6 +95,7 @@
 
     function paint(){
       if(view==='orders'){ paintOrders(); return; }
+      if(view==='changes'){ paintChanges(); return; }
       const list=rows(); const em=edMap();
       moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px)"><table class="mo-t">
         <colgroup><col class="c-no"><col class="c-ed"><col><col class="c-stk"><col class="c-pr"><col class="c-act"></colgroup>
@@ -166,6 +167,37 @@
       if(cr && cr.configured!==false && cr.ok){ toast(`결제요청 추가 + 마우저 장바구니에 담았습니다 (${p.mouserNo} × ${qty})`); refreshCart(); }
       else{ try{ window.open(prodUrl(no),'_blank','noopener'); }catch(e){}
         toast(cr&&cr.configured===false ? '결제요청 추가 · (장바구니 자동담기는 서버 Cart API 키 설정 후 활성화)' : '결제요청 추가 · 장바구니 담기 실패 → 마우저 상품페이지를 열었습니다'); }
+    }
+
+    // 변동 알림 — 크론(api/mouser-cron)이 매일 저장한 일자별 변동 리포트(coll mouser_report)
+    async function paintChanges(){
+      moBody.innerHTML='<div class="muted" style="padding:18px">변동 리포트 불러오는 중…</div>';
+      let reports=[];
+      try{ const r=await fetch('/api/store?type=coll&coll=mouser_report'); if(r.ok){ const d=await r.json(); reports=(d&&d.items||[]).filter(x=>x&&x.day).sort((a,b)=>String(b.day).localeCompare(String(a.day))); } }catch(e){}
+      if(!root.isConnected) return;
+      if(!reports.length){ moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">
+        ${icon('info')} 아직 수집된 변동 리포트가 없습니다. <b>매일 자동</b>으로 가격·재고를 조사해 변동을 여기 쌓습니다.<br>
+        지금 바로 시작하려면 <a href="/api/mouser-cron" target="_blank" rel="noopener"><b>/api/mouser-cron</b></a> 을 한 번 열어 <b>첫 스냅샷</b>을 만드세요. (첫 실행은 기준값만 저장 → 다음 실행부터 변동 표시)</div>`; return; }
+      let day=reports[0].day;
+      const lab={up:['가격 ▲','#c0392b'],down:['가격 ▼','#12886a'],restock:['신규 입고','#0a3d62'],oos:['품절','#8a6d00']};
+      function render(){ const rep=reports.find(r=>r.day===day)||reports[0]; const chs=rep.changes||[];
+        moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span>${icon('chart')} <b>${esc(rep.day)}</b> 변동 <b>${rep.changed||0}</b>건 · 검사 ${rep.checked||0}품목</span>
+            <span style="margin-left:auto">일자 <select id="moDaySel" style="height:32px;border:1px solid var(--line-2);border-radius:7px;padding:0 8px">${reports.map(r=>`<option value="${esc(r.day)}" ${r.day===day?'selected':''}>${esc(r.day)} (${r.changed||0}건)</option>`).join('')}</select></span></div>
+          ${chs.length?`<div class="nx-wrap" style="max-height:calc(100vh - 340px)"><table class="mo-t">
+            <colgroup><col style="width:120px"><col style="width:96px"><col><col style="width:180px"></colgroup>
+            <thead><tr><th>구분</th><th>마우저번호</th><th>상품명</th><th style="text-align:right">변동</th></tr></thead>
+            <tbody>${chs.map(c=>{ const L=lab[c.kind]||['변동','#333'];
+              const detail=c.field==='price'?`${won(c.old)} → <b style="color:${L[1]}">${won(c.new)}</b>`
+                : c.kind==='restock'?`<b style="color:${L[1]}">${won(c.new)} 입고</b>` : `<b style="color:${L[1]}">품절</b>`;
+              return `<tr><td><span style="font-weight:800;color:${L[1]}">${L[0]}</span></td>
+                <td><a class="mo-code" href="${esc(prodUrl(c.mouserNo))}" target="_blank" rel="noopener">${esc(c.mouserNo)}</a></td>
+                <td style="white-space:normal;word-break:break-word;line-height:1.35">${esc(c.name||'')}</td>
+                <td class="num">${detail}</td></tr>`; }).join('')}</tbody></table></div>`
+            :`<div class="nx-empty">${icon('check2')}<div>이 날은 가격·재고 변동이 없습니다.</div></div>`}`;
+        const sel=moBody.querySelector('#moDaySel'); if(sel) sel.onchange=()=>{ day=sel.value; render(); };
+      }
+      render();
     }
 
     // 주문현황(Phase 1 최소) — 결제요청→주문된 마우저 건 표시 + DHL 추적 링크
