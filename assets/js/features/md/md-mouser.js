@@ -11,9 +11,22 @@
   const toObj = a => Array.isArray(a) ? MF.reduce((o,k,i)=>(o[k]=a[i],o),{}) : a;
   const PARTS = ()=> (window.MOUSER_PARTS||[]).map(toObj);
   const won = n => Number(n||0).toLocaleString('ko-KR');
-  const EDMAP_KEY='eduino.mouser.edmap';                 // { mouserNo: 자사코드 }
-  const edMap = ()=> store(EDMAP_KEY).get({})||{};
-  const setEd = (no,code)=>{ const m=edMap(); if(code) m[no]=code; else delete m[no]; store(EDMAP_KEY).set(m); };
+  // 자사(에듀이노)코드 매핑 { mouserNo: 자사코드 } — MD 팀 공유(coll 'mouser_edmap') + 로컬 캐시
+  const EDMAP_KEY='eduino.mouser.edmap';
+  let edState = store(EDMAP_KEY).get({})||{};
+  const edMap = ()=> edState;
+  async function loadEdShared(){
+    try{ const r=await fetch('/api/store?type=coll&coll=mouser_edmap'); if(!r.ok) return false;
+      const d=await r.json(); let ch=false; (d&&d.items||[]).forEach(it=>{ if(it&&it.id){ edState[it.id]=it.code||''; ch=true; } });
+      store(EDMAP_KEY).set(edState); return ch; }catch(e){ return false; }
+  }
+  function setEd(no,code){ code=String(code||'').trim();
+    if(code) edState[no]=code; else delete edState[no]; store(EDMAP_KEY).set(edState);
+    try{ if(code) fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'mouser_edmap',item:{id:no,code}})});
+         else fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collDel',coll:'mouser_edmap',id:no})}); }catch(e){}
+  }
+  // 마우저 장바구니(Cart API) — 서버 프록시 경유
+  async function cartApi(op, items){ try{ const r=await fetch('/api/mouser-cart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,items})}); return r.ok?await r.json():null; }catch(e){ return null; } }
   const meU = ()=> (Auth.user&&Auth.user())||{};
   const canEdit = ()=> !!(Auth.isAdmin&&Auth.isAdmin()) || meU().dept==='md' || meU().role==='lead';
   const prodUrl = no => `https://www.mouser.kr/ProductDetail/${encodeURIComponent(no)}`;
@@ -57,9 +70,10 @@
         .mo-req{background:#0a3d62;color:#fff;border:0;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
         .mo-req:hover{background:#0c4b78}
       </style>
-      <div class="nx-note" id="moNote" style="border-left-color:#0a3d62;background:#eef4fb">
-        ${icon('truck')} <b>마우저 직소싱</b> — 즐겨찾기 <b>${all.length}</b>품목의 재고·가격을 확인하고, <b>[결제요청]</b>으로 구매 요청을 올립니다.
-        <span id="moLiveState" class="muted" style="font-size:12px"></span>
+      <div class="nx-note" id="moNote" style="border-left-color:#0a3d62;background:#eef4fb;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>${icon('truck')} <b>마우저 직소싱</b> — 즐겨찾기 <b>${all.length}</b>품목의 재고·가격을 확인하고, <b>[요청]</b>으로 결제요청+장바구니에 담습니다.
+        <span id="moLiveState" class="muted" style="font-size:12px"></span></span>
+        <span id="moCart" style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#0a3d62"></span>
       </div>
       <div class="mo-tabs" id="moMfr">${mfrs.map(m=>`<div class="mo-tab${m===mfr?' on':''}" data-m="${esc(m)}">${esc(m)} <span class="muted" style="font-weight:600;font-size:11px">${all.filter(p=>p.mfr===m).length}</span></div>`).join('')}</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
@@ -126,21 +140,32 @@
       });
     }
 
-    function requestPay(no){
+    // 장바구니 배지 표시(현재 담긴 수량)
+    async function refreshCart(){ const box=root.querySelector('#moCart'); if(!box) return;
+      const r=await cartApi('get'); if(!root.isConnected||!box) return;
+      if(!r || r.configured===false){ box.innerHTML=''; return; }
+      const n=r.count||0;
+      box.innerHTML=`${icon('box')} 마우저 장바구니 <b>${n}</b>건 <a href="${esc(r.webUrl||'https://www.mouser.kr/Cart/')}" target="_blank" rel="noopener" class="btn ghost sm" style="padding:2px 8px">열기</a>`;
+    }
+
+    async function requestPay(no){
       const p=all.find(x=>x.mouserNo===no); if(!p) return;
       const qtyEl=moBody.querySelector(`[data-qty="${CSS.escape(no)}"]`); const qty=Math.max(1, Number((qtyEl&&qtyEl.value||'1').replace(/[^\d]/g,''))||1);
-      // 현재가 셀에서 단가 추출(없으면 기준가)
       const prTd=moBody.querySelector(`tr[data-no="${CSS.escape(no)}"] [data-price] .mo-price`);
       const unit=prTd?Number(prTd.textContent.replace(/[^\d]/g,''))||p.basePriceKRW:p.basePriceKRW;
+      const ed=edMap()[no]||p.edCode||'';
       const me=meU(); const today=todayStr();
+      // 1) 프로그램 결제요청 리스트에 추가
       const rec={ id:uuid(), day:today, date:today, kind:'발주', orderer:'', vendor:'Mouser',
-        content:`[${p.mouserNo}${(edMap()[no]||p.edCode)?' · '+(edMap()[no]||p.edCode):''}] ${p.name||''}`,
+        content:`[${p.mouserNo}${ed?' · '+ed:''}] ${p.name||''}`,
         qty:String(qty), amount:unit*qty, account:'', prodAmount:unit*qty, ship:0,
         whoName:me.name||'', who:me.loginId||me.name||'', createdAt:nowISO(), source:'mouser', mouserNo:no };
       if(window.Records) Records.pushRaw('md','payreq',rec);
-      // 마우저 상품 페이지 열기(장바구니 담기용 — 자동담기는 이후 단계)
-      try{ window.open(prodUrl(no),'_blank','noopener'); }catch(e){}
-      toast('결제요청에 추가했습니다 · 마우저 상품페이지를 열었습니다');
+      // 2) 마우저 장바구니에 담기(Cart API) — 미설정/실패 시 상품페이지 열기로 대체
+      const cr=await cartApi('add',[{mouserNo:no, qty, edCode:ed}]);
+      if(cr && cr.configured!==false && cr.ok){ toast(`결제요청 추가 + 마우저 장바구니에 담았습니다 (${p.mouserNo} × ${qty})`); refreshCart(); }
+      else{ try{ window.open(prodUrl(no),'_blank','noopener'); }catch(e){}
+        toast(cr&&cr.configured===false ? '결제요청 추가 · (장바구니 자동담기는 서버 Cart API 키 설정 후 활성화)' : '결제요청 추가 · 장바구니 담기 실패 → 마우저 상품페이지를 열었습니다'); }
     }
 
     // 주문현황(Phase 1 최소) — 결제요청→주문된 마우저 건 표시 + DHL 추적 링크
@@ -161,6 +186,9 @@
     }
 
     renderCats(); paint();
+    // 팀 공유 자사코드 로드 후 반영 + 장바구니 배지
+    loadEdShared().then(ch=>{ if(ch && root.isConnected && view==='stock') paint(); });
+    refreshCart();
   }
 
   // 가격비교 탭으로 등록(엔티렉스 옆) — 여러 번 로드돼도 중복 방지
