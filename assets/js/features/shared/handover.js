@@ -83,12 +83,15 @@
         <div class="mbody wide" id="hvBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
         const body=root.querySelector('#hvBody');
 
-        function draw(){
+        function filteredRows(){
           const term=q.trim().toLowerCase();
-          const rows=list.filter(v=>!term || (String(v.name||'')+String(v.manager||'')).toLowerCase().includes(term))
-                         .filter(v=>!hasFilter || sf==='all' || ftype(v)===sf)
-                         .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
-          // 구분별 개수(필터 칩 라벨용) — 검색어는 무시하고 전체 기준
+          return list.filter(v=>!term || (String(v.name||'')+String(v.manager||'')).toLowerCase().includes(term))
+                     .filter(v=>!hasFilter || sf==='all' || ftype(v)===sf)
+                     .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
+        }
+        function draw(){ drawShell(); renderList(); }
+        // 껍데기(검색창·필터칩)는 한 번만 그림 → 검색 입력 시 입력칸이 교체되지 않아 한글 조합이 안 깨짐.
+        function drawShell(){
           const cnt=t=> t==='all'?list.length:list.filter(v=>ftype(v)===t).length;
           const chip=(val,label)=>`<button class="hv-sf ${sf===val?'on':''}" data-sf="${esc(val)}">${esc(label)} <b>${cnt(val)}</b></button>`;
           body.innerHTML=`
@@ -96,16 +99,24 @@
               <input class="q" placeholder="${esc(cfg.unit)}명·담당자 검색" value="${esc(q)}">
               ${canEdit()?`<button class="btn pri" id="hvAdd">${icon('plus')}새 ${esc(cfg.unit)}</button>`:''}
               ${canEdit()?`<button class="btn" id="hvBulk">${icon('upload')}엑셀 일괄등록</button>`:''}
-              <span class="muted" style="font-size:12.5px">${rows.length}곳</span>
+              <span class="muted" id="hvCount" style="font-size:12.5px"></span>
             </div>
             ${hasFilter?`<div class="hv-sfbar">${icon('check2')}<span class="lb">${esc(flt.label)}</span>${chip('all','전체')}${F_TYPES.map(t=>chip(t,t)).join('')}</div>`:''}
-            ${rows.length?`<div class="hv-grid">${rows.map(cardHtml).join('')}</div>`
-              :`<div class="hv-empty">${icon('folder')}<div style="margin-top:8px">${sf!=='all'?`'${esc(sf)}' 구분에 해당하는 ${esc(cfg.unit)}가 없습니다.`:`등록된 ${esc(cfg.unit)}가 없습니다.${canEdit()?` <b>[새 ${esc(cfg.unit)}]</b>로 추가하세요.`:''}`}</div></div>`}`;
-          const qi=body.querySelector('.q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=body.querySelector('.q'); n.focus(); try{n.setSelectionRange(p,p);}catch(e){} };
-          body.querySelectorAll('.hv-sf').forEach(b=>b.onclick=()=>{ sf=b.dataset.sf; draw(); });
+            <div id="hvList"></div>`;
+          // 목록만 갱신(입력칸은 유지) → IME 조합 보존
+          const qi=body.querySelector('.q'); qi.oninput=()=>{ q=qi.value; renderList(); };
+          body.querySelectorAll('.hv-sf').forEach(b=>b.onclick=()=>{ sf=b.dataset.sf;
+            body.querySelectorAll('.hv-sf').forEach(x=>x.classList.toggle('on',x.dataset.sf===sf)); renderList(); });
           const add=body.querySelector('#hvAdd'); if(add) add.onclick=()=>openCard(null);
           const bulk=body.querySelector('#hvBulk'); if(bulk) bulk.onclick=()=>openBulk();
-          body.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{ const v=list.find(x=>x.id===c.dataset.id); if(v) openCard(v); });
+        }
+        function renderList(){
+          const rows=filteredRows();
+          const cntEl=body.querySelector('#hvCount'); if(cntEl) cntEl.textContent=`${rows.length}곳`;
+          const listEl=body.querySelector('#hvList'); if(!listEl) return;
+          listEl.innerHTML=rows.length?`<div class="hv-grid">${rows.map(cardHtml).join('')}</div>`
+            :`<div class="hv-empty">${icon('folder')}<div style="margin-top:8px">${sf!=='all'?`'${esc(sf)}' 구분에 해당하는 ${esc(cfg.unit)}가 없습니다.`:`등록된 ${esc(cfg.unit)}가 없습니다.${canEdit()?` <b>[새 ${esc(cfg.unit)}]</b>로 추가하세요.`:''}`}</div></div>`;
+          listEl.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{ const v=list.find(x=>x.id===c.dataset.id); if(v) openCard(v); });
         }
         // 정산유형(월정산/선결제 등)·상태별 배지 색상 — 가시성 향상
         function badgeStyle(f,val){ const s=String(val||'');
