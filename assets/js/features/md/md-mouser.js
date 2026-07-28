@@ -11,6 +11,17 @@
   const toObj = a => Array.isArray(a) ? MF.reduce((o,k,i)=>(o[k]=a[i],o),{}) : a;
   const PARTS = ()=> (window.MOUSER_PARTS||[]).map(toObj);
   const won = n => Number(n||0).toLocaleString('ko-KR');
+  // 자사(에듀이노) 상품 마스터 — 가격비교(엔티렉스) 공급가표 + 담당자 수정분을 ed(자사코드) 기준으로 조회.
+  //  MD가 마우저 행에 자사코드를 입력하면 이 마스터에서 상품명·판매가·공급가·소비자가를 찾아 우측에 노출.
+  const NF = window.NTREX_FIELDS || ['ed','ntx','name','price','supply','retail','note'];
+  const ntxObj = a => Array.isArray(a) ? NF.reduce((o,k,i)=>(o[k]=a[i],o),{}) : a;
+  function selfProducts(){
+    const base={};
+    (window.NTREX_PRODUCTS||[]).map(ntxObj).forEach(p=>{ const k=String(p.ed||'').trim(); if(k) base[k]=p; });
+    const ov=store('eduino.ntrex.products').get({})||{};   // 담당자 추가·수정분(가격비교와 동일 저장소)
+    Object.values(ov).forEach(o=>{ if(!o||o._del) return; const k=String(o.ed||'').trim(); if(k) base[k]={...(base[k]||{}),...o}; });
+    return base;
+  }
   // 자사(에듀이노)코드 매핑 { mouserNo: 자사코드 } — MD 팀 공유(coll 'mouser_edmap') + 로컬 캐시
   const EDMAP_KEY='eduino.mouser.edmap';
   let edState = store(EDMAP_KEY).get({})||{};
@@ -36,6 +47,7 @@
     const mfrs=[...new Set(all.map(p=>p.mfr))];
     let mfr=mfrs[0]||'', cat='', view='stock';
     let stockMap=null, stockAt='';   // 크론이 저장한 최신 재고맵(coll mouser_stock)
+    let selfMap=selfProducts();      // 자사코드(ed) → 자사 상품정보
     const catsOf=m=>[...new Set(all.filter(p=>p.mfr===m).map(p=>p.category).filter(Boolean))];
     cat=catsOf(mfr)[0]||'';
 
@@ -56,13 +68,20 @@
         .mo-code{font-family:var(--mono);font-weight:800;font-size:12px;color:#0a3d62}
         .mo-ed input{width:100%;min-width:70px;font:inherit;border:1px dashed var(--line-2);border-radius:6px;padding:4px 6px;font-size:12px}
         .mo-qty{width:38px;text-align:center;font:inherit;border:1px solid var(--line-2);border-radius:6px;padding:4px 3px}
-        /* 마우저 표 — 공간 효율: 상품명이 남는 폭 흡수, 숫자·액션 칸은 최소폭 */
-        table.mo-t{border-collapse:collapse;width:auto;font-size:12.5px;table-layout:fixed}
-        table.mo-t .c-nm{width:420px}
+        /* 마우저 표 — 우측 여백을 자사 상품정보 칸이 흡수, 숫자·액션 칸은 최소폭 */
+        table.mo-t{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:fixed}
+        table.mo-t .c-nm{width:360px}
         table.mo-t th{position:sticky;top:0;background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mo-t td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
         table.mo-t td.num{text-align:right;font-variant-numeric:tabular-nums}
-        table.mo-t .c-no{width:112px} table.mo-t .c-ed{width:92px} table.mo-t .c-stk{width:104px} table.mo-t .c-pr{width:88px} table.mo-t .c-act{width:100px}
+        table.mo-t .c-no{width:112px} table.mo-t .c-ed{width:92px} table.mo-t .c-stk{width:104px} table.mo-t .c-pr{width:88px} table.mo-t .c-act{width:92px}
+        table.mo-t .c-mine{width:auto}
+        /* 자사 상품정보 칸 — 자사코드 매칭 시 우리 상품 노출 */
+        .mo-mine{line-height:1.4} .mo-mine .nm{font-weight:600;color:var(--ink);white-space:normal;word-break:break-word}
+        .mo-mine .pr{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+        .mo-mine .pr .sup{color:#c0392b;font-weight:700} .mo-mine .pr .ret{color:#0070C0;font-weight:700}
+        .mo-mine .none{color:var(--muted);font-size:11px}
+        .mo-mine .hint{color:var(--muted);font-size:11px;opacity:.7}
         .mo-req{background:#0a3d62;color:#fff;border:0;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
         .mo-req:hover{background:#0c4b78}
       </style>
@@ -89,15 +108,30 @@
 
     function rows(){ return all.filter(p=>p.mfr===mfr && p.category===cat); }
 
+    // 자사코드(ed) → 자사 상품정보 셀 HTML. 입력 없으면 안내, 매칭 없으면 '등록 없음'.
+    function mineCellHtml(ed){
+      ed=String(ed||'').trim();
+      if(!ed) return `<span class="hint">자사코드 입력 시 자사 상품정보 표시</span>`;
+      const m=selfMap[ed];
+      if(!m) return `<span class="none">자사 상품 DB에 <b>${esc(ed)}</b> 없음 <span style="opacity:.7">(가격비교 › 취급상품에 등록)</span></span>`;
+      const pr=[];
+      if(m.price) pr.push(`판매 ${won(m.price)}`);
+      if(m.supply) pr.push(`<span class="sup">공급 ${won(m.supply)}</span>`);
+      if(m.retail) pr.push(`<span class="ret">소비자 ${won(m.retail)}</span>`);
+      return `<div class="nm">${esc(m.name||'(상품명 없음)')}</div>
+        <div class="pr">${pr.join('')||'<span style="opacity:.7">가격 미등록</span>'}${m.ntx?`<span style="opacity:.7">엔티렉스 ${esc(m.ntx)}</span>`:''}</div>`;
+    }
+
     function paint(){
       if(view==='orders'){ paintOrders(); return; }
       if(view==='changes'){ paintChanges(); return; }
+      selfMap=selfProducts();
       const list=rows(); const em=edMap();
       moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px)"><table class="mo-t">
-        <colgroup><col class="c-no"><col class="c-ed"><col class="c-nm"><col class="c-stk"><col class="c-pr"><col class="c-act"></colgroup>
+        <colgroup><col class="c-no"><col class="c-ed"><col class="c-nm"><col class="c-stk"><col class="c-pr"><col class="c-mine"><col class="c-act"></colgroup>
         <thead><tr>
           <th>마우저 번호</th><th>자사코드</th><th>상품명</th>
-          <th style="text-align:right">재고/입고</th><th style="text-align:right">가격</th><th style="text-align:center">요청</th></tr></thead>
+          <th style="text-align:right">재고/입고</th><th style="text-align:right">가격</th><th>자사 상품정보</th><th style="text-align:center">요청</th></tr></thead>
         <tbody>${list.length?list.map(p=>{
           const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||'');
           return `<tr data-no="${esc(p.mouserNo)}">
@@ -106,13 +140,15 @@
             <td style="white-space:normal;word-break:break-word;line-height:1.35">${esc(p.name||'')}</td>
             <td class="num" data-stk><span class="mo-stk wait">–</span></td>
             <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}</span><div class="mo-base">기준가</div></td>
+            <td class="mo-mine" data-mine="${esc(p.mouserNo)}">${mineCellHtml(ed)}</td>
             <td style="white-space:nowrap;text-align:center">
               <input class="mo-qty" data-qty="${esc(p.mouserNo)}" value="1" inputmode="numeric" maxlength="2">
               <button class="mo-req" data-req="${esc(p.mouserNo)}" title="결제요청에 추가 + 마우저 열기">요청</button>
             </td></tr>`; }).join('')
-          :`<tr><td colspan="6" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
-      // 자사코드 인라인 편집
-      moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>setEd(inp.dataset.ed, inp.value.trim()));
+          :`<tr><td colspan="7" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
+      // 자사코드 인라인 편집 → 저장 + 우측 자사 상품정보 즉시 갱신
+      moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>{ const v=inp.value.trim(); setEd(inp.dataset.ed, v);
+        const cell=moBody.querySelector(`[data-mine="${CSS.escape(inp.dataset.ed)}"]`); if(cell) cell.innerHTML=mineCellHtml(v); });
       // 결제요청
       moBody.querySelectorAll('[data-req]').forEach(b=>b.onclick=()=>requestPay(b.dataset.req));
       // 아침 크론이 저장한 최신 재고·가격·입고예정 표시(매 접속마다 실시간 호출 대신)
@@ -193,6 +229,10 @@
       const unit=prTd?Number(prTd.textContent.replace(/[^\d]/g,''))||p.basePriceKRW:p.basePriceKRW;
       const ed=edMap()[no]||p.edCode||'';
       const me=meU(); const today=todayStr();
+      // 버튼 상태 피드백(담는 중 → 결과) — 반응이 확실히 보이도록
+      const btn=moBody.querySelector(`[data-req="${CSS.escape(no)}"]`); const orig=btn?btn.innerHTML:'';
+      const setBtn=(t,bg)=>{ if(!btn) return; btn.innerHTML=t; if(bg) btn.style.background=bg; };
+      if(btn){ btn.disabled=true; } setBtn('담는 중…');
       // 1) 프로그램 결제요청 리스트에 추가
       const rec={ id:uuid(), day:today, date:today, kind:'발주', orderer:'', vendor:'Mouser',
         content:`[${p.mouserNo}${ed?' · '+ed:''}] ${p.name||''}`,
@@ -201,9 +241,17 @@
       if(window.Records) Records.pushRaw('md','payreq',rec);
       // 2) 마우저 장바구니에 담기(Cart API) — 미설정/실패 시 상품페이지 열기로 대체
       const cr=await cartApi('add',[{mouserNo:no, qty, edCode:ed}]);
-      if(cr && cr.configured!==false && cr.ok){ toast(`결제요청 추가 + 마우저 장바구니에 담았습니다 (${p.mouserNo} × ${qty})`); refreshCart(); }
-      else{ try{ window.open(prodUrl(no),'_blank','noopener'); }catch(e){}
-        toast(cr&&cr.configured===false ? '결제요청 추가 · (장바구니 자동담기는 서버 Cart API 키 설정 후 활성화)' : '결제요청 추가 · 장바구니 담기 실패 → 마우저 상품페이지를 열었습니다'); }
+      const restore=(ms)=>setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, ms||1400);
+      if(cr && cr.configured!==false && cr.ok){
+        setBtn('담김 ✓','#12886a'); restore();
+        toast(`결제요청 추가 + 마우저 장바구니에 담았습니다 (${p.mouserNo} × ${qty}) — 배지 [내용]에서 확인`); refreshCart();
+      } else {
+        const errMsg=(cr&&cr.errors&&cr.errors.length)?String(cr.errors[0].Message||cr.errors[0]||''):(cr&&cr.error)||'';
+        setBtn('열기 ↗','#8a6d00'); restore(1800);
+        try{ window.open(prodUrl(no),'_blank','noopener'); }catch(e){}
+        toast(cr&&cr.configured===false ? '결제요청 추가 · (장바구니 자동담기는 서버 Cart API 키 설정 후 활성화)'
+          : `결제요청 추가 · 장바구니 담기 실패${errMsg?' ('+errMsg+')':''} → 상품페이지를 열었습니다`);
+      }
     }
 
     // 변동 알림 — 크론(api/mouser-cron)이 매일 저장한 일자별 변동 리포트(coll mouser_report)
