@@ -130,21 +130,25 @@
           stkTd.innerHTML=`<span class="mo-stk" style="color:#8a6d00">구매제한</span><div class="mo-lead" title="${esc(d.restriction||'')}">마우저 구매불가</div>`;
           if(reqBtn){ reqBtn.disabled=true; reqBtn.style.opacity=.4; reqBtn.style.cursor='not-allowed'; reqBtn.title='마우저 구매불가 품목'; }
           return; }
-        if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유</div>`;
+        const viaCart = d.via==='cart';   // Search가 막아 Cart API로 보강한 값(카트 조회 기준)
+        const srcNote = viaCart ? '<span title="검색API 제한 → 장바구니API 조회값" style="color:#8a6d00"> · 카트조회</span>' : '';
+        if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유${srcNote}</div>`;
         else{ const info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}`:''}` : esc(d.availability||d.lead||'입고 문의');
-          stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}</div>`; }
-        if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">현재가</div>`;
+          stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}${srcNote}</div>`; }
+        if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회가':'현재가'}</div>`;
       });
     }
     async function loadStock(){ try{ const r=await fetch('/api/store?type=coll&coll=mouser_stock'); if(!r.ok) return;
       const dd=await r.json(); const it=(dd&&dd.items||[]).find(x=>x&&x.id==='latest'); if(it){ stockMap=it.parts||{}; stockAt=it.at||''; } }catch(e){} }
 
-    // 장바구니 배지 표시(현재 담긴 수량)
+    // 장바구니 배지 표시(현재 담긴 수량) — [열기]는 API로 담은 그 카트(CartKey)로 연결
     async function refreshCart(){ const box=root.querySelector('#moCart'); if(!box) return;
       const r=await cartApi('get'); if(!root.isConnected||!box) return;
       if(!r || r.configured===false){ box.innerHTML=''; return; }
       const n=r.count||0;
-      box.innerHTML=`${icon('box')} 마우저 장바구니 <b>${n}</b>건 <a href="${esc(r.webUrl||'https://www.mouser.kr/Cart/')}" target="_blank" rel="noopener" class="btn ghost sm" style="padding:2px 8px">열기</a>`;
+      const url=r.webUrl||'https://www.mouser.kr/Cart/';
+      const tip=r.cartKey?`API 장바구니 (CartKey ${String(r.cartKey).slice(0,8)}…) · 웹 장바구니와 별도로 관리됩니다`:'';
+      box.innerHTML=`${icon('box')} 마우저 장바구니 <b>${n}</b>건 <a href="${esc(url)}" target="_blank" rel="noopener" class="btn ghost sm" style="padding:2px 8px" title="${esc(tip)}">열기</a>`;
     }
 
     async function requestPay(no){

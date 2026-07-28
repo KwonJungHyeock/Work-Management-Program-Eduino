@@ -4,7 +4,7 @@
    - 트리거: Vercel 크론(GET) · 브라우저로 열면 수동 1회 실행(첫 스냅샷/즉시 갱신).
    - 키: MOUSER_API_KEY. 미설정 시 {configured:false}. */
 const { MOUSER_PARTS, MOUSER_FIELDS } = require('../assets/js/data/mouser-data.js');
-const { lookupOne } = require('../lib/mouser.js');
+const { lookupOne, cartLookupOne } = require('../lib/mouser.js');
 
 const SNAP_KEY = 'eduino:mouser:snap:last';        // 직전 스냅샷(변동 비교용)
 const STOCK_COLL = 'eduino:coll:mouser_stock';     // 최신 재고맵(클라이언트가 읽음)
@@ -32,6 +32,8 @@ async function pool(items, size, fn) { const out = {}; for (let i = 0; i < items
 module.exports = async function handler(req, res) {
   // 검색(재고·가격)은 Search API 키
   const key = process.env.MOUSER_API_KEY || process.env.MOUSER_SEARCH_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
+  // 장바구니(Cart) 키 — Search 가 구매제한/조회불가로 막은 품목의 가격·재고를 Cart API 로 보강.
+  const cartKey = process.env.MOUSER_CART_API_KEY || process.env.MOUSER_ORDER_API_KEY || process.env.MOUSER_API_KEY;
   if (!key) return res.status(200).json({ configured: false });
 
   const parts = MOUSER_PARTS.map(toObj);
@@ -41,13 +43,24 @@ module.exports = async function handler(req, res) {
 
   const results = await pool(nos, 5, no => lookupOne(key, no));
 
+  // Search 가 막은 품목(구매제한·조회불가)은 Cart API 로 가격·재고 보강 시도(임시 카트 → 실제값만 회수).
+  let cartFilled = 0;
+  if (cartKey) {
+    const needCart = nos.filter(no => { const d = results[no] || {}; return !d.found || d.restricted || (!d.inStock && !d.priceKRW); });
+    if (needCart.length) {
+      const cartRes = await pool(needCart, 5, no => cartLookupOne(cartKey, no));
+      // Cart 에 실제 가격·재고가 있으면 = 실제 구매 가능 → 구매제한 플래그 해제(Search 오탐 보정).
+      needCart.forEach(no => { const c = cartRes[no]; if (c && c.found && (c.priceKRW || c.inStock)) { results[no] = { ...(results[no] || {}), ...c, found: true, restricted: false, restriction: '' }; cartFilled++; } });
+    }
+  }
+
   // 최신 재고맵(클라이언트 표시용) + 변동비교용 스냅샷
   const stock = {}; const snap = { day: today, at, parts: {} };
   let found = 0;
   parts.forEach(p => {
     const d = results[p.mouserNo] || {};
     if (d.found) found++;
-    stock[p.mouserNo] = { found: !!d.found, inStock: d.inStock || 0, priceKRW: d.priceKRW || 0, availability: d.availability || '', lead: d.lead || '', nextDate: d.nextDate || '', onOrderQty: (d.onOrder && d.onOrder[0] && d.onOrder[0].qty) || 0, restricted: !!d.restricted, restriction: d.restriction || '' };
+    stock[p.mouserNo] = { found: !!d.found, inStock: d.inStock || 0, priceKRW: d.priceKRW || 0, availability: d.availability || '', lead: d.lead || '', nextDate: d.nextDate || '', onOrderQty: (d.onOrder && d.onOrder[0] && d.onOrder[0].qty) || 0, restricted: !!d.restricted, restriction: d.restriction || '', via: d.via || 'search' };
     snap.parts[p.mouserNo] = { price: d.found ? d.priceKRW : 0, inStock: d.found ? d.inStock : 0 };
   });
   await redis(['HSET', STOCK_COLL, 'latest', JSON.stringify({ id: 'latest', at, checked: nos.length, found, parts: stock })]);
@@ -71,5 +84,5 @@ module.exports = async function handler(req, res) {
   const restrictedCnt = Object.values(stock).filter(s => s.restricted).length;
   const buyableCnt = Object.values(stock).filter(s => s.found && !s.restricted && (s.inStock > 0 || s.priceKRW > 0)).length;
   const restrictedList = parts.filter(p => (stock[p.mouserNo] || {}).restricted).map(p => p.mouserNo);
-  return res.status(200).json({ ok: true, day: today, checked: nos.length, found, buyable: buyableCnt, restricted: restrictedCnt, restrictedList: restrictedList.slice(0, 60), changed: changes.length, firstRun: !last });
+  return res.status(200).json({ ok: true, day: today, checked: nos.length, found, buyable: buyableCnt, restricted: restrictedCnt, cartFilled, restrictedList: restrictedList.slice(0, 60), changed: changes.length, firstRun: !last });
 };

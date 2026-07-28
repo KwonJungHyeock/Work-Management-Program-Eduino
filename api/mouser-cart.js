@@ -27,6 +27,9 @@ async function redis(command) {
 }
 
 const num = s => { const m = String(s == null ? '' : s).replace(/[^\d.]/g, ''); return m ? Number(m) : 0; };
+// API 로 담은 카트를 웹에서 여는 URL — 저장된 CartKey 를 붙여 '담은 그 카트'가 열리게 함.
+//  (마우저 웹의 cartKey 파라미터 지원 여부는 검증 중 · 미지원 시 일반 장바구니로 폴백)
+const cartWebUrl = k => k ? `https://www.mouser.kr/Cart/?cartKey=${encodeURIComponent(k)}` : 'https://www.mouser.kr/Cart/';
 
 function summarize(d, fallbackKey) {
   const items = d && (d.CartItems || d.cartItems || []) || [];
@@ -67,15 +70,15 @@ module.exports = async function handler(req, res) {
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); } catch (e) {}
   const op = body.op || 'add';
   const qs = `?apiKey=${encodeURIComponent(key)}&countryCode=KR&currencyCode=KRW`;
-  const webUrl = 'https://www.mouser.kr/Cart/';
   let cartKey = (await redis(['GET', CARTKEY_KV])) || '';
 
   try {
     if (op === 'get') {
-      if (!cartKey) return res.status(200).json({ configured: true, ok: true, cartKey: '', count: 0, webUrl });
+      if (!cartKey) return res.status(200).json({ configured: true, ok: true, cartKey: '', count: 0, webUrl: cartWebUrl('') });
       const r = await fetch(`${CART_BASE}${qs}&cartKey=${encodeURIComponent(cartKey)}`);
       const d = await r.json().catch(() => ({}));
-      return res.status(200).json({ configured: true, webUrl, ...summarize(d, cartKey) });
+      const s = summarize(d, cartKey);
+      return res.status(200).json({ configured: true, webUrl: cartWebUrl(s.cartKey || cartKey), ...s });
     }
 
     // op === 'add'
@@ -93,8 +96,8 @@ module.exports = async function handler(req, res) {
     const d = await r.json().catch(() => ({}));
     const s = summarize(d, cartKey);
     if (s.cartKey && s.cartKey !== cartKey) await redis(['SET', CARTKEY_KV, s.cartKey]);
-    return res.status(200).json({ configured: true, webUrl, ...s });
+    return res.status(200).json({ configured: true, webUrl: cartWebUrl(s.cartKey || cartKey), ...s });
   } catch (e) {
-    return res.status(200).json({ configured: true, ok: false, error: String((e && e.message) || e), webUrl });
+    return res.status(200).json({ configured: true, ok: false, error: String((e && e.message) || e), webUrl: cartWebUrl(cartKey) });
   }
 };
