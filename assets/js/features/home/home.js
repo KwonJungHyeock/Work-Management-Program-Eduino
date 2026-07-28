@@ -71,6 +71,18 @@
         .nt-tgt{font-weight:700;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
         .compose{border:1px solid var(--line);border-radius:13px;background:var(--panel-2);padding:16px 18px;margin-bottom:20px}
         .compose .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+        /* 댓글 */
+        .nt-cmtbtn{margin-left:6px}
+        .nt-cmts{margin-top:11px;border-top:1px dashed var(--line);padding-top:11px}
+        .nt-cmt{font-size:13px;line-height:1.5;padding:7px 0;border-bottom:1px solid var(--line)}
+        .nt-cmt:last-of-type{border-bottom:0}
+        .nt-cmt .who{font-weight:800;color:var(--ink)} .nt-cmt .at{color:var(--muted);font-size:11.5px;margin-left:7px}
+        .nt-cmt .txt{color:var(--ink-2);white-space:pre-wrap;word-break:break-word;margin-top:2px}
+        .nt-cmt .lnk{background:none;border:0;color:var(--muted);font-size:11.5px;cursor:pointer;margin-left:7px;padding:0}
+        .nt-cmt .lnk:hover{color:var(--red)}
+        .nt-cmt-in{display:flex;gap:7px;margin-top:9px}
+        .nt-cmt-in input{flex:1;min-width:0;height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 11px;font:inherit;font-size:13px}
+        .nt-cmt-none{color:var(--muted);font-size:12.5px;padding:2px 0 4px}
       </style>
       <div class="mhead pad"><div class="mhead-row">
         <div><div class="tt">공지사항</div><div class="ds">관리자가 올린 공지입니다. <b>[확인]</b>을 눌러야 읽음 처리되고 알림에서 사라집니다.</div></div></div></div>
@@ -103,14 +115,38 @@
             <span>${esc(n.authorName||'관리자')}</span><span>·</span><span>${esc(dateShort(n.createdAt))}</span>
             ${done?`<span class="nt-donemeta">완료 · ${esc(dateShort(n.doneAt))}</span>`:''}
             <span style="margin-left:auto">읽음 ${ (n.readBy||[]).length }</span>
+            <button class="btn ghost sm nt-cmtbtn" data-cmt>${icon('chat')||'💬'} 댓글 ${(n.comments||[]).length}</button>
             ${isAdmin?`<button class="btn ${done?'ghost':'ok'} sm" data-done>${done?'완료 취소':icon('check')+'완료 처리'}</button>`:''}
-            ${unread?`<button class="btn pri sm" data-read>${icon('check')}확인</button>`:(!done?'<span style="color:var(--ok);font-weight:700;font-size:12px">✓ 확인함</span>':'')}</div>`;
+            ${unread?`<button class="btn pri sm" data-read>${icon('check')}확인</button>`:(!done?'<span style="color:var(--ok);font-weight:700;font-size:12px">✓ 확인함</span>':'')}</div>
+          <div class="nt-cmts" data-cmtbox hidden></div>`;
         const db=c.querySelector('[data-del]'); if(db) db.onclick=async()=>{ if(confirm('이 공지를 삭제할까요?')){ await collDel('notice',n.id); load(); } };
         const rb=c.querySelector('[data-read]'); if(rb) rb.onclick=async(e)=>{ e.currentTarget.disabled=true; await markRead([n]); load();
           if(window.refreshNavBadges) window.refreshNavBadges(); };
         const dn=c.querySelector('[data-done]'); if(dn) dn.onclick=async(e)=>{ e.currentTarget.disabled=true; await markDone(n,!done); load(); };
         const pn=c.querySelector('[data-pin]'); if(pn) pn.onclick=async(e)=>{ e.currentTarget.disabled=true; await markPin(n,!pinned); load(); };
+        // 댓글 — 기본 접힘, [댓글] 클릭 시 펼침
+        const box=c.querySelector('[data-cmtbox]');
+        function renderCmts(){
+          const list=n.comments||[];
+          box.innerHTML=`${list.length?list.map(cm=>`<div class="nt-cmt"><span class="who">${esc(cm.byName||cm.by||'')}</span><span class="at">${esc(dateShort(cm.at))}</span>${(cm.by===u.loginId||isAdmin)?`<button class="lnk" data-delcmt="${esc(cm.id)}">삭제</button>`:''}<div class="txt">${esc(cm.text||'')}</div></div>`).join(''):'<div class="nt-cmt-none">아직 댓글이 없습니다. 첫 댓글을 남겨보세요.</div>'}
+            <div class="nt-cmt-in"><input data-cmtinput placeholder="댓글 입력 (${esc(u.name||u.loginId)})" maxlength="500"><button class="btn pri sm" data-cmtsend>등록</button></div>`;
+          const send=box.querySelector('[data-cmtsend]'), inp=box.querySelector('[data-cmtinput]');
+          const go=async()=>{ const t=(inp.value||'').trim(); if(!t) return; send.disabled=true; await addComment(n,t); renderCmts(); updateCmtCount();
+            const ni=box.querySelector('[data-cmtinput]'); if(ni) ni.focus(); };
+          if(send) send.onclick=go; if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); go(); } };
+          box.querySelectorAll('[data-delcmt]').forEach(b=>b.onclick=async()=>{ if(!confirm('이 댓글을 삭제할까요?')) return; await delComment(n,b.dataset.delcmt); renderCmts(); updateCmtCount(); });
+        }
+        function updateCmtCount(){ const cb=c.querySelector('[data-cmt]'); if(cb) cb.innerHTML=`${icon('chat')||'💬'} 댓글 ${(n.comments||[]).length}`; }
+        const cbtn=c.querySelector('[data-cmt]'); if(cbtn) cbtn.onclick=()=>{ const open=box.hidden; box.hidden=!open; if(open&&!box.dataset.rendered){ renderCmts(); box.dataset.rendered='1'; } };
         return c;
+      }
+      async function addComment(n, text){
+        n.comments=[...(n.comments||[]), { id:uuid(), by:u.loginId, byName:u.name||u.loginId, text:text.slice(0,500), at:nowISO() }];
+        try{ await collPush('notice', n); }catch{}
+      }
+      async function delComment(n, cid){
+        n.comments=(n.comments||[]).filter(cm=>cm.id!==cid);
+        try{ await collPush('notice', n); }catch{}
       }
       async function markDone(n, done){
         n.done=done; n.doneAt=done?nowISO():''; n.doneBy=done?u.loginId:'';
