@@ -223,7 +223,9 @@
           const oo=(d.onOrder||[]).filter(x=>x&&(x.qty||x.date));
           let info;
           if(oo.length) info=`<b style="color:#0a3d62">입고예정</b>${oo.map(x=>`<div>${x.qty?`<b>${won(x.qty)}개</b> `:''}${x.date?`~ ${esc(String(x.date).slice(0,10))}`:'예정일 미정'}</div>`).join('')}`;
-          else info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}개`:''}` : esc(d.availability||d.lead||'입고 문의');
+          else if(d.nextDate) info=`입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}개`:''}`;
+          else{ const lead=String(d.lead||'').trim(); const leadTxt=lead&&!/^0\s*(일|day)/i.test(lead)?` · 리드 ${esc(lead)}`:'';
+            info=`<span class="muted">입고예정 없음</span>${leadTxt}`; }
           stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}${srcNote}</div>`; }
         if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회 매입가':'현재 매입가'}</div>`;
         updateCompare(p.mouserNo);   // 실제 매입가 확보 → 직소싱 절감 재계산
