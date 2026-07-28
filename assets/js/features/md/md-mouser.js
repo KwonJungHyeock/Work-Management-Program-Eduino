@@ -124,8 +124,12 @@
       if(!stockMap){ if(st) st.innerHTML=' · <b style="color:var(--warn)">자동갱신 대기</b> — 매일 아침 자동조사 후 표시 (지금 즉시: <a href="/api/mouser-cron" target="_blank" rel="noopener">/api/mouser-cron</a> 1회 실행)'; return; }
       if(st) st.innerHTML=` · 자동갱신 <b>${esc((stockAt||'').slice(0,10))}</b> <a href="/api/mouser-cron" target="_blank" rel="noopener" title="지금 최신화" style="font-size:11px">↻ 지금</a>`;
       list.forEach(p=>{ const d=stockMap[p.mouserNo]; const tr=moBody.querySelector(`tr[data-no="${CSS.escape(p.mouserNo)}"]`); if(!tr) return;
-        const stkTd=tr.querySelector('[data-stk]'), prTd=tr.querySelector('[data-price]');
+        const stkTd=tr.querySelector('[data-stk]'), prTd=tr.querySelector('[data-price]'), reqBtn=tr.querySelector('[data-req]');
         if(!d || !d.found){ stkTd.innerHTML='<span class="mo-stk wait">확인불가</span>'; return; }
+        if(d.restricted){   // 마우저 유통 구매불가 — 소싱 판단에 중요
+          stkTd.innerHTML=`<span class="mo-stk" style="color:#8a6d00">구매제한</span><div class="mo-lead" title="${esc(d.restriction||'')}">마우저 구매불가</div>`;
+          if(reqBtn){ reqBtn.disabled=true; reqBtn.style.opacity=.4; reqBtn.style.cursor='not-allowed'; reqBtn.title='마우저 구매불가 품목'; }
+          return; }
         if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유</div>`;
         else{ const info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}`:''}` : esc(d.availability||d.lead||'입고 문의');
           stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}</div>`; }

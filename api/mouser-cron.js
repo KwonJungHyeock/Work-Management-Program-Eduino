@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
   parts.forEach(p => {
     const d = results[p.mouserNo] || {};
     if (d.found) found++;
-    stock[p.mouserNo] = { found: !!d.found, inStock: d.inStock || 0, priceKRW: d.priceKRW || 0, availability: d.availability || '', lead: d.lead || '', nextDate: d.nextDate || '', onOrderQty: (d.onOrder && d.onOrder[0] && d.onOrder[0].qty) || 0 };
+    stock[p.mouserNo] = { found: !!d.found, inStock: d.inStock || 0, priceKRW: d.priceKRW || 0, availability: d.availability || '', lead: d.lead || '', nextDate: d.nextDate || '', onOrderQty: (d.onOrder && d.onOrder[0] && d.onOrder[0].qty) || 0, restricted: !!d.restricted, restriction: d.restriction || '' };
     snap.parts[p.mouserNo] = { price: d.found ? d.priceKRW : 0, inStock: d.found ? d.inStock : 0 };
   });
   await redis(['HSET', STOCK_COLL, 'latest', JSON.stringify({ id: 'latest', at, checked: nos.length, found, parts: stock })]);
