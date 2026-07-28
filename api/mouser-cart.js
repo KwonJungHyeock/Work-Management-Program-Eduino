@@ -44,8 +44,22 @@ function summarize(d, fallbackKey) {
 module.exports = async function handler(req, res) {
   // 장바구니는 Order/Cart API 키 — 검색(Search) 키와 다름. Cart/Order 키 우선, 없으면 MOUSER_API_KEY.
   const key = process.env.MOUSER_CART_API_KEY || process.env.MOUSER_ORDER_API_KEY || process.env.MOUSER_API_KEY;
-  // 진단용 GET — /api/mouser-cart 를 브라우저로 열면 키 감지 여부 확인(키 값 미노출)
-  if (req.method === 'GET') return res.status(200).json({ ok: true, api: 'cart', configured: !!key, note: key ? 'MOUSER_API_KEY 감지됨' : 'MOUSER_API_KEY 미감지(이 배포 환경)' });
+  // 진단용 GET — 키 감지여부 + ?probe=<부품번호> 로 실제 담기 시도 원응답 확인
+  if (req.method === 'GET') {
+    if (!key) return res.status(200).json({ ok: true, api: 'cart', configured: false, note: 'Cart/Order 키 미감지' });
+    if (req.query && req.query.probe) {
+      const no = String(req.query.probe);
+      const qs = `?apiKey=${encodeURIComponent(key)}&countryCode=KR&currencyCode=KRW`;
+      let cartKey = (await redis(['GET', CARTKEY_KV])) || '';
+      const payload = { CartKey: cartKey || '', CartItems: [{ MouserPartNumber: no, Quantity: 1 }] };
+      const url = `${CART_BASE}/items/insert${qs}`;
+      let http = 0, raw = {};
+      try { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); http = r.status; raw = await r.json().catch(() => ({})); }
+      catch (e) { raw = { error: String((e && e.message) || e) }; }
+      return res.status(200).json({ probe: no, endpoint: `${CART_BASE}/items/insert`, http, storedCartKey: cartKey || '(none)', raw });
+    }
+    return res.status(200).json({ ok: true, api: 'cart', configured: true, note: 'Cart/Order 키 감지됨 · ?probe=<부품번호> 로 담기 원응답 확인' });
+  }
   if (!key) return res.status(200).json({ configured: false });
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
