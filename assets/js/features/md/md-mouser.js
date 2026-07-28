@@ -74,7 +74,7 @@
       <div class="mo-tabs" id="moMfr">${mfrs.map(m=>`<div class="mo-tab${m===mfr?' on':''}" data-m="${esc(m)}">${esc(m)} <span class="muted" style="font-weight:600;font-size:11px">${all.filter(p=>p.mfr===m).length}</span></div>`).join('')}</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
         <span class="mo-sub" id="moCat"></span>
-        <span class="mo-view" id="moView"><button data-v="stock" class="on">재고·비교</button><button data-v="changes">변동 알림</button><button data-v="orders">주문현황</button></span>
+        <span class="mo-view" id="moView"><button data-v="stock" class="on">재고·비교</button><button data-v="changes">변동 알림</button><button data-v="orders">주문내역</button></span>
       </div>
       <div id="moBody"></div>`;
 
@@ -194,21 +194,36 @@
       render();
     }
 
-    // 주문현황(Phase 1 최소) — 결제요청→주문된 마우저 건 표시 + DHL 추적 링크
+    // 주문내역 — 마우저 Order History API 로 주문·상태·송장 가져와 표시(송장→DHL 자동)
+    const dhlUrl=t=>'https://www.dhl.com/kr-ko/home/tracking/tracking-express.html?submit=1&tracking-id='+encodeURIComponent(String(t||'').replace(/\s/g,''));
     async function paintOrders(){
-      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">
-        마우저 주문 완료 건과 배송추적을 확인합니다. <b>실시간 주문상태 자동연동</b>은 마우저 주문 API 연결(다음 단계) 후 제공되며,
-        지금은 <b>DHL 송장번호</b>로 추적 링크를 열 수 있습니다.</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
-          <input id="moDhl" placeholder="DHL 송장(추적) 번호" style="height:38px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px;min-width:220px">
-          <button class="btn pri" id="moDhlGo" style="background:#0a3d62">${icon('truck')}DHL 배송추적 열기</button>
-          <a class="btn ghost" href="https://www.mouser.kr/OrderHistory/" target="_blank" rel="noopener">${icon('chart')}마우저 주문내역 열기</a>
-        </div>
-        <div class="nx-empty">${icon('box')}<div>주문현황 자동표시는 다음 단계(주문 API)에서 연결됩니다.</div></div>`;
-      const go=()=>{ const t=(moBody.querySelector('#moDhl').value||'').replace(/\s/g,''); if(!t){ toast('DHL 송장번호를 입력하세요'); return; }
-        window.open('https://www.dhl.com/kr-ko/home/tracking/tracking-express.html?submit=1&tracking-id='+encodeURIComponent(t),'_blank','noopener'); };
-      moBody.querySelector('#moDhlGo').onclick=go;
-      moBody.querySelector('#moDhl').onkeydown=e=>{ if(e.key==='Enter') go(); };
+      moBody.innerHTML='<div class="muted" style="padding:18px">주문내역 불러오는 중…</div>';
+      let res=null; try{ const r=await fetch('/api/mouser-orders'); if(r.ok) res=await r.json(); }catch(e){}
+      if(!root.isConnected) return;
+      const manual=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">
+          <span class="muted" style="font-size:12px">송장으로 직접 추적:</span>
+          <input id="moDhl" placeholder="DHL 송장(추적) 번호" style="height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px;min-width:200px">
+          <button class="btn sm" id="moDhlGo" style="background:#0a3d62;color:#fff">${icon('truck')}DHL 추적</button>
+          <a class="btn ghost sm" href="https://www.mouser.kr/OrderHistory/" target="_blank" rel="noopener">마우저 주문내역 열기</a></div>`;
+      const wireManual=()=>{ const go=()=>{ const t=(moBody.querySelector('#moDhl').value||'').trim(); if(!t){ toast('DHL 송장번호를 입력하세요'); return; } window.open(dhlUrl(t),'_blank','noopener'); };
+        const b=moBody.querySelector('#moDhlGo'); if(b) b.onclick=go; const i=moBody.querySelector('#moDhl'); if(i) i.onkeydown=e=>{ if(e.key==='Enter') go(); }; };
+      if(!res || res.configured===false){
+        moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('info')} 주문내역 자동연동 <b>대기</b> — 마우저 <b>Order History API 키</b> 설정 후 주문·상태·송장이 자동 표시됩니다. (진단: <a href="/api/mouser-orders?raw=1" target="_blank" rel="noopener">/api/mouser-orders?raw=1</a>)</div>${manual}`;
+        wireManual(); return; }
+      const orders=res.orders||[];
+      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('box')} 마우저 <b>주문내역</b> ${orders.length}건 (최근 12개월) · 상태·송장 자동. 송장의 <b>[DHL]</b>로 배송추적을 엽니다.</div>
+        ${orders.length?`<div class="nx-wrap" style="max-height:calc(100vh - 340px)"><table class="mo-t" style="width:100%">
+          <thead><tr><th>주문번호</th><th>주문일</th><th>상태</th><th style="text-align:right">금액</th><th>송장/배송추적</th></tr></thead>
+          <tbody>${orders.map(o=>`<tr>
+            <td class="mo-code">${esc(o.orderNo||'-')}${o.poNumber?`<div class="muted" style="font-size:10.5px">PO ${esc(o.poNumber)}</div>`:''}</td>
+            <td style="white-space:nowrap">${esc(o.date||'-')}</td>
+            <td><span style="font-weight:700">${esc(o.status||'-')}</span></td>
+            <td class="num">${esc(o.total||'')}</td>
+            <td>${o.tracking?`${esc(o.carrier||'')} ${esc(o.tracking)} <a class="btn ghost sm" href="${esc(dhlUrl(o.tracking))}" target="_blank" rel="noopener" style="padding:2px 8px">DHL</a>`:'<span class="muted">-</span>'}</td>
+          </tr>`).join('')}</tbody></table></div>`
+          :`<div class="nx-empty">${icon('box')}<div>최근 12개월 주문내역이 없습니다.</div></div>`}
+        ${manual}`;
+      wireManual();
     }
 
     renderCats(); paint();
