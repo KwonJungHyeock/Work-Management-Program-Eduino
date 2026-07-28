@@ -3,7 +3,7 @@
    - POST /api/mouser  { mouserNos:[...] }  → { configured, data:{ <no>:{found,inStock,nextDate,priceKRW,...} } }
    - 진단 GET /api/mouser            → 키 감지 여부
      진단 GET /api/mouser?test=713-… → 실제 1건 조회 결과(에러·재고·입고예정) 확인 */
-const { lookupOne } = require('../lib/mouser.js');
+const { lookupOne, SEARCH_ENDPOINT } = require('../lib/mouser.js');
 
 module.exports = async function handler(req, res) {
   // 검색(재고·가격)은 Search API 키 — 주문/카트 키와 다름
@@ -25,6 +25,16 @@ module.exports = async function handler(req, res) {
     if (!key) return res.status(200).json({ configured: false, note: 'MOUSER_API_KEY(=Search키) 미감지 — 재고·가격은 Search API 키가 필요' });
     const test = req.query && (req.query.test || req.query.q);
     if (test) {
+      // ?test=<no>&raw=1 — 마우저 원본 Part 객체 그대로(실제 필드명 확인 → 매핑 확정용)
+      if (req.query.raw) {
+        let http = 0, j = {};
+        try {
+          const r = await fetch(SEARCH_ENDPOINT + '?apiKey=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ SearchByPartRequest: { mouserPartNumber: String(test), partSearchOptions: '' } }) });
+          http = r.status; j = await r.json();
+        } catch (e) {}
+        const part = (j && j.SearchResults && j.SearchResults.Parts && j.SearchResults.Parts[0]) || null;
+        return res.status(200).json({ test: String(test), http, errors: (j && (j.Errors || j.errors)) || [], part });
+      }
       const result = await lookupOne(key, String(test));
       return res.status(200).json({ configured: true, test: String(test), result });
     }
