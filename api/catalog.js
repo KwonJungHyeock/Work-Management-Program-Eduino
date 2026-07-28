@@ -94,6 +94,27 @@ module.exports = async function handler(req, res) {
         const byCount = (o) => Object.values(o).sort((a, b) => b.count - a.count);
         return res.status(200).json({ ok: true, vendors: byCount(vend), categories: byCount(cls), products: Array.isArray(flat) ? flat.length / 2 : 0 });
       }
+      // 업체(거래처코드) 기준 상품 목록 — GET /api/catalog?vendorCodes=코드1,코드2&limit=300
+      //  업체명→거래처코드는 클라이언트가 이름표로 역매핑해 전달(서버엔 코드만 저장됨).
+      if (q.vendorCodes != null) {
+        const norm = s => String(s || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase();
+        const nz = s => norm(s).replace(/^0+/, '');
+        const set = new Set(String(q.vendorCodes).split(',').map(norm).filter(Boolean));
+        const setz = new Set([...set].map(x => x.replace(/^0+/, '')));
+        const limit = Math.min(Number(q.limit) || 300, 500);
+        if (!set.size) return res.status(200).json({ ok: true, items: [], total: 0 });
+        const flat = await redis(['HGETALL', CATALOG_KEY]);
+        const items = [];
+        if (Array.isArray(flat)) {
+          for (let i = 1; i < flat.length; i += 2) {
+            let p = null; try { p = JSON.parse(flat[i]); } catch (e) {}
+            if (!p) continue;
+            const c = norm(p.custCode); if (set.has(c) || setz.has(nz(p.custCode))) items.push(p);
+          }
+        }
+        items.sort((a, b) => String(a.selfCode).localeCompare(String(b.selfCode), undefined, { numeric: true }));
+        return res.status(200).json({ ok: true, items: items.slice(0, limit), total: items.length });
+      }
       // 상품명/코드 부분 검색 (CS·MD 조회용) — GET /api/catalog?q=아두이노&limit=30
       if (q.q != null) {
         const term = String(q.q || '').trim().toLowerCase();

@@ -44,12 +44,35 @@
           .lk-opt .on{font-size:14px;color:var(--ink-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .lk-opt .go{color:var(--muted);display:flex}.lk-opt:hover .go{color:var(--red)}
           .lk-top .obadge{font-size:13px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:7px;padding:3px 11px;white-space:nowrap}
+          .lk-grid.g5{grid-template-columns:repeat(5,1fr)}
+          @media(max-width:620px){ .lk-grid.g5{grid-template-columns:repeat(2,1fr)} }
+          /* 검색 모드 토글 */
+          .lk-mode{display:inline-flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:12px}
+          .lk-mode button{border:0;background:var(--panel);padding:8px 16px;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+          .lk-mode button:first-child{border-left:0} .lk-mode button.on{background:var(--brand,#1f56a3);color:#fff}
+          /* 업체명 결과 목록 */
+          .lk-vhead{margin:6px 2px 14px;font-size:13.5px;color:var(--ink-2)} .lk-vhead b{color:var(--ink)}
+          .lk-vgroup{margin-bottom:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--sh-sm)}
+          .lk-vg-hd{padding:10px 15px;background:var(--panel-2);border-bottom:1px solid var(--line);font-size:13.5px;font-weight:800;color:var(--ink)}
+          .lk-vg-hd .muted{font-weight:600;margin-left:6px}
+          .lk-vtable{width:100%}
+          .lk-vtr{display:grid;grid-template-columns:118px 1fr 92px 92px 82px;gap:8px;align-items:center;padding:9px 15px;border-top:1px solid var(--line-2);cursor:pointer;font-size:13px}
+          .lk-vtr:hover{background:var(--panel-2)} .lk-vth{cursor:default;font-size:11px;font-weight:800;color:var(--muted);background:var(--panel);border-top:0}
+          .lk-vth:hover{background:var(--panel)}
+          .lk-vtr .c{font-family:var(--mono);font-weight:800;color:var(--brand,#1f56a3)}
+          .lk-vtr .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .lk-vtr .r{text-align:right;font-variant-numeric:tabular-nums}
+          .lk-vtr .r.mg{color:#12886a;font-weight:800} .lk-vtr .r.mgb{color:#c0392b;font-weight:800}
+          @media(max-width:620px){ .lk-vtr{grid-template-columns:96px 1fr 74px;gap:6px} .lk-vtr .r:nth-child(4),.lk-vtr .r:nth-child(5),.lk-vth span:nth-child(4),.lk-vth span:nth-child(5){display:none} }
         </style>
         <div class="mhead pad"><div class="mhead-row">
           <div><div class="tt">상품 조회</div>
-            <div class="ds">이카운트 품목을 <b>상품코드</b>로 조회합니다. 고객 문의 응대 시 구매처·단가를 바로 확인하세요.</div></div>
+            <div class="ds">이카운트 품목을 <b>상품코드</b> 또는 <b>공급업체명</b>으로 조회합니다. 고객 문의 응대 시 공급업체·단가·마진을 바로 확인하세요.</div></div>
         </div></div>
         <div class="mbody"><div class="lk-wrap">
+          <div class="lk-mode" id="lkMode">
+            <button data-m="code" class="on">상품코드</button>
+            <button data-m="vendor">공급업체명</button></div>
           <div class="lk-search"><span class="ic">${icon('search')}</span>
             <input type="text" id="lkQ" placeholder="상품코드 입력 (예: P-DA39)" autocomplete="off" autofocus></div>
           <div class="lk-meta" id="lkMeta"></div>
@@ -66,11 +89,23 @@
       const won=n=>`<span class="v num">${fmtNum(Number(n)||0)}<span class="won">원</span></span>`;
       const cell=(k,v)=>`<div class="lk-cell"><div class="k">${k}</div>${v}</div>`;
       const hint=(html,bad)=>{ out.innerHTML=`<div class="lk-empty${bad?' bad':''}">${html}</div>`; };
+      // 마진율(%) = (판매가 - 공급가) / 판매가 × 100 — 판매가 기준
+      const marginPct=(inP,outP)=>{ inP=Number(inP)||0; outP=Number(outP)||0; if(outP<=0) return null; return Math.round((outP-inP)/outP*1000)/10; };
+      // 공급업체명 → 이카운트 거래처코드(들) 역매핑 (이름표: 관리자 저장분 + 내장 기본값)
+      function vendorCodesFor(term){ term=String(term||'').trim().toLowerCase(); if(!term) return [];
+        const nameMap=(typeof catNameMap==='function'?(catNameMap().vendor||{}):{});
+        const merged=Object.assign({}, (window.VENDOR_DEFAULTS||{}), nameMap);
+        const codes=[]; for(const k in merged){ if(String(merged[k]||'').toLowerCase().includes(term)) codes.push(k); }
+        return [...new Set(codes)];
+      }
 
-      let seq=0, timer=null;
-      async function run(code){
+      let seq=0, timer=null, mode='code';
+      function placeholderFor(){ return mode==='vendor'?'공급업체명 입력 (예: 로보로보)':'상품코드 입력 (예: P-DA39)'; }
+      function baseHint(){ return mode==='vendor'?'공급업체명을 입력하면 그 업체의 상품이 모두 표시됩니다.':'상품코드를 입력하면 상세 정보가 표시됩니다.'; }
+      function run(t){ if(mode==='vendor') return runVendor(t); return runCode(t); }
+      async function runCode(code){
         const my=++seq;
-        if(!code){ hint(`${icon('search')}<div>상품코드를 입력하면 상세 정보가 표시됩니다.</div>`); return; }
+        if(!code){ hint(`${icon('search')}<div>${baseHint()}</div>`); return; }
         hint(`${icon('cloud')}<div>조회 중…</div>`);
         let d=null; try{ const r=await fetch('/api/catalog?code='+encodeURIComponent(code)); d=await r.json(); }catch(e){}
         if(my!==seq||!root.isConnected) return;                       // 최신 조회만 반영
@@ -103,15 +138,56 @@
               <div class="nm">${p.name?esc(p.name):'<span class="muted">(품명 없음)</span>'}</div></div>
             ${p.option?`<span class="obadge">옵션 ${esc(p.option)}</span>`:''}
             <button class="btn sm" id="lkCopy">${icon('copy')}제품명 복사</button></div>
-          <div class="lk-grid">
-            ${cell('구매처명', `<span class="v">${vendor?esc(vendor):'<span class="muted">미지정</span>'}</span>`)}
+          <div class="lk-grid g5">
+            ${cell('공급업체명', `<span class="v">${vendor?esc(vendor):'<span class="muted">미지정</span>'}</span>`)}
             ${cell('상품분류', `<span class="v">${category?esc(category):'<span class="muted">-</span>'}</span>`)}
-            ${cell('입고단가', won(p.inPrice))}
-            ${cell('출고단가', won(p.outPrice))}
+            ${cell('공급가', won(p.inPrice))}
+            ${cell('에듀이노 판매가', won(p.outPrice))}
+            ${cell('마진율', marginCellV(p))}
           </div></div>`;
         const cp=root.querySelector('#lkCopy'); if(cp) cp.onclick=()=>{ copyText(p.name||''); toast('제품명 복사'); };
       }
-      qEl.oninput=()=>{ const t=qEl.value.trim(); clearTimeout(timer); timer=setTimeout(()=>run(t), 260); };
+      // 마진율 셀 — 판매가 기준 %, 마진액 병기(양수 초록·음수 빨강)
+      function marginCellV(p){ const m=marginPct(p.inPrice,p.outPrice);
+        if(m==null) return `<span class="v" style="color:var(--muted)">-</span>`;
+        const c=m>=0?'#12886a':'#c0392b'; const amt=(Number(p.outPrice)||0)-(Number(p.inPrice)||0);
+        return `<span class="v" style="color:${c}">${m}%</span><span class="won" style="color:${c};margin-left:0;display:block;margin-top:2px">${fmtNum(amt)}원</span>`;
+      }
+      // 공급업체명 검색 → 그 업체의 상품 목록
+      async function runVendor(term){
+        const my=++seq;
+        if(!term){ hint(`${icon('search')}<div>${baseHint()}</div>`); return; }
+        const codes=vendorCodesFor(term);
+        if(!codes.length){ hint(`${icon('alert')}<div>"${esc(term)}" — 일치하는 공급업체를 찾지 못했습니다.<br><span style="font-size:12.5px">이카운트 거래처명 일부로 검색해 보세요.</span></div>`,true); return; }
+        hint(`${icon('cloud')}<div>조회 중…</div>`);
+        let d=null; try{ const r=await fetch('/api/catalog?vendorCodes='+encodeURIComponent(codes.join(','))+'&limit=400'); d=await r.json(); }catch(e){}
+        if(my!==seq||!root.isConnected) return;
+        if(!d||!d.ok){ hint(`${icon('alert')}<div>조회에 실패했습니다. 잠시 후 다시 시도하세요.</div>`,true); return; }
+        renderVendorList(d.items||[], term, d.total||0);
+      }
+      function renderVendorList(items, term, total){
+        if(!items.length){ hint(`${icon('alert')}<div>"${esc(term)}" 업체의 상품이 카탈로그에 없습니다.</div>`,true); return; }
+        const groups={}; items.forEach(p=>{ const vn=catVendorName(p)||'미지정'; (groups[vn]=groups[vn]||[]).push(p); });
+        const names=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'ko'));
+        out.innerHTML=`<div class="lk-vhead">${icon('folder')} "<b>${esc(term)}</b>" — 공급업체 <b>${names.length}</b>곳 · 상품 <b>${items.length}</b>개${total>items.length?` <span class="muted">(상위 ${items.length} 표시)</span>`:''}</div>
+          ${names.map(vn=>{ const rows=groups[vn]; return `<div class="lk-vgroup">
+            <div class="lk-vg-hd">${esc(vn)}<span class="muted">${rows.length}개</span></div>
+            <div class="lk-vtable">
+              <div class="lk-vtr lk-vth"><span>상품코드</span><span>상품명</span><span class="r">공급가</span><span class="r">판매가</span><span class="r">마진율</span></div>
+              ${rows.map((p,i)=>{ const m=marginPct(p.inPrice,p.outPrice); return `<div class="lk-vtr" data-vk="${esc(vn)}" data-i="${i}" title="상세 보기">
+                <span class="c">${esc(p.selfCode)}</span>
+                <span class="n">${p.name?esc(p.name):'<span class="muted">(품명 없음)</span>'}${p.option?` <span class="muted">· ${esc(p.option)}</span>`:''}</span>
+                <span class="r">${fmtNum(p.inPrice||0)}</span>
+                <span class="r">${fmtNum(p.outPrice||0)}</span>
+                <span class="r ${m==null?'':(m>=0?'mg':'mgb')}">${m==null?'-':m+'%'}</span></div>`; }).join('')}
+            </div></div>`; }).join('')}`;
+        out.querySelectorAll('.lk-vtr[data-vk]').forEach(row=>row.onclick=()=>{ const p=groups[row.dataset.vk][+row.dataset.i]; if(p) showProduct(p); });
+      }
+      // 검색 모드 전환(상품코드 ↔ 공급업체명)
+      root.querySelectorAll('#lkMode button').forEach(b=>b.onclick=()=>{ if(mode===b.dataset.m) return; mode=b.dataset.m;
+        root.querySelectorAll('#lkMode button').forEach(x=>x.classList.toggle('on',x.dataset.m===mode));
+        qEl.value=''; qEl.placeholder=placeholderFor(); hint(`${icon('search')}<div>${baseHint()}</div>`); qEl.focus(); });
+      qEl.oninput=()=>{ const t=qEl.value.trim(); clearTimeout(timer); timer=setTimeout(()=>run(t), mode==='vendor'?200:260); };
       qEl.onkeydown=e=>{ if(e.key==='Enter'){ clearTimeout(timer); run(qEl.value.trim()); } };
       qEl.focus();
     }
