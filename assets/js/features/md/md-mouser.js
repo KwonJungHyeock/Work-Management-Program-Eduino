@@ -95,6 +95,16 @@
         .mo-savenote{font-size:10px;color:var(--muted);margin-top:3px}
         .mo-req{background:#0a3d62;color:#fff;border:0;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
         .mo-req:hover{background:#0c4b78}
+        /* 주문내역 표 — 가독성 위해 글자 확대 */
+        table.mo-ord{font-size:14px}
+        table.mo-ord th{font-size:12.5px;padding:10px 12px}
+        table.mo-ord td{padding:11px 12px;vertical-align:middle}
+        table.mo-ord .mo-code{font-size:14.5px;font-weight:800}
+        table.mo-ord .osub{font-size:11.5px;color:var(--muted);margin-top:2px;font-weight:600}
+        table.mo-ord .ost{display:inline-block;font-weight:800;font-size:13px;border-radius:7px;padding:3px 11px}
+        table.mo-ord .obar{height:5px;border-radius:3px;background:#e9ecf1;margin-top:6px;overflow:hidden;max-width:150px}
+        table.mo-ord .otrk{font-size:13px;font-family:var(--mono)}
+        table.mo-ord .otrk b{font-weight:800}
       </style>
       <div class="nx-note" id="moNote" style="border-left-color:#0a3d62;background:#eef4fb;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span>${icon('truck')} <b>마우저 직소싱</b> — 즐겨찾기 <b>${all.length}</b>품목의 재고·가격을 확인하고, <b>[요청]</b>으로 결제요청+장바구니에 담습니다.
@@ -386,18 +396,18 @@
       const kpi=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           ${[['진행중',cnt.proc,'#0a63c2'],['완료',cnt.done,'#12886a'],['이월',cnt.back,'#b4530a'],['취소',cnt.cancel,'#8a8f98']].map(([l,n,c])=>
             `<span style="font-size:12px;font-weight:700;color:${c};background:${c}18;border:1px solid ${c}44;border-radius:8px;padding:4px 10px">${l} ${n}</span>`).join('')}</div>`;
-      const detailUrl=o=>'https://www.mouser.kr/OrderHistory/'; // 송장·금액·추적은 상세(마우저)에서
-      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('box')} 마우저 <b>주문내역</b> (최근 12개월) — 제조사 구분 없이 <b>전체</b>. <b>주문상태</b> 자동 동기화. <span class="muted">※ 송장·금액·추적번호는 요약 응답에 없어 <b>[상세]</b>(마우저)에서 확인합니다.</span></div>
+      const trackedCnt=all.filter(o=>o.tracking).length;
+      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;font-size:13.5px">${icon('box')} 마우저 <b>주문내역</b> (최근 12개월) — 제조사 구분 없이 <b>전체</b>. <b>주문상태</b>·<b>배송추적</b> 자동 동기화. 추적번호의 <b>[DHL]</b>로 배송조회를 엽니다.${trackedCnt?'':' <span class="muted">(추적번호는 배송 시작된 주문부터 표시)</span>'}</div>
         ${kpi}${filters}
-        ${list.length?`<div class="nx-wrap" style="max-height:calc(100vh - 400px);overflow:auto"><table class="mo-t" style="min-width:820px">
-          <thead><tr><th style="width:96px">주문일</th><th style="width:170px">주문번호</th><th style="width:130px">구매자</th><th style="width:180px">주문상태</th><th>상세</th></tr></thead>
+        ${list.length?`<div class="nx-wrap" style="max-height:calc(100vh - 400px);overflow:auto"><table class="mo-t mo-ord" style="min-width:960px">
+          <thead><tr><th style="width:104px">주문일</th><th style="width:180px">주문번호</th><th style="width:140px">구매자</th><th style="width:186px">주문상태</th><th>배송추적</th></tr></thead>
           <tbody>${list.map(o=>{ const st=statusStyle(o.status); return `<tr>
             <td style="white-space:nowrap">${esc(o.date||'-')}</td>
-            <td class="mo-code" style="white-space:normal;word-break:break-all">웹 ${esc(o.webNo||o.orderNo||'-')}${o.salesNo&&o.salesNo!==o.webNo?`<div class="muted" style="font-size:10px">판매 ${esc(o.salesNo)}</div>`:''}${o.poNumber?`<div class="muted" style="font-size:10px">PO ${esc(o.poNumber)}</div>`:''}</td>
-            <td style="white-space:nowrap;font-size:11.5px">${esc(o.buyer||'-')}</td>
-            <td><span style="display:inline-block;font-weight:800;font-size:11.5px;color:${st.c};background:${st.bg};border-radius:6px;padding:2px 9px">${esc(statusKo(o.status)||'-')}</span>
-              <div style="height:4px;border-radius:3px;background:#e9ecf1;margin-top:5px;overflow:hidden"><div style="width:${st.pct}%;height:100%;background:${st.c}"></div></div></td>
-            <td><a class="btn ghost sm" href="${esc(detailUrl(o))}" target="_blank" rel="noopener" style="padding:2px 8px">상세 ↗</a></td>
+            <td class="mo-code" style="white-space:normal;word-break:break-all">웹 ${esc(o.webNo||o.orderNo||'-')}${o.salesNo&&o.salesNo!==o.webNo?`<div class="osub">판매 ${esc(o.salesNo)}</div>`:''}${o.poNumber?`<div class="osub">PO ${esc(o.poNumber)}</div>`:''}</td>
+            <td style="white-space:nowrap">${esc(o.buyer||'-')}</td>
+            <td><span class="ost" style="color:${st.c};background:${st.bg}">${esc(statusKo(o.status)||'-')}</span>
+              <div class="obar"><div style="width:${st.pct}%;height:100%;background:${st.c}"></div></div></td>
+            <td>${o.tracking?`<span class="otrk">${esc(o.carrier||'DHL')} <b>${esc(o.tracking)}</b></span> <a class="btn ghost sm" href="${esc(dhlUrl(o.tracking))}" target="_blank" rel="noopener" style="padding:3px 10px">DHL 추적</a>${o.shipDate?`<div class="osub">배송 ${esc(o.shipDate)}</div>`:''}`:`<span class="muted">${/취소|cancel/i.test(String(o.status))?'-':'배송 준비중'}</span>`}</td>
           </tr>`; }).join('')}</tbody></table></div>`
           :`<div class="nx-empty">${icon('box')}<div>${all.length?'필터에 맞는 주문이 없습니다.':'최근 12개월 주문내역이 없습니다.'}</div></div>`}
         ${manualOrders()}`;
