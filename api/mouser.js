@@ -10,7 +10,19 @@ module.exports = async function handler(req, res) {
   const key = process.env.MOUSER_API_KEY || process.env.MOUSER_SEARCH_API_KEY || process.env.EDUINO_MOUSER_API_KEY;
 
   if (req.method === 'GET') {
-    if (!key) return res.status(200).json({ configured: false, note: 'MOUSER_API_KEY 미감지(이 배포 환경) — 환경변수 스코프/재배포 확인' });
+    // ?keys=1 — 어떤 마우저 환경변수가 설정돼 있는지 확인(값은 노출 안 함, 존재여부만)
+    if (req.query && req.query.keys) {
+      return res.status(200).json({
+        present: {
+          MOUSER_API_KEY: !!process.env.MOUSER_API_KEY,
+          MOUSER_SEARCH_API_KEY: !!process.env.MOUSER_SEARCH_API_KEY,
+          MOUSER_CART_API_KEY: !!process.env.MOUSER_CART_API_KEY,
+          MOUSER_ORDER_API_KEY: !!process.env.MOUSER_ORDER_API_KEY,
+        },
+        note: '검색(재고·가격)=MOUSER_API_KEY(=Search키) · 장바구니=MOUSER_CART_API_KEY(=Cart/Order키)',
+      });
+    }
+    if (!key) return res.status(200).json({ configured: false, note: 'MOUSER_API_KEY(=Search키) 미감지 — 재고·가격은 Search API 키가 필요' });
     const test = req.query && (req.query.test || req.query.q);
     if (test) {
       const result = await lookupOne(key, String(test));
