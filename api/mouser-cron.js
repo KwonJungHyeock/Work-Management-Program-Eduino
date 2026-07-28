@@ -9,6 +9,7 @@ const { lookupOne, cartLookupOne } = require('../lib/mouser.js');
 const SNAP_KEY = 'eduino:mouser:snap:last';        // 직전 스냅샷(변동 비교용)
 const STOCK_COLL = 'eduino:coll:mouser_stock';     // 최신 재고맵(클라이언트가 읽음)
 const REPORT_COLL = 'eduino:coll:mouser_report';   // 일자별 변동 리포트
+const PROBE_KEY = 'eduino:mouser:probecart';       // 가격·재고 조회 전용 카트키(재사용 → 계정 오염 방지)
 
 function kvCreds() {
   const env = process.env;
@@ -43,14 +44,25 @@ module.exports = async function handler(req, res) {
 
   const results = await pool(nos, 5, no => lookupOne(key, no));
 
-  // Search 가 막은 품목(구매제한·조회불가)은 Cart API 로 가격·재고 보강 시도(임시 카트 → 실제값만 회수).
+  // Search 가 막은 품목(구매제한·조회불가)은 Cart API 로 가격·재고 보강 시도.
+  //  ※ 계정 카트 오염 방지: 전용 '조회 카트' 하나(PROBE_KEY)만 재사용 — 매 조회마다 새 카트를 만들지 않음.
   let cartFilled = 0;
   if (cartKey) {
     const needCart = nos.filter(no => { const d = results[no] || {}; return !d.found || d.restricted || (!d.inStock && !d.priceKRW); });
     if (needCart.length) {
-      const cartRes = await pool(needCart, 5, no => cartLookupOne(cartKey, no));
-      // Cart 에 실제 가격·재고가 있으면 = 실제 구매 가능 → 구매제한 플래그 해제(Search 오탐 보정).
-      needCart.forEach(no => { const c = cartRes[no]; if (c && c.found && (c.priceKRW || c.inStock)) { results[no] = { ...(results[no] || {}), ...c, found: true, restricted: false, restriction: '' }; cartFilled++; } });
+      // 저장된 조회 카트키 재사용 → 없으면 첫 1건을 순차 조회해 새 키를 확보하고 저장(이후 전부 이 키로).
+      let probe = (await redis(['GET', PROBE_KEY])) || '';
+      const merge = (no, c) => { if (c && c.found && (c.priceKRW || c.inStock)) { results[no] = { ...(results[no] || {}), ...c, found: true, restricted: false, restriction: '' }; cartFilled++; } };
+      let rest = needCart;
+      if (!probe) {
+        const seed = await cartLookupOne(cartKey, needCart[0], '');
+        probe = (seed && seed.cartKey) || '';
+        if (probe) await redis(['SET', PROBE_KEY, probe]);
+        merge(needCart[0], seed);
+        rest = probe ? needCart.slice(1) : needCart;   // 키 확보 실패 시 폴백(전체 재시도)
+      }
+      const cartRes = await pool(rest, 5, no => cartLookupOne(cartKey, no, probe));
+      rest.forEach(no => merge(no, cartRes[no]));
     }
   }
 
