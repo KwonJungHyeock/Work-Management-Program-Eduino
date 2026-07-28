@@ -141,14 +141,49 @@
     async function loadStock(){ try{ const r=await fetch('/api/store?type=coll&coll=mouser_stock'); if(!r.ok) return;
       const dd=await r.json(); const it=(dd&&dd.items||[]).find(x=>x&&x.id==='latest'); if(it){ stockMap=it.parts||{}; stockAt=it.at||''; } }catch(e){} }
 
-    // 장바구니 배지 표시(현재 담긴 수량) — [열기]는 API로 담은 그 카트(CartKey)로 연결
+    // 장바구니 배지 — [내용]으로 담긴 품목을 프로그램 안에서 바로 확인, [열기]로 API 카트(CartKey) 연결
+    let lastCart=null;
     async function refreshCart(){ const box=root.querySelector('#moCart'); if(!box) return;
       const r=await cartApi('get'); if(!root.isConnected||!box) return;
       if(!r || r.configured===false){ box.innerHTML=''; return; }
-      const n=r.count||0;
+      lastCart=r; const n=r.count||0;
       const url=r.webUrl||'https://www.mouser.kr/Cart/';
-      const tip=r.cartKey?`API 장바구니 (CartKey ${String(r.cartKey).slice(0,8)}…) · 웹 장바구니와 별도로 관리됩니다`:'';
-      box.innerHTML=`${icon('box')} 마우저 장바구니 <b>${n}</b>건 <a href="${esc(url)}" target="_blank" rel="noopener" class="btn ghost sm" style="padding:2px 8px" title="${esc(tip)}">열기</a>`;
+      const tip=r.cartKey?`API 장바구니 (CartKey ${String(r.cartKey).slice(0,10)}…) · 웹 장바구니와 별도 · [내용]으로 담긴 품목 확인`:'';
+      box.innerHTML=`${icon('box')} 마우저 장바구니 <b>${n}</b>건
+        <button id="moCartView" class="btn ghost sm" style="padding:2px 8px" title="담긴 품목 보기">내용</button>
+        <a href="${esc(url)}" target="_blank" rel="noopener" class="btn ghost sm" style="padding:2px 8px" title="${esc(tip)}">열기</a>`;
+      const vb=box.querySelector('#moCartView'); if(vb) vb.onclick=()=>showCart(r);
+    }
+    // 담긴 품목 목록을 오버레이로 표시 — "웹 카트에 안 보인다" 오해 해소(API 카트는 별도 관리)
+    function showCart(r){
+      const items=(r&&r.items)||[]; const ck=(r&&r.cartKey)||''; const url=(r&&r.webUrl)||'https://www.mouser.kr/Cart/';
+      const rowsH=items.length?items.map(it=>`<tr>
+          <td><a class="mo-code" href="${esc(prodUrl(it.no))}" target="_blank" rel="noopener">${esc(it.no)}</a><div class="muted" style="font-size:10.5px;white-space:normal;max-width:320px">${esc(it.desc||'')}</div></td>
+          <td class="num">${it.qty}</td><td class="num">${won(it.unit)}</td><td class="num"><b>${won(it.ext||it.unit*it.qty)}</b></td>
+          <td class="num">${it.ats?won(it.ats):'-'}</td></tr>`).join('')
+        :`<tr><td colspan="5" class="nx-empty" style="padding:20px">담긴 품목이 없습니다.</td></tr>`;
+      const sum=items.reduce((s,i)=>s+(i.ext||i.unit*i.qty||0),0);
+      const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+      ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:720px;width:97%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+        <div style="padding:16px 20px 10px;border-bottom:1px solid var(--line)">
+          <div style="font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px">${icon('box')||''} 마우저 API 장바구니 <span class="muted" style="font-weight:600;font-size:13px">${items.length}품목 · ${(r&&r.count)||0}개</span>
+            <button id="moCartX" class="btn ghost sm" style="margin-left:auto;padding:2px 10px">닫기</button></div>
+          <div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;margin-top:10px">
+            ${icon('info')||''} 이 목록은 <b>API 장바구니</b>입니다. 마우저 <b>웹 장바구니와 별도</b>로 관리되어, 웹에서 기본으로 열리는 카트에는 보이지 않을 수 있습니다.
+            ${ck?`<div style="margin-top:6px;font-size:12px">CartKey <code style="font-family:var(--mono);background:#fff;border:1px solid var(--line-2);border-radius:5px;padding:1px 6px">${esc(ck)}</code>
+              <button id="moCkCopy" class="btn ghost sm" style="padding:1px 8px">복사</button>
+              <a class="btn ghost sm" href="${esc(url)}" target="_blank" rel="noopener" style="padding:1px 8px">웹에서 열기</a></div>`:''}
+          </div>
+        </div>
+        <div style="padding:6px 20px;overflow-y:auto;flex:1">
+          <table class="mo-t" style="width:100%">
+            <thead><tr><th>부품 / 설명</th><th style="text-align:right">수량</th><th style="text-align:right">단가</th><th style="text-align:right">금액</th><th style="text-align:right">재고</th></tr></thead>
+            <tbody>${rowsH}</tbody></table>
+          <div style="text-align:right;margin:12px 2px;font-weight:800;color:#0a3d62">합계 ${won(sum)}원</div>
+        </div></div>`;
+      document.body.appendChild(ov); const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+      const xb=ov.querySelector('#moCartX'); if(xb) xb.onclick=close;
+      const cp=ov.querySelector('#moCkCopy'); if(cp) cp.onclick=()=>{ try{ navigator.clipboard.writeText(ck); toast('CartKey 복사됨'); }catch(e){} };
     }
 
     async function requestPay(no){

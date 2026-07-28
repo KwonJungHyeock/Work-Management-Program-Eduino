@@ -32,14 +32,24 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[^\d.]/g, ''); 
 const cartWebUrl = k => k ? `https://www.mouser.kr/Cart/?cartKey=${encodeURIComponent(k)}` : 'https://www.mouser.kr/Cart/';
 
 function summarize(d, fallbackKey) {
-  const items = d && (d.CartItems || d.cartItems || []) || [];
-  const count = items.reduce((s, x) => s + (Number(x.Quantity || x.quantity || 0) || 0), 0);
+  const raw = d && (d.CartItems || d.cartItems || []) || [];
+  const count = raw.reduce((s, x) => s + (Number(x.Quantity || x.quantity || 0) || 0), 0);
   const errors = (d && (d.Errors || d.errors)) || [];
+  // 카트에 담긴 품목 목록 — 프로그램 안에서 '무엇이 담겼는지' 바로 보여주기 위함
+  const items = raw.map(x => ({
+    no: String(x.MouserPartNumber || x.mouserPartNumber || '').trim(),
+    qty: Number(x.Quantity || x.quantity || 0) || 0,
+    unit: num(x.UnitPrice != null ? x.UnitPrice : x.unitPrice),
+    ext: num(x.ExtendedPrice != null ? x.ExtendedPrice : x.extendedPrice),
+    ats: num(x.MouserATS != null ? x.MouserATS : x.AvailabilityInStock),
+    desc: x.Description || x.description || '',
+  })).filter(i => i.no);
   return {
     ok: !(errors && errors.length),
     cartKey: (d && (d.CartKey || d.cartKey)) || fallbackKey || '',
     count,
     total: (d && (d.MerchandiseTotal || d.CartTotal || d.merchandiseTotal)) || '',
+    items,
     errors,
   };
 }
