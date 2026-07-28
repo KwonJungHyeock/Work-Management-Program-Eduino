@@ -19,19 +19,31 @@ async function fetchHistory(key, startDate, endDate) {
   return { http: r.status, body };
 }
 
-// 응답 필드명이 문서/버전마다 다를 수 있어 후보를 넓게 커버
+// 응답 필드명이 문서/버전마다 다를 수 있어 후보를 넓게 커버(웹 주문내역 화면의 모든 항목 대응)
+const pick = (o, keys) => { for (const k of keys) { if (o[k] != null && o[k] !== '') return o[k]; } return ''; };
+const day10 = v => v ? String(v).slice(0, 10) : '';
 function normalize(d) {
   const list = (d && (d.OrderHistoryItems || d.OrderHistory || d.Orders || d.orderHistoryItems || [])) || [];
-  return list.map(o => ({
-    orderNo: o.WebOrderNumber || o.SalesOrderNumber || o.OrderNumber || o.PONumber || '',
-    poNumber: o.PONumber || o.PoNumber || '',
-    date: (o.OrderDate || o.PODate || o.DateOrdered || o.SubmittedDate || '').toString().slice(0, 10),
-    status: o.OrderStatusDisplay || o.OrderStatus || o.Status || '',
-    total: o.OrderTotal || o.Total || o.MerchandiseTotal || '',
-    tracking: o.TrackingNumber || o.Tracking || o.CarrierTrackingNumber || '',
-    carrier: o.Carrier || o.ShipVia || '',
-    shipDate: (o.ShipDate || o.ShippedDate || '').toString().slice(0, 10),
-  })).filter(o => o.orderNo || o.date);
+  return list.map(o => {
+    const webNo = pick(o, ['WebOrderNumber', 'WebOrderNo', 'webOrderNumber']);
+    const salesNo = pick(o, ['SalesOrderNumber', 'MouserOrderNumber', 'salesOrderNumber']);
+    const trk = pick(o, ['TrackingNumber', 'CarrierTrackingNumber', 'Tracking', 'trackingNumber']);
+    return {
+      orderNo: webNo || salesNo || pick(o, ['OrderNumber', 'PONumber']) || '',   // 대표(웹 주문번호)
+      salesNo,                                     // 판매 주문번호
+      webNo,                                       // 웹 주문번호
+      poNumber: pick(o, ['PONumber', 'PoNumber', 'poNumber']),
+      date: day10(pick(o, ['OrderDate', 'DateCreated', 'PODate', 'DateOrdered', 'SubmittedDate', 'CreatedDate'])),
+      buyer: pick(o, ['BuyerName', 'Buyer', 'OrderedBy', 'CustomerName', 'ContactName', 'PurchaserName']),
+      status: pick(o, ['OrderStatusDisplay', 'OrderStatus', 'StatusDisplay', 'Status']),
+      total: pick(o, ['InvoiceTotal', 'OrderTotal', 'Total', 'MerchandiseTotal', 'GrandTotal']),
+      invoiceNo: pick(o, ['InvoiceNumber', 'InvoiceNo', 'invoiceNumber']),
+      invoiceUrl: pick(o, ['InvoiceUrl', 'InvoicePdfUrl', 'InvoiceURL', 'InvoicePDFUrl']),
+      tracking: trk,
+      carrier: pick(o, ['Carrier', 'ShipVia', 'ShipMethod', 'ShippingMethod']),
+      shipDate: day10(pick(o, ['ShipDate', 'ShippedDate', 'ShipmentDate', 'DateShipped'])),
+    };
+  }).filter(o => o.orderNo || o.date);
 }
 
 module.exports = async function handler(req, res) {

@@ -105,7 +105,11 @@
     root.querySelectorAll('#moMfr .mo-tab').forEach(t=>t.onclick=()=>{ mfr=t.dataset.m;
       root.querySelectorAll('#moMfr .mo-tab').forEach(x=>x.classList.toggle('on',x.dataset.m===mfr)); renderCats(); paint(); });
     root.querySelectorAll('#moView button').forEach(b=>b.onclick=()=>{ view=b.dataset.v;
-      root.querySelectorAll('#moView button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); paint(); });
+      root.querySelectorAll('#moView button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); applyViewChrome(); paint(); });
+    // 주문내역·변동알림은 제조사와 무관 → 제조사/카테고리 탭 숨김(재고·비교에서만 표시)
+    function applyViewChrome(){ const per=(view==='stock');
+      const mfrBar=root.querySelector('#moMfr'); if(mfrBar) mfrBar.style.display=per?'':'none';
+      if(catBar) catBar.style.display=per?'':'none'; }
 
     function rows(){ return all.filter(p=>p.mfr===mfr && p.category===cat); }
 
@@ -289,39 +293,87 @@
       render();
     }
 
-    // 주문내역 — 마우저 Order History API 로 주문·상태·송장 가져와 표시(송장→DHL 자동)
+    // 주문내역 — 마우저 Order History API 로 주문·상태·송장 가져와 통합 표시(제조사 무관 · 필터 제공)
     const dhlUrl=t=>'https://www.dhl.com/kr-ko/home/tracking/tracking-express.html?submit=1&tracking-id='+encodeURIComponent(String(t||'').replace(/\s/g,''));
+    // 주문상태 → 색/진행도(문자에 상관없이 키워드로 분류). 상태 연동이 핵심이라 눈에 띄게.
+    function statusStyle(s){ const t=String(s||'').toLowerCase();
+      if(/취소|cancel|void/.test(t)) return {c:'#8a8f98',bg:'#eef0f3',pct:0};
+      if(/완료|배송완료|invoiced|complete|shipped|delivered/.test(t)) return {c:'#12886a',bg:'#e6f7f0',pct:100};
+      if(/이월|백오더|back\s*order|backorder/.test(t)) return {c:'#b4530a',bg:'#fff4e6',pct:35};
+      if(/선별|처리|진행|프로세스|process|picking|packing|preparing/.test(t)) return {c:'#0a63c2',bg:'#e8f1fc',pct:60};
+      return {c:'#4a4f57',bg:'#f0f2f5',pct:20}; }
+    let ordersCache=null, ordFilter={status:'',buyer:'',q:''};
     async function paintOrders(){
       moBody.innerHTML='<div class="muted" style="padding:18px">주문내역 불러오는 중…</div>';
       let res=null; try{ const r=await fetch('/api/mouser-orders'); if(r.ok) res=await r.json(); }catch(e){}
       if(!root.isConnected) return;
       const manual=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">
-          <span class="muted" style="font-size:12px">송장으로 직접 추적:</span>
-          <input id="moDhl" placeholder="DHL 송장(추적) 번호" style="height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px;min-width:200px">
+          <span class="muted" style="font-size:12px">송장/추적번호로 직접 조회:</span>
+          <input id="moDhl" placeholder="DHL 추적번호" style="height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px;min-width:180px">
           <button class="btn sm" id="moDhlGo" style="background:#0a3d62;color:#fff">${icon('truck')}DHL 추적</button>
-          <a class="btn ghost sm" href="https://www.mouser.kr/OrderHistory/" target="_blank" rel="noopener">마우저 주문내역 열기</a></div>`;
-      const wireManual=()=>{ const go=()=>{ const t=(moBody.querySelector('#moDhl').value||'').trim(); if(!t){ toast('DHL 송장번호를 입력하세요'); return; } window.open(dhlUrl(t),'_blank','noopener'); };
+          <a class="btn ghost sm" href="https://www.mouser.kr/OrderHistory/" target="_blank" rel="noopener">마우저 주문내역 열기 ↗</a></div>`;
+      const wireManual=()=>{ const go=()=>{ const t=(moBody.querySelector('#moDhl').value||'').trim(); if(!t){ toast('추적번호를 입력하세요'); return; } window.open(dhlUrl(t),'_blank','noopener'); };
         const b=moBody.querySelector('#moDhlGo'); if(b) b.onclick=go; const i=moBody.querySelector('#moDhl'); if(i) i.onkeydown=e=>{ if(e.key==='Enter') go(); }; };
       if(!res || res.configured===false){
-        moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('info')} 주문내역 자동연동 <b>대기</b> — 마우저 <b>Order History API 키</b> 설정 후 주문·상태·송장이 자동 표시됩니다. (진단: <a href="/api/mouser-orders?raw=1" target="_blank" rel="noopener">/api/mouser-orders?raw=1</a>)</div>${manual}`;
+        moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('info')} 주문내역 자동연동 <b>대기</b> — 마우저 <b>Order History API 키</b> 설정 후 주문·<b>상태</b>·송장·추적번호가 자동 표시됩니다.<br>
+          진단: <a href="/api/mouser-orders?raw=1" target="_blank" rel="noopener"><b>/api/mouser-orders?raw=1</b></a> 로 원응답을 확인하세요. (권한 없으면 빈 목록/오류 → automation팀에 OrderHistory 권한 요청)</div>${manual}`;
         wireManual(); return; }
-      const orders=res.orders||[];
-      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('box')} 마우저 <b>주문내역</b> ${orders.length}건 (최근 12개월) · 상태·송장 자동. 송장의 <b>[DHL]</b>로 배송추적을 엽니다.</div>
-        ${orders.length?`<div class="nx-wrap" style="max-height:calc(100vh - 340px)"><table class="mo-t" style="width:100%">
-          <thead><tr><th>주문번호</th><th>주문일</th><th>상태</th><th style="text-align:right">금액</th><th>송장/배송추적</th></tr></thead>
-          <tbody>${orders.map(o=>`<tr>
-            <td class="mo-code">${esc(o.orderNo||'-')}${o.poNumber?`<div class="muted" style="font-size:10.5px">PO ${esc(o.poNumber)}</div>`:''}</td>
-            <td style="white-space:nowrap">${esc(o.date||'-')}</td>
-            <td><span style="font-weight:700">${esc(o.status||'-')}</span></td>
-            <td class="num">${esc(o.total||'')}</td>
-            <td>${o.tracking?`${esc(o.carrier||'')} ${esc(o.tracking)} <a class="btn ghost sm" href="${esc(dhlUrl(o.tracking))}" target="_blank" rel="noopener" style="padding:2px 8px">DHL</a>`:'<span class="muted">-</span>'}</td>
-          </tr>`).join('')}</tbody></table></div>`
-          :`<div class="nx-empty">${icon('box')}<div>최근 12개월 주문내역이 없습니다.</div></div>`}
-        ${manual}`;
-      wireManual();
+      ordersCache=(res.orders||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+      renderOrders();
     }
+    function renderOrders(){
+      const all=ordersCache||[];
+      const statuses=[...new Set(all.map(o=>o.status).filter(Boolean))];
+      const buyers=[...new Set(all.map(o=>o.buyer).filter(Boolean))];
+      const q=ordFilter.q.trim().toLowerCase();
+      const list=all.filter(o=>
+        (!ordFilter.status||o.status===ordFilter.status) &&
+        (!ordFilter.buyer||o.buyer===ordFilter.buyer) &&
+        (!q||[o.orderNo,o.salesNo,o.webNo,o.poNumber,o.tracking,o.invoiceNo].some(x=>String(x||'').toLowerCase().includes(q))));
+      // 상태별 요약(진행중/완료/이월/취소)
+      const cnt={done:0,proc:0,back:0,cancel:0};
+      all.forEach(o=>{ const p=statusStyle(o.status).pct; if(/취소|cancel/.test(String(o.status).toLowerCase()))cnt.cancel++; else if(p>=100)cnt.done++; else if(/이월|back/.test(String(o.status).toLowerCase()))cnt.back++; else cnt.proc++; });
+      const filters=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 12px">
+          <select id="ordStatus" style="height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px">
+            <option value="">전체 상태</option>${statuses.map(s=>`<option value="${esc(s)}" ${ordFilter.status===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+          ${buyers.length>1?`<select id="ordBuyer" style="height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px">
+            <option value="">전체 구매자</option>${buyers.map(b=>`<option value="${esc(b)}" ${ordFilter.buyer===b?'selected':''}>${esc(b)}</option>`).join('')}</select>`:''}
+          <input id="ordQ" type="search" value="${esc(ordFilter.q)}" placeholder="주문번호·PO·추적번호 검색" style="height:34px;flex:1;min-width:200px;max-width:340px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px">
+          <span class="muted" style="font-size:12px;margin-left:auto">${list.length}/${all.length}건</span></div>`;
+      const kpi=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          ${[['진행중',cnt.proc,'#0a63c2'],['완료',cnt.done,'#12886a'],['이월',cnt.back,'#b4530a'],['취소',cnt.cancel,'#8a8f98']].map(([l,n,c])=>
+            `<span style="font-size:12px;font-weight:700;color:${c};background:${c}18;border:1px solid ${c}44;border-radius:8px;padding:4px 10px">${l} ${n}</span>`).join('')}</div>`;
+      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb">${icon('box')} 마우저 <b>주문내역</b> (최근 12개월) — 제조사 구분 없이 <b>전체</b> 표시. <b>주문상태</b>·송장·추적번호 자동 동기화. 송장 <b>[PDF]</b>·추적 <b>[DHL]</b>.</div>
+        ${kpi}${filters}
+        ${list.length?`<div class="nx-wrap" style="max-height:calc(100vh - 400px);overflow:auto"><table class="mo-t" style="min-width:1020px">
+          <thead><tr><th style="width:90px">주문일</th><th style="width:150px">주문번호</th><th style="width:110px">구매자</th><th style="width:150px">주문상태</th><th style="text-align:right;width:110px">금액(KRW)</th><th style="width:110px">송장</th><th>추적/배송</th></tr></thead>
+          <tbody>${list.map(o=>{ const st=statusStyle(o.status); return `<tr>
+            <td style="white-space:nowrap">${esc(o.date||'-')}</td>
+            <td class="mo-code" style="white-space:normal;word-break:break-all">${esc(o.webNo||o.orderNo||'-')}${o.salesNo&&o.salesNo!==o.webNo?`<div class="muted" style="font-size:10px">판매 ${esc(o.salesNo)}</div>`:''}${o.poNumber?`<div class="muted" style="font-size:10px">PO ${esc(o.poNumber)}</div>`:''}</td>
+            <td style="white-space:nowrap;font-size:11.5px">${esc(o.buyer||'-')}</td>
+            <td><span style="display:inline-block;font-weight:800;font-size:11.5px;color:${st.c};background:${st.bg};border-radius:6px;padding:2px 9px">${esc(o.status||'-')}</span>
+              <div style="height:4px;border-radius:3px;background:#e9ecf1;margin-top:5px;overflow:hidden"><div style="width:${st.pct}%;height:100%;background:${st.c}"></div></div></td>
+            <td class="num" style="font-weight:700">${o.total?esc(String(o.total)):'-'}</td>
+            <td>${o.invoiceUrl?`<a class="btn ghost sm" href="${esc(o.invoiceUrl)}" target="_blank" rel="noopener" style="padding:2px 8px">PDF</a>`:(o.invoiceNo?`<span class="muted" style="font-size:11px">${esc(o.invoiceNo)}</span>`:'<span class="muted">-</span>')}</td>
+            <td>${o.tracking?`<span style="font-size:11.5px">${esc(o.carrier||'DHL')} ${esc(o.tracking)}</span> <a class="btn ghost sm" href="${esc(dhlUrl(o.tracking))}" target="_blank" rel="noopener" style="padding:2px 8px">DHL</a>${o.shipDate?`<div class="muted" style="font-size:10px">배송 ${esc(o.shipDate)}</div>`:''}`:'<span class="muted">-</span>'}</td>
+          </tr>`; }).join('')}</tbody></table></div>`
+          :`<div class="nx-empty">${icon('box')}<div>${all.length?'필터에 맞는 주문이 없습니다.':'최근 12개월 주문내역이 없습니다.'}</div></div>`}
+        ${manualOrders()}`;
+      const ss=moBody.querySelector('#ordStatus'); if(ss) ss.onchange=()=>{ ordFilter.status=ss.value; renderOrders(); };
+      const bs=moBody.querySelector('#ordBuyer'); if(bs) bs.onchange=()=>{ ordFilter.buyer=bs.value; renderOrders(); };
+      const qq=moBody.querySelector('#ordQ'); if(qq) qq.oninput=()=>{ ordFilter.q=qq.value; renderOrders(); };
+      wireManualOrders();
+    }
+    // 주문내역 하단 수동 추적(공통)
+    function manualOrders(){ return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">
+        <span class="muted" style="font-size:12px">추적번호로 직접 조회:</span>
+        <input id="moDhl" placeholder="DHL 추적번호" style="height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 12px;min-width:180px">
+        <button class="btn sm" id="moDhlGo" style="background:#0a3d62;color:#fff">${icon('truck')}DHL 추적</button>
+        <a class="btn ghost sm" href="https://www.mouser.kr/OrderHistory/" target="_blank" rel="noopener">마우저 주문내역 열기 ↗</a></div>`; }
+    function wireManualOrders(){ const go=()=>{ const el2=moBody.querySelector('#moDhl'); const t=(el2&&el2.value||'').trim(); if(!t){ toast('추적번호를 입력하세요'); return; } window.open(dhlUrl(t),'_blank','noopener'); };
+      const b=moBody.querySelector('#moDhlGo'); if(b) b.onclick=go; const i=moBody.querySelector('#moDhl'); if(i) i.onkeydown=e=>{ if(e.key==='Enter') go(); }; }
 
-    renderCats(); paint();
+    renderCats(); applyViewChrome(); paint();
     // 최신 재고맵(크론 저장) + 팀 공유 자사코드 로드 후 반영 + 장바구니 배지
     loadStock().then(()=>{ if(root.isConnected && view==='stock') paint(); });
     loadEdShared().then(ch=>{ if(ch && root.isConnected && view==='stock') paint(); });
