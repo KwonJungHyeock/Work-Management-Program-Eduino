@@ -68,5 +68,8 @@ module.exports = async function handler(req, res) {
   const report = { id: 'rep:' + today, type: 'report', day: today, at, checked: nos.length, changed: changes.length, changes: changes.slice(0, 300) };
   await redis(['HSET', REPORT_COLL, report.id, JSON.stringify(report)]);
 
-  return res.status(200).json({ ok: true, day: today, checked: nos.length, found, changed: changes.length, firstRun: !last });
+  const restrictedCnt = Object.values(stock).filter(s => s.restricted).length;
+  const buyableCnt = Object.values(stock).filter(s => s.found && !s.restricted && (s.inStock > 0 || s.priceKRW > 0)).length;
+  const restrictedList = parts.filter(p => (stock[p.mouserNo] || {}).restricted).map(p => p.mouserNo);
+  return res.status(200).json({ ok: true, day: today, checked: nos.length, found, buyable: buyableCnt, restricted: restrictedCnt, restrictedList: restrictedList.slice(0, 60), changed: changes.length, firstRun: !last });
 };
