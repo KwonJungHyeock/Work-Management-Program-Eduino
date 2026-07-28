@@ -22,7 +22,7 @@ try { for (const line of readFileSync(new URL('./.env', import.meta.url),'utf8')
 
 const arg = k => { const a=process.argv.find(x=>x.startsWith('--'+k)); return a?(a.includes('=')?a.split('=')[1]:true):false; };
 const DEBUG=arg('debug'), DRY=arg('dry'), LIMIT=Number(arg('limit'))||0, ONE=arg('code');
-const DELAY=Number(E.NTREX_DELAY_MS)||2000;   // 기본 간격 넉넉히(차단 위험↓) · .env로 조정
+const DELAY=Number(E.NTREX_DELAY_MS)||5000;   // 기본 5초=분당 12회(쿠팡 15회/분 한도 밑) · .env로 조정
 const MAXFAIL=Math.max(3, Number(E.NTREX_MAX_FAIL)||10);   // 연속 실패 이 횟수 도달 시 즉시 중단(업무 PC IP 보호)
 const jitter=()=>Math.floor(Math.random()*800);   // 요청마다 0~0.8초 무작위 추가(봇 티 줄임)
 const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36';
@@ -94,6 +94,19 @@ else{
   if(LIMIT) items=items.slice(0,LIMIT);
 }
 
+// 분할(선택) — 하루에 NTREX_DAILY_MAX 개씩 날짜별로 '순환' 조회(차단 위험↓).
+//   예) 604개·DAILY_MAX=200 → 4일에 나눠 각 상품을 4일마다 1회 확인.
+const DAILY=Number(E.NTREX_DAILY_MAX)||0;
+let CHUNK='';
+if(!ONE && DAILY>0 && items.length>DAILY){
+  const K=Math.ceil(items.length/DAILY);                 // 며칠에 걸쳐 도는지
+  const size=Math.ceil(items.length/K);                  // 하루치(균등 분배)
+  const idx=Math.floor(Date.now()/86400000)%K;           // 날짜 기준 순환 인덱스
+  items=items.slice(idx*size,(idx+1)*size);
+  CHUNK=`${idx+1}/${K}`;
+  console.log(`daily chunk ${CHUNK} · ${items.length} items (전체 순환 ${K}일 주기)`);
+}
+
 if(DEBUG){
   console.log('== price candidate diagnostics ==');
   for(const p of items.slice(0,ONE?1:3)){
@@ -136,6 +149,6 @@ console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${
 if(DRY){ console.log('[dry-run] skip upload'); process.exit(0); }
 if(!E.STORE_URL){ console.log('STORE_URL not set -> skip upload (add STORE_URL to .env)'); process.exit(0); }
 const doc={ id:`ntrex:${day}`, coll:'ntrex', day, checkedAt:new Date().toISOString(),
-  count:diffs.length, checked, failed, noprice, total:items.length, items:diffs };   // 일일 리포트용 통계 포함
+  count:diffs.length, checked, failed, noprice, total:items.length, chunk:CHUNK||undefined, items:diffs };   // 일일 리포트용 통계(분할 시 chunk 표기)
 const r=await fetch(E.STORE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'ntrex',item:doc})});
 console.log('upload:', r.status, ascii(await r.text()).slice(0,200));
