@@ -18,14 +18,19 @@
           .lk-search input{height:56px;font-size:18px;font-family:var(--mono);letter-spacing:.02em;padding:0 16px 0 46px;border-width:1.5px}
           .lk-search input:focus{border-color:var(--brand,#1f56a3);box-shadow:0 0 0 4px rgba(31,86,163,.12)}
           .lk-meta{font-size:12.5px;color:var(--muted);margin:10px 2px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-          .lk-card{margin-top:18px;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:var(--sh-sm)}
-          .lk-top{display:flex;align-items:center;gap:12px;padding:16px 18px;background:linear-gradient(0deg,var(--panel-2),var(--panel));border-bottom:1px solid var(--line)}
+          .lk-card{margin-top:18px;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--sh-sm);background:var(--panel)}
+          /* 상단: 상품코드/상품명 헤더 — 옅은 톤으로 구분 */
+          .lk-top{display:flex;align-items:center;gap:12px;padding:16px 18px;background:var(--panel-2)}
           .lk-top .code{font-family:var(--mono);font-weight:800;font-size:20px;letter-spacing:.02em}
           .lk-top .nm{font-size:14.5px;color:var(--ink-2);font-weight:600;line-height:1.4}
-          .lk-grid{display:grid;grid-template-columns:repeat(4,1fr)}
-          .lk-cell{padding:13px 16px;border-top:1px solid var(--line)}
+          /* 구분 띠 — 상품코드와 정보 영역 사이 */
+          .lk-band{display:flex;align-items:center;gap:7px;padding:7px 18px;background:#eef4fb;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:11px;font-weight:800;letter-spacing:.04em;color:#0a3d62}
+          .lk-band svg{width:14px;height:14px}
+          /* 정보 영역 — 흰색 시트 */
+          .lk-grid{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel)}
+          .lk-cell{padding:14px 16px}
           .lk-cell + .lk-cell{border-left:1px solid var(--line)}
-          @media(max-width:620px){ .lk-grid{grid-template-columns:repeat(2,1fr)} .lk-cell:nth-child(odd){border-left:none} }
+          @media(max-width:620px){ .lk-grid{grid-template-columns:repeat(2,1fr)} .lk-cell:nth-child(odd){border-left:none} .lk-cell:nth-child(n+3){border-top:1px solid var(--line)} }
           .lk-cell .k{font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.03em;margin-bottom:5px}
           .lk-cell .v{font-size:15px;font-weight:700;color:var(--ink)}
           .lk-cell .v.num{font-family:var(--mono)}
@@ -138,6 +143,7 @@
               <div class="nm">${p.name?esc(p.name):'<span class="muted">(품명 없음)</span>'}</div></div>
             ${p.option?`<span class="obadge">옵션 ${esc(p.option)}</span>`:''}
             <button class="btn sm" id="lkCopy">${icon('copy')}제품명 복사</button></div>
+          <div class="lk-band"><span style="width:6px;height:6px;border-radius:50%;background:#0a3d62;display:inline-block"></span><span>공급업체 · 단가 · 마진 정보</span></div>
           <div class="lk-grid g5">
             ${cell('공급업체명', `<span class="v">${vendor?esc(vendor):'<span class="muted">미지정</span>'}</span>`)}
             ${cell('상품분류', `<span class="v">${category?esc(category):'<span class="muted">-</span>'}</span>`)}
