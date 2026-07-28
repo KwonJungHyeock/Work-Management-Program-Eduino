@@ -28,12 +28,22 @@ const jitter=()=>Math.floor(Math.random()*800);   // 요청마다 0~0.8초 무�
 const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36';
 const siteUrl = no => `https://www.devicemart.co.kr/goods/view?no=${encodeURIComponent(no)}`;
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+// 프록시 경유(선택) — devicemart 가 IP를 차단할 때 한국 프록시로 우회.
+//   .env:  NTREX_PROXY=http://아이디:비번@프록시호스트:포트   (또는 http://프록시호스트:포트)
+//   ※ VPS 에서 1회 `npm i undici` 필요(프록시 사용 시에만).
+let DISPATCHER=null;
+if(E.NTREX_PROXY){
+  try{ const { ProxyAgent }=await import('undici'); DISPATCHER=new ProxyAgent(E.NTREX_PROXY);
+    console.log('proxy: on ('+E.NTREX_PROXY.replace(/\/\/[^@]*@/,'//***@')+')'); }
+  catch(e){ console.error('NTREX_PROXY 설정됨 · undici 로드 실패 → VPS ecount-sync 폴더에서 `npm i undici` 후 재시도:', e.message); process.exit(1); }
+}
 const won = n => Number(n||0).toLocaleString('en-US');
 const ascii = s => String(s||'').replace(/[^\x20-\x7E]/g,'.').replace(/\s+/g,' ').trim();  // strip non-ASCII (no broken glyphs)
 
 async function getHtml(url){
   const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), Number(E.NTREX_TIMEOUT_MS)||15000);
-  try{ const r=await fetch(url,{headers:{'User-Agent':UA,'Accept-Language':'ko-KR,ko;q=0.9'},signal:ctl.signal});
+  try{ const r=await fetch(url,{headers:{'User-Agent':UA,'Accept-Language':'ko-KR,ko;q=0.9'},signal:ctl.signal,dispatcher:DISPATCHER||undefined});
     if(!r.ok) throw new Error('HTTP '+r.status); return await r.text();
   } finally{ clearTimeout(t); }
 }
