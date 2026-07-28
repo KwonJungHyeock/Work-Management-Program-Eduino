@@ -110,6 +110,7 @@
         <span>${icon('truck')} <b>마우저 직소싱</b> — 즐겨찾기 <b>${all.length}</b>품목의 재고·가격을 확인하고, <b>[요청]</b>으로 결제요청+장바구니에 담습니다.
         <span id="moLiveState" class="muted" style="font-size:12px"></span></span>
         <span id="moCart" style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#0a3d62"></span>
+        <div style="flex-basis:100%;font-size:11.5px;color:var(--muted);margin-top:2px">${icon('info')||''} <b>데이터 기준</b> — 마우저 재고·가격·입고예정은 <b>매일 아침 7시</b> 자동 조사한 값입니다(실시간 아님). 그날 아침 이후 변동은 다음날 반영돼요.</div>
       </div>
       <div class="mo-tabs" id="moMfr">${mfrs.map(m=>`<div class="mo-tab${m===mfr?' on':''}" data-m="${esc(m)}">${esc(m)} <span class="muted" style="font-weight:600;font-size:11px">${all.filter(p=>p.mfr===m).length}</span></div>`).join('')}</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
@@ -121,7 +122,8 @@
     const catBar=root.querySelector('#moCat'), moBody=root.querySelector('#moBody');
     function renderCats(){ const cats=catsOf(mfr); if(!cats.includes(cat)) cat=cats[0]||'';
       catBar.innerHTML=cats.map(c=>`<button data-c="${esc(c)}" class="${c===cat?'on':''}">${esc(c)}</button>`).join('');
-      catBar.querySelectorAll('button').forEach(b=>b.onclick=()=>{ cat=b.dataset.c; paint(); }); }
+      catBar.querySelectorAll('button').forEach(b=>b.onclick=()=>{ cat=b.dataset.c;
+        catBar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.c===cat)); paint(); }); }
     root.querySelectorAll('#moMfr .mo-tab').forEach(t=>t.onclick=()=>{ mfr=t.dataset.m;
       root.querySelectorAll('#moMfr .mo-tab').forEach(x=>x.classList.toggle('on',x.dataset.m===mfr)); renderCats(); paint(); });
     root.querySelectorAll('#moView button').forEach(b=>b.onclick=()=>{ view=b.dataset.v;
@@ -140,31 +142,28 @@
       if(!ed) return `<span class="mo-hint">자사코드 입력 시</span>`;
       const m=selfMap[ed];
       if(!m) return `<span class="mo-none">자사 DB 없음 <span style="opacity:.7">(취급상품 등록)</span></span>`;
-      return `<div class="mo-snm">${esc(m.name||'(상품명 없음)')}</div>${m.ntx?`<div class="mo-sub2">엔티렉스 ${esc(m.ntx)}</div>`:''}`;
+      return `<div class="mo-snm">${esc(m.name||'(상품명 없음)')}</div>`;
     }
-    // 자사 공급가 셀 — 공급가(강조) + 소비자가·판매가(sub). 상품명은 별도 컬럼으로 분리.
-    function supplyCellHtml(ed){ ed=String(ed||'').trim();
+    // 자사 판매가 셀 — 에듀이노 판매가(price)
+    function sellCellHtml(ed){ ed=String(ed||'').trim();
       if(!ed) return `<span class="mo-hint">–</span>`;
       const m=selfMap[ed];
       if(!m) return `<span class="mo-none">–</span>`;
-      const sub=[]; if(m.retail) sub.push(`소비자 ${won(m.retail)}`); if(m.price) sub.push(`판매 ${won(m.price)}`);
-      return `<div class="mo-sup"><span class="lbl">공급가</span>${m.supply?won(m.supply):'<span class="mo-none">미등록</span>'}</div>
-        ${sub.length?`<div class="mo-sub2">${sub.join('<br>')}</div>`:''}`;
+      return `<div class="mo-sup">${m.price?won(m.price):'<span class="mo-none">미등록</span>'}</div>`;
     }
-    // 직소싱 절감 셀 — 마우저 매입가 vs 자사 공급가 차액(공급가 기준). +면 직구가 저렴(절감).
-    function savingCellHtml(ed, buy){ ed=String(ed||'').trim();
-      const m=ed?selfMap[ed]:null;
-      if(!m||!m.supply) return `<span class="mo-none">-</span>`;
+    // 마진율 셀 — (자사 판매가 − 마우저 매입가) ÷ 자사 판매가 × 100. 마우저서 사와 자사가로 팔 때 마진.
+    function marginCellHtml(ed, buy){ ed=String(ed||'').trim();
+      const m=ed?selfMap[ed]:null; const sell=m?Number(m.price)||0:0;
+      if(!m||!sell) return `<span class="mo-none">-</span>`;
       if(!buy) return `<span class="mo-none" title="마우저 매입가 미확인 · 자동갱신 후 표시">매입가 확인</span>`;
-      const diff=m.supply-buy; const pct=m.supply>0?Math.round(Math.abs(diff)/m.supply*100):0;
-      if(diff>0) return `<span class="mo-save good">▼ ${won(diff)} <span class="pct">${pct}%</span></span><div class="mo-savenote">직소싱 절감</div>`;
-      if(diff<0) return `<span class="mo-save bad">▲ ${won(-diff)} <span class="pct">${pct}%</span></span><div class="mo-savenote">직소싱이 더 비쌈</div>`;
-      return `<span class="mo-save same">동일</span>`;
+      const diff=sell-buy; const pct=Math.round(diff/sell*1000)/10;
+      const cls=diff>0?'good':(diff<0?'bad':'same');
+      return `<span class="mo-save ${cls}">${pct}%</span><div class="mo-savenote">마진 ${won(diff)}</div>`;
     }
     function updateCompare(no){ const em=edMap(); const ed=em[no]!=null?em[no]:''; const p=all.find(x=>x.mouserNo===no);
       const nmCell=moBody.querySelector(`[data-snm="${CSS.escape(no)}"]`); if(nmCell) nmCell.innerHTML=selfNameCellHtml(ed);
-      const supCell=moBody.querySelector(`[data-sup="${CSS.escape(no)}"]`); if(supCell) supCell.innerHTML=supplyCellHtml(ed);
-      const savCell=moBody.querySelector(`[data-save="${CSS.escape(no)}"]`); if(savCell) savCell.innerHTML=savingCellHtml(ed, p?mouserBuyOf(p):0);
+      const sellCell=moBody.querySelector(`[data-sell="${CSS.escape(no)}"]`); if(sellCell) sellCell.innerHTML=sellCellHtml(ed);
+      const mgCell=moBody.querySelector(`[data-margin="${CSS.escape(no)}"]`); if(mgCell) mgCell.innerHTML=marginCellHtml(ed, p?mouserBuyOf(p):0);
     }
 
     function paint(){
@@ -180,7 +179,7 @@
           <th style="position:static;background:var(--panel-2)"></th></tr>
         <tr>
           <th>마우저 번호</th><th>마우저 상품명</th><th style="text-align:right">재고/입고</th><th style="text-align:right">마우저 매입가</th>
-          <th class="zself">자사코드</th><th class="zself">자사 상품명</th><th class="zself" style="text-align:right">자사 공급가</th><th class="zself">직소싱 절감</th>
+          <th class="zself">자사코드</th><th class="zself">자사 상품명</th><th class="zself" style="text-align:right">자사 판매가</th><th class="zself">마진율</th>
           <th style="text-align:center">요청</th></tr></thead>
         <tbody>${list.length?list.map(p=>{
           const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||''); const buy=mouserBuyOf(p);
@@ -191,8 +190,8 @@
             <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}</span><div class="mo-base">기준가</div></td>
             <td class="zself mo-ed">${canEdit()?`<input data-ed="${esc(p.mouserNo)}" value="${esc(ed)}" placeholder="미보유">`:esc(ed||'-')}</td>
             <td class="zself" data-snm="${esc(p.mouserNo)}" style="white-space:normal;word-break:break-word;line-height:1.35">${selfNameCellHtml(ed)}</td>
-            <td class="zself num" data-sup="${esc(p.mouserNo)}">${supplyCellHtml(ed)}</td>
-            <td class="zself" data-save="${esc(p.mouserNo)}">${savingCellHtml(ed, buy)}</td>
+            <td class="zself num" data-sell="${esc(p.mouserNo)}">${sellCellHtml(ed)}</td>
+            <td class="zself" data-margin="${esc(p.mouserNo)}">${marginCellHtml(ed, buy)}</td>
             <td style="white-space:nowrap;text-align:center">
               <input class="mo-qty" data-qty="${esc(p.mouserNo)}" value="1" inputmode="numeric" maxlength="2">
               <button class="mo-req" data-req="${esc(p.mouserNo)}" title="결제요청에 추가 + 마우저 장바구니에 담기">요청</button>
@@ -220,7 +219,11 @@
         const viaCart = d.via==='cart';   // Search가 막아 Cart API로 보강한 값(카트 조회 기준)
         const srcNote = viaCart ? '<span title="검색API 제한 → 장바구니API 조회값" style="color:#8a6d00"> · 카트조회</span>' : '';
         if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유${srcNote}</div>`;
-        else{ const info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}`:''}` : esc(d.availability||d.lead||'입고 문의');
+        else{ // 품절 → 마우저 입고예정(주문중) 배치별 수량·예상일 모두 표시
+          const oo=(d.onOrder||[]).filter(x=>x&&(x.qty||x.date));
+          let info;
+          if(oo.length) info=`<b style="color:#0a3d62">입고예정</b>${oo.map(x=>`<div>${x.qty?`<b>${won(x.qty)}개</b> `:''}${x.date?`~ ${esc(String(x.date).slice(0,10))}`:'예정일 미정'}</div>`).join('')}`;
+          else info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}개`:''}` : esc(d.availability||d.lead||'입고 문의');
           stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}${srcNote}</div>`; }
         if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회 매입가':'현재 매입가'}</div>`;
         updateCompare(p.mouserNo);   // 실제 매입가 확보 → 직소싱 절감 재계산
@@ -396,18 +399,18 @@
       const kpi=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           ${[['진행중',cnt.proc,'#0a63c2'],['완료',cnt.done,'#12886a'],['이월',cnt.back,'#b4530a'],['취소',cnt.cancel,'#8a8f98']].map(([l,n,c])=>
             `<span style="font-size:12px;font-weight:700;color:${c};background:${c}18;border:1px solid ${c}44;border-radius:8px;padding:4px 10px">${l} ${n}</span>`).join('')}</div>`;
-      const trackedCnt=all.filter(o=>o.tracking).length;
-      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;font-size:13.5px">${icon('box')} 마우저 <b>주문내역</b> (최근 12개월) — 제조사 구분 없이 <b>전체</b>. <b>주문상태</b>·<b>배송추적</b> 자동 동기화. 추적번호의 <b>[DHL]</b>로 배송조회를 엽니다.${trackedCnt?'':' <span class="muted">(추적번호는 배송 시작된 주문부터 표시)</span>'}</div>
+      moBody.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;font-size:13.5px">${icon('box')} 마우저 <b>주문내역</b> (최근 12개월) — 제조사 구분 없이 <b>전체</b>. <b>주문상태</b>·금액·운송사 자동. <span class="muted">※ 추적번호는 마우저 API로 제공되지 않아, 하단에서 추적번호로 직접 조회하세요.</span></div>
         ${kpi}${filters}
-        ${list.length?`<div class="nx-wrap" style="max-height:calc(100vh - 400px);overflow:auto"><table class="mo-t mo-ord" style="min-width:960px">
-          <thead><tr><th style="width:104px">주문일</th><th style="width:180px">주문번호</th><th style="width:140px">구매자</th><th style="width:186px">주문상태</th><th>배송추적</th></tr></thead>
+        ${list.length?`<div class="nx-wrap" style="max-height:calc(100vh - 400px);overflow:auto"><table class="mo-t mo-ord" style="min-width:980px">
+          <thead><tr><th style="width:104px">주문일</th><th style="width:180px">주문번호</th><th style="width:130px">구매자</th><th style="width:180px">주문상태</th><th style="text-align:right;width:120px">금액(KRW)</th><th>운송사</th></tr></thead>
           <tbody>${list.map(o=>{ const st=statusStyle(o.status); return `<tr>
             <td style="white-space:nowrap">${esc(o.date||'-')}</td>
             <td class="mo-code" style="white-space:normal;word-break:break-all">웹 ${esc(o.webNo||o.orderNo||'-')}${o.salesNo&&o.salesNo!==o.webNo?`<div class="osub">판매 ${esc(o.salesNo)}</div>`:''}${o.poNumber?`<div class="osub">PO ${esc(o.poNumber)}</div>`:''}</td>
             <td style="white-space:nowrap">${esc(o.buyer||'-')}</td>
             <td><span class="ost" style="color:${st.c};background:${st.bg}">${esc(statusKo(o.status)||'-')}</span>
               <div class="obar"><div style="width:${st.pct}%;height:100%;background:${st.c}"></div></div></td>
-            <td>${o.tracking?`<span class="otrk">${esc(o.carrier||'DHL')} <b>${esc(o.tracking)}</b></span> <a class="btn ghost sm" href="${esc(dhlUrl(o.tracking))}" target="_blank" rel="noopener" style="padding:3px 10px">DHL 추적</a>${o.shipDate?`<div class="osub">배송 ${esc(o.shipDate)}</div>`:''}`:`<span class="muted">${/취소|cancel/i.test(String(o.status))?'-':'배송 준비중'}</span>`}</td>
+            <td class="num" style="font-weight:800">${o.total?won(o.total):'<span class="muted">-</span>'}</td>
+            <td>${o.carrier?esc(o.carrier):'<span class="muted">-</span>'}${o.shipDate?`<div class="osub">배송 ${esc(o.shipDate)}</div>`:''}</td>
           </tr>`; }).join('')}</tbody></table></div>`
           :`<div class="nx-empty">${icon('box')}<div>${all.length?'필터에 맞는 주문이 없습니다.':'최근 12개월 주문내역이 없습니다.'}</div></div>`}
         ${manualOrders()}`;

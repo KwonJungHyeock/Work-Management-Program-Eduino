@@ -69,7 +69,7 @@ function findVal(obj, keys, depth) {
 function parseDetail(d) {
   return {
     tracking: String(findVal(d, ['TrackingNumber', 'CarrierTrackingNumber', 'Tracking']) || ''),
-    carrier: String(findVal(d, ['Carrier', 'ShipVia', 'ShipMethod', 'ShippingMethod', 'ShipCarrier']) || ''),
+    carrier: String(findVal(d, ['PrimaryMethod', 'Carrier', 'ShipVia', 'ShipMethod', 'ShipCarrier']) || ''),
     shipDate: day10(findVal(d, ['ShipDate', 'ShippedDate', 'ShipmentDate', 'DateShipped'])),
     invoiceNo: String(findVal(d, ['InvoiceNumber', 'InvoiceNo']) || ''),
     invoiceUrl: String(findVal(d, ['InvoiceUrl', 'InvoicePdfUrl', 'InvoiceURL', 'InvoicePDFUrl']) || ''),
