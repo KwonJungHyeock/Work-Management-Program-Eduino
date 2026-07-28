@@ -60,6 +60,11 @@ module.exports = async function handler(req, res) {
   // 진단용 GET — 키 감지여부 + ?probe=<부품번호> 로 실제 담기 시도 원응답 확인
   if (req.method === 'GET') {
     if (!key) return res.status(200).json({ ok: true, api: 'cart', configured: false, note: 'Cart/Order 키 미감지' });
+    // 저장된 CartKey 초기화(삭제/오염된 카트 정리 후 새로 시작) — ?reset=1
+    if (req.query && req.query.reset) {
+      await redis(['DEL', CARTKEY_KV]);
+      return res.status(200).json({ ok: true, api: 'cart', reset: true, note: '저장된 CartKey 삭제됨 · 다음 담기부터 새 카트 생성' });
+    }
     if (req.query && req.query.probe) {
       const no = String(req.query.probe);
       const qs = `?apiKey=${encodeURIComponent(key)}&countryCode=KR&currencyCode=KRW`;
@@ -99,14 +104,26 @@ module.exports = async function handler(req, res) {
     })).filter(i => i.MouserPartNumber);
     if (!items.length) return res.status(200).json({ configured: true, ok: false, error: 'no items' });
 
-    const payload = { CartKey: cartKey || '', CartItems: items };
-    const r = await fetch(`${CART_BASE}/items/insert${qs}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-    });
-    const d = await r.json().catch(() => ({}));
-    const s = summarize(d, cartKey);
+    // 담기 실행 — 필요 시 새 카트(빈 CartKey)로 재시도
+    async function doInsert(ck) {
+      const r = await fetch(`${CART_BASE}/items/insert${qs}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ CartKey: String(ck || ''), CartItems: items }),
+      });
+      const d = await r.json().catch(() => ({}));
+      return summarize(d, ck);
+    }
+    const wanted = items.map(i => i.MouserPartNumber);
+    const reflected = s => wanted.every(no => (s.items || []).some(x => x.no === no));
+    let s = await doInsert(cartKey);
+    let healed = false;
+    // 저장된 CartKey 가 삭제/무효(오류 또는 담은 품목이 카트에 반영 안 됨)면 → 새 카트로 자동 복구
+    if ((s.errors && s.errors.length) || !reflected(s)) {
+      const s2 = await doInsert('');
+      if (!(s2.errors && s2.errors.length) && (s2.items || []).length) { s = s2; healed = true; }
+    }
     if (s.cartKey && s.cartKey !== cartKey) await redis(['SET', CARTKEY_KV, s.cartKey]);
-    return res.status(200).json({ configured: true, webUrl: cartWebUrl(s.cartKey || cartKey), ...s });
+    return res.status(200).json({ configured: true, healed, webUrl: cartWebUrl(s.cartKey || cartKey), ...s });
   } catch (e) {
     return res.status(200).json({ configured: true, ok: false, error: String((e && e.message) || e), webUrl: cartWebUrl(cartKey) });
   }

@@ -74,8 +74,9 @@
         table.mo-t th{position:sticky;top:0;background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mo-t td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
         table.mo-t td.num{text-align:right;font-variant-numeric:tabular-nums}
-        table.mo-t .c-no{width:112px} table.mo-t .c-ed{width:92px} table.mo-t .c-stk{width:104px} table.mo-t .c-pr{width:88px} table.mo-t .c-act{width:92px}
-        table.mo-t .c-mine{width:auto}
+        table.mo-t .c-no{width:108px} table.mo-t .c-ed{width:88px} table.mo-t .c-stk{width:100px} table.mo-t .c-pr{width:84px} table.mo-t .c-act{width:118px}
+        table.mo-t .c-mine{width:auto;min-width:150px}
+        table.mo-t td:last-child{padding-right:12px}
         /* 자사 상품정보 칸 — 자사코드 매칭 시 우리 상품 노출 */
         .mo-mine{line-height:1.4} .mo-mine .nm{font-weight:600;color:var(--ink);white-space:normal;word-break:break-word}
         .mo-mine .pr{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
@@ -127,7 +128,7 @@
       if(view==='changes'){ paintChanges(); return; }
       selfMap=selfProducts();
       const list=rows(); const em=edMap();
-      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px)"><table class="mo-t">
+      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px);overflow:auto"><table class="mo-t" style="min-width:900px">
         <colgroup><col class="c-no"><col class="c-ed"><col class="c-nm"><col class="c-stk"><col class="c-pr"><col class="c-mine"><col class="c-act"></colgroup>
         <thead><tr>
           <th>마우저 번호</th><th>자사코드</th><th>상품명</th>
@@ -178,9 +179,10 @@
       const dd=await r.json(); const it=(dd&&dd.items||[]).find(x=>x&&x.id==='latest'); if(it){ stockMap=it.parts||{}; stockAt=it.at||''; } }catch(e){} }
 
     // 장바구니 배지 — [내용]으로 담긴 품목을 프로그램 안에서 바로 확인, [열기]로 API 카트(CartKey) 연결
+    //  optCart 를 주면(담기 응답) 별도 조회 없이 그 값으로 즉시 갱신 → 담은 직후 숫자가 바로 반영됨.
     let lastCart=null;
-    async function refreshCart(){ const box=root.querySelector('#moCart'); if(!box) return;
-      const r=await cartApi('get'); if(!root.isConnected||!box) return;
+    async function refreshCart(optCart){ const box=root.querySelector('#moCart'); if(!box) return;
+      const r=(optCart&&optCart.configured!==false)?optCart:await cartApi('get'); if(!root.isConnected||!box) return;
       if(!r || r.configured===false){ box.innerHTML=''; return; }
       lastCart=r; const n=r.count||0;
       const url=r.webUrl||'https://www.mouser.kr/Cart/';
@@ -244,7 +246,9 @@
       const restore=(ms)=>setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, ms||1400);
       if(cr && cr.configured!==false && cr.ok){
         setBtn('담김 ✓','#12886a'); restore();
-        toast(`결제요청 추가 + 마우저 장바구니에 담았습니다 (${p.mouserNo} × ${qty}) — 배지 [내용]에서 확인`); refreshCart();
+        const healed = cr.healed ? ' · 새 카트 생성됨' : '';
+        toast(`결제요청 추가 + 마우저 장바구니에 담았습니다 (${p.mouserNo} × ${qty})${healed} — 배지 [내용]에서 확인`);
+        refreshCart(cr);   // 담기 응답으로 배지 즉시 갱신
       } else {
         const errMsg=(cr&&cr.errors&&cr.errors.length)?String(cr.errors[0].Message||cr.errors[0]||''):(cr&&cr.error)||'';
         setBtn('열기 ↗','#8a6d00'); restore(1800);
