@@ -74,15 +74,21 @@
         table.mo-t th{position:sticky;top:0;background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mo-t td{padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
         table.mo-t td.num{text-align:right;font-variant-numeric:tabular-nums}
-        table.mo-t .c-no{width:108px} table.mo-t .c-ed{width:88px} table.mo-t .c-stk{width:100px} table.mo-t .c-pr{width:84px} table.mo-t .c-act{width:118px}
-        table.mo-t .c-mine{width:auto;min-width:150px}
+        table.mo-t .c-no{width:104px} table.mo-t .c-ed{width:84px} table.mo-t .c-nm{width:auto;min-width:200px}
+        table.mo-t .c-stk{width:96px} table.mo-t .c-buy{width:92px} table.mo-t .c-sup{width:118px} table.mo-t .c-save{width:120px} table.mo-t .c-act{width:112px}
         table.mo-t td:last-child{padding-right:12px}
-        /* 자사 상품정보 칸 — 자사코드 매칭 시 우리 상품 노출 */
-        .mo-mine{line-height:1.4} .mo-mine .nm{font-weight:600;color:var(--ink);white-space:normal;word-break:break-word}
-        .mo-mine .pr{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
-        .mo-mine .pr .sup{color:#c0392b;font-weight:700} .mo-mine .pr .ret{color:#0070C0;font-weight:700}
-        .mo-mine .none{color:var(--muted);font-size:11px}
-        .mo-mine .hint{color:var(--muted);font-size:11px;opacity:.7}
+        /* 자사·비교 영역 — 옅은 배경으로 마우저와 시각 구분 */
+        table.mo-t th.zself, table.mo-t td.zself{background:#f3f8ff}
+        table.mo-t th.zself{border-bottom-color:#cfe0f5}
+        /* 자사 공급가/판매정보 */
+        .mo-sup{font-weight:800;color:#0a3d62} .mo-sup .lbl{font-size:9.5px;font-weight:700;color:var(--muted);display:block}
+        .mo-sub2{font-size:10.5px;color:var(--muted);margin-top:2px;white-space:normal;word-break:break-word;line-height:1.3}
+        .mo-none{color:var(--muted);font-size:11px} .mo-hint{color:var(--muted);font-size:11px;opacity:.7}
+        /* 직소싱 절감 배지 */
+        .mo-save{font-weight:800;font-size:12px;border-radius:7px;padding:3px 8px;display:inline-block;white-space:nowrap}
+        .mo-save.good{color:#12886a;background:#e6f7f0} .mo-save.bad{color:#c0392b;background:#fdecea} .mo-save.same{color:#6b7280;background:#eef0f3}
+        .mo-save .pct{font-size:10.5px;font-weight:700;opacity:.85}
+        .mo-savenote{font-size:10px;color:var(--muted);margin-top:3px}
         .mo-req{background:#0a3d62;color:#fff;border:0;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
         .mo-req:hover{background:#0c4b78}
       </style>
@@ -113,18 +119,30 @@
 
     function rows(){ return all.filter(p=>p.mfr===mfr && p.category===cat); }
 
-    // 자사코드(ed) → 자사 상품정보 셀 HTML. 입력 없으면 안내, 매칭 없으면 '등록 없음'.
-    function mineCellHtml(ed){
-      ed=String(ed||'').trim();
-      if(!ed) return `<span class="hint">자사코드 입력 시 자사 상품정보 표시</span>`;
+    // 마우저 매입가(직소싱 원가) — 크론 재고맵의 현재가 우선, 없으면 시드 기준가
+    function mouserBuyOf(p){ const d=stockMap&&stockMap[p.mouserNo]; if(d&&d.found&&d.priceKRW>0) return d.priceKRW; return p.basePriceKRW||0; }
+    // 자사 공급가 셀 — 자사코드 매칭 시 공급가(강조) + 상품명·소비자가
+    function supplyCellHtml(ed){ ed=String(ed||'').trim();
+      if(!ed) return `<span class="mo-hint">자사코드 입력 시</span>`;
       const m=selfMap[ed];
-      if(!m) return `<span class="none">자사 상품 DB에 <b>${esc(ed)}</b> 없음 <span style="opacity:.7">(가격비교 › 취급상품에 등록)</span></span>`;
-      const pr=[];
-      if(m.price) pr.push(`판매 ${won(m.price)}`);
-      if(m.supply) pr.push(`<span class="sup">공급 ${won(m.supply)}</span>`);
-      if(m.retail) pr.push(`<span class="ret">소비자 ${won(m.retail)}</span>`);
-      return `<div class="nm">${esc(m.name||'(상품명 없음)')}</div>
-        <div class="pr">${pr.join('')||'<span style="opacity:.7">가격 미등록</span>'}${m.ntx?`<span style="opacity:.7">엔티렉스 ${esc(m.ntx)}</span>`:''}</div>`;
+      if(!m) return `<span class="mo-none">자사 DB 없음</span>`;
+      const sub=[]; if(m.retail) sub.push(`소비자 ${won(m.retail)}`); if(m.price) sub.push(`판매 ${won(m.price)}`);
+      return `<div class="mo-sup"><span class="lbl">공급가</span>${m.supply?won(m.supply):'<span class="mo-none">미등록</span>'}</div>
+        <div class="mo-sub2">${esc(m.name||'')}${sub.length?`<br>${sub.join(' · ')}`:''}</div>`;
+    }
+    // 직소싱 절감 셀 — 마우저 매입가 vs 자사 공급가 차액(공급가 기준). +면 직구가 저렴(절감).
+    function savingCellHtml(ed, buy){ ed=String(ed||'').trim();
+      const m=ed?selfMap[ed]:null;
+      if(!m||!m.supply) return `<span class="mo-none">-</span>`;
+      if(!buy) return `<span class="mo-none" title="마우저 매입가 미확인 · 자동갱신 후 표시">매입가 확인</span>`;
+      const diff=m.supply-buy; const pct=m.supply>0?Math.round(Math.abs(diff)/m.supply*100):0;
+      if(diff>0) return `<span class="mo-save good">▼ ${won(diff)} <span class="pct">${pct}%</span></span><div class="mo-savenote">직소싱 절감</div>`;
+      if(diff<0) return `<span class="mo-save bad">▲ ${won(-diff)} <span class="pct">${pct}%</span></span><div class="mo-savenote">직소싱이 더 비쌈</div>`;
+      return `<span class="mo-save same">동일</span>`;
+    }
+    function updateCompare(no){ const em=edMap(); const ed=em[no]!=null?em[no]:''; const p=all.find(x=>x.mouserNo===no);
+      const supCell=moBody.querySelector(`[data-sup="${CSS.escape(no)}"]`); if(supCell) supCell.innerHTML=supplyCellHtml(ed);
+      const savCell=moBody.querySelector(`[data-save="${CSS.escape(no)}"]`); if(savCell) savCell.innerHTML=savingCellHtml(ed, p?mouserBuyOf(p):0);
     }
 
     function paint(){
@@ -132,28 +150,29 @@
       if(view==='changes'){ paintChanges(); return; }
       selfMap=selfProducts();
       const list=rows(); const em=edMap();
-      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px);overflow:auto"><table class="mo-t" style="min-width:900px">
-        <colgroup><col class="c-no"><col class="c-ed"><col class="c-nm"><col class="c-stk"><col class="c-pr"><col class="c-mine"><col class="c-act"></colgroup>
+      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px);overflow:auto"><table class="mo-t" style="min-width:960px">
+        <colgroup><col class="c-no"><col class="c-nm"><col class="c-stk"><col class="c-buy"><col class="c-ed"><col class="c-sup"><col class="c-save"><col class="c-act"></colgroup>
         <thead><tr>
-          <th>마우저 번호</th><th>자사코드</th><th>상품명</th>
-          <th style="text-align:right">재고/입고</th><th style="text-align:right">가격</th><th>자사 상품정보</th><th style="text-align:center">요청</th></tr></thead>
+          <th>마우저 번호</th><th>상품명</th><th style="text-align:right">재고/입고</th><th style="text-align:right">마우저 매입가</th>
+          <th class="zself">자사코드</th><th class="zself" style="text-align:right">자사 공급가</th><th class="zself">직소싱 절감</th>
+          <th style="text-align:center">요청</th></tr></thead>
         <tbody>${list.length?list.map(p=>{
-          const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||'');
+          const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||''); const buy=mouserBuyOf(p);
           return `<tr data-no="${esc(p.mouserNo)}">
             <td><a class="mo-code" href="${esc(prodUrl(p.mouserNo))}" target="_blank" rel="noopener">${esc(p.mouserNo)}</a><div class="muted" style="font-size:10.5px">${esc(p.mfrNo||'')}</div></td>
-            <td class="mo-ed">${canEdit()?`<input data-ed="${esc(p.mouserNo)}" value="${esc(ed)}" placeholder="미보유">`:esc(ed||'-')}</td>
             <td style="white-space:normal;word-break:break-word;line-height:1.35">${esc(p.name||'')}</td>
             <td class="num" data-stk><span class="mo-stk wait">–</span></td>
             <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}</span><div class="mo-base">기준가</div></td>
-            <td class="mo-mine" data-mine="${esc(p.mouserNo)}">${mineCellHtml(ed)}</td>
+            <td class="zself mo-ed">${canEdit()?`<input data-ed="${esc(p.mouserNo)}" value="${esc(ed)}" placeholder="미보유">`:esc(ed||'-')}</td>
+            <td class="zself" data-sup="${esc(p.mouserNo)}">${supplyCellHtml(ed)}</td>
+            <td class="zself" data-save="${esc(p.mouserNo)}">${savingCellHtml(ed, buy)}</td>
             <td style="white-space:nowrap;text-align:center">
               <input class="mo-qty" data-qty="${esc(p.mouserNo)}" value="1" inputmode="numeric" maxlength="2">
-              <button class="mo-req" data-req="${esc(p.mouserNo)}" title="결제요청에 추가 + 마우저 열기">요청</button>
+              <button class="mo-req" data-req="${esc(p.mouserNo)}" title="결제요청에 추가 + 마우저 장바구니에 담기">요청</button>
             </td></tr>`; }).join('')
-          :`<tr><td colspan="7" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
-      // 자사코드 인라인 편집 → 저장 + 우측 자사 상품정보 즉시 갱신
-      moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>{ const v=inp.value.trim(); setEd(inp.dataset.ed, v);
-        const cell=moBody.querySelector(`[data-mine="${CSS.escape(inp.dataset.ed)}"]`); if(cell) cell.innerHTML=mineCellHtml(v); });
+          :`<tr><td colspan="8" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
+      // 자사코드 인라인 편집 → 저장 + 자사공급가·직소싱 절감 즉시 갱신
+      moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>{ setEd(inp.dataset.ed, inp.value.trim()); updateCompare(inp.dataset.ed); });
       // 결제요청
       moBody.querySelectorAll('[data-req]').forEach(b=>b.onclick=()=>requestPay(b.dataset.req));
       // 아침 크론이 저장한 최신 재고·가격·입고예정 표시(매 접속마다 실시간 호출 대신)
@@ -176,7 +195,8 @@
         if(d.inStock>0) stkTd.innerHTML=`<span class="mo-stk in">${won(d.inStock)}</span><div class="mo-lead">재고 보유${srcNote}</div>`;
         else{ const info = d.nextDate ? `입고예정 <b>${esc(d.nextDate)}</b>${d.onOrderQty?` · ${won(d.onOrderQty)}`:''}` : esc(d.availability||d.lead||'입고 문의');
           stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}${srcNote}</div>`; }
-        if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회가':'현재가'}</div>`;
+        if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회 매입가':'현재 매입가'}</div>`;
+        updateCompare(p.mouserNo);   // 실제 매입가 확보 → 직소싱 절감 재계산
       });
     }
     async function loadStock(){ try{ const r=await fetch('/api/store?type=coll&coll=mouser_stock'); if(!r.ok) return;
