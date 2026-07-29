@@ -330,8 +330,8 @@
         let demo=false, rows=liveDiffs;
         if(!real){ const s=prods.find(p=>p.price>0); demo=!!s; rows=s?[{ntx:s.ntx,name:s.name,oldPrice:s.price,newPrice:Math.round(s.price*1.05)}]:[]; }
         sec.innerHTML=`${apDay?`<div class="nx-note">최근 확인: <b>${esc(apDay)}</b> · 변동 <b>${(diffs||[]).length}</b>건${hidden?` · 처리/삭제 <b>${hidden}</b>건`:''}
-            <div style="font-size:11.5px;color:var(--muted);margin-top:4px">${icon('info')||''} <b>데이터 기준</b> — ${esc(v.siteName)} 판매가는 크롤러가 <b>매일 09~16시</b> 수집합니다. 오늘 수집분은 <b>익일</b> 확인돼요.</div></div>`:
-          `<div class="nx-note">${icon('alert')} 아직 크롤러가 연동되지 않아 <b>예시 미리보기</b>입니다. VPS 크롤러가 ${esc(v.siteName)}의 판매가를 <b>매일 09~16시</b> 수집하면 실제 변동분이 자동 표시됩니다(최신값은 익일 확인).</div>`}
+            <div style="font-size:11.5px;color:var(--muted);margin-top:4px">${icon('info')||''} <b>검수 사이클</b> — ${esc(v.siteName)} 판매가를 <b>매일 오전 10시</b> 자동 수집. 전체 상품을 <b>3일 주기</b>로 나눠 순환 점검(하루 약 200개)하여 각 상품을 <b>3일마다</b> 최신화합니다.</div></div>`:
+          `<div class="nx-note">${icon('alert')} 아직 크롤러가 연동되지 않아 <b>예시 미리보기</b>입니다. <b>검수 사이클</b>: 크롤러가 ${esc(v.siteName)} 판매가를 <b>매일 오전 10시</b> 수집(전체 <b>3일 주기</b> 순환·하루 약 200개)하면 실제 변동분이 자동 표시됩니다.</div>`}
           <div class="nx-kpi">
             <div class="nx-k red"><div class="l">가격 변동</div><div class="v">${real}<span style="font-size:14px">건</span></div></div>
             <div class="nx-k"><div class="l">취급 상품</div><div class="v">${prods.length}</div></div>
