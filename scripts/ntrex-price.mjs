@@ -152,6 +152,7 @@ if(DEBUG){
 for(let i=items.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [items[i],items[j]]=[items[j],items[i]]; }
 
 const day = new Date().toISOString().slice(0,10);
+const startedAt = Date.now();   // 소요시간 측정 시작
 const diffs=[]; let checked=0, failed=0, noprice=0, consecFail=0;
 let restIn=18+Math.floor(Math.random()*22);   // 18~39건마다 사람처럼 긴 휴식
 for(const p of items){
@@ -169,11 +170,14 @@ for(const p of items){
   // 가끔(18~39건마다) 20~50초 긴 휴식 — 연속 트래픽 티 줄임
   if(--restIn<=0){ const rest=20000+Math.floor(Math.random()*30000); console.log(`... 휴식 ${Math.round(rest/1000)}초`); await sleep(rest); restIn=18+Math.floor(Math.random()*22); }
 }
-console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${diffs.length}`);
+const durationSec = Math.round((Date.now()-startedAt)/1000);
+const durTxt = durationSec>=60 ? `${Math.floor(durationSec/60)}분 ${durationSec%60}초` : `${durationSec}초`;
+console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${diffs.length} · 소요 ${durTxt}`);
 
 if(DRY){ console.log('[dry-run] skip upload'); process.exit(0); }
 if(!E.STORE_URL){ console.log('STORE_URL not set -> skip upload (add STORE_URL to .env)'); process.exit(0); }
 const doc={ id:`ntrex:${day}`, coll:'ntrex', day, checkedAt:new Date().toISOString(),
-  count:diffs.length, checked, failed, noprice, total:items.length, chunk:CHUNK||undefined, items:diffs };   // 일일 리포트용 통계(분할 시 chunk 표기)
+  count:diffs.length, checked, failed, noprice, total:items.length, chunk:CHUNK||undefined,
+  startedAt:new Date(startedAt).toISOString(), durationSec, items:diffs };   // 일일 리포트용 통계(소요시간·분할 chunk 포함)
 const r=await fetch(E.STORE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'ntrex',item:doc})});
 console.log('upload:', r.status, ascii(await r.text()).slice(0,200));

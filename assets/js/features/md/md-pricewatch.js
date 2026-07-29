@@ -176,13 +176,17 @@
             const total=(d.total!=null?d.total:null);
             const cnt=(d.count!=null?d.count:(d.items||[]).length);
             const np=(d.noprice!=null?d.noprice:'-'), fa=(d.failed!=null?d.failed:'-');
+            const durSec=Number(d.durationSec)||0;
+            const durTxt=durSec>0?(durSec>=60?`${Math.floor(durSec/60)}분 ${durSec%60}초`:`${durSec}초`):'';
+            const startT=d.startedAt?(()=>{ try{ return new Date(d.startedAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } })():'';
             const rows=(d.items||[]);
             return `<div class="rp-card">
               <div class="rp-hd" data-toggle>
                 <span class="rp-date">${esc(d.day||'')}</span>
                 <span class="rp-stats">
-                  <span>검사 <b>${checked!=null?checked:'-'}${total!=null?` / ${total}`:''}</b></span>
+                  <span>검토 상품 <b>${checked!=null?checked:'-'}${total!=null?` / ${total}`:''}</b>개</span>
                   <span class="rp-chg">변동 <b>${cnt}</b>건</span>
+                  ${durTxt?`<span class="muted">소요 <b style="color:var(--ink-2)">${durTxt}</b>${startT?` · ${esc(startT)} 시작`:''}</span>`:''}
                   <span class="muted">무가격 ${np} · 실패 ${fa}</span>
                 </span>
                 <span class="rp-rev">${ st?`<span class="rp-ok">✔ ${esc(st.by||'')} 확인</span>`:`<button class="btn ghost sm" data-a="review" data-day="${esc(d.day)}">확인</button>` }
