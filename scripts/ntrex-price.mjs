@@ -22,10 +22,21 @@ try { for (const line of readFileSync(new URL('./.env', import.meta.url),'utf8')
 
 const arg = k => { const a=process.argv.find(x=>x.startsWith('--'+k)); return a?(a.includes('=')?a.split('=')[1]:true):false; };
 const DEBUG=arg('debug'), DRY=arg('dry'), LIMIT=Number(arg('limit'))||0, ONE=arg('code');
-const DELAY=Number(E.NTREX_DELAY_MS)||5000;   // 기본 5초=분당 12회(쿠팡 15회/분 한도 밑) · .env로 조정
-const MAXFAIL=Math.max(3, Number(E.NTREX_MAX_FAIL)||10);   // 연속 실패 이 횟수 도달 시 즉시 중단(업무 PC IP 보호)
-const jitter=()=>Math.floor(Math.random()*800);   // 요청마다 0~0.8초 무작위 추가(봇 티 줄임)
-const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36';
+const DELAY=Number(E.NTREX_DELAY_MS)||5000;   // 기본 5초 · 실제 간격은 아래 gap()으로 무작위화
+const MAXFAIL=Math.max(3, Number(E.NTREX_MAX_FAIL)||10);   // 연속 실패 이 횟수 도달 시 즉시 중단(IP 보호)
+// ── 안전 랜덤화(사람처럼 · 봇 탐지·차단 회피) ──
+//  간격을 DELAY의 0.9~1.8배로 무작위 → 불규칙하고 분당 최대도 15회 밑 유지(DELAY=5000이면 4.5~9초=6.7~13회/분)
+const gap=()=>Math.floor(DELAY*0.9 + Math.random()*DELAY*0.9);
+// 요청마다 UA 무작위 선택(실브라우저 여러 개)
+const UAS=[
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+];
+const pickUA=()=>UAS[Math.floor(Math.random()*UAS.length)];
+const UA=UAS[0];   // 진단(debug)용 기본
 const siteUrl = no => `https://www.devicemart.co.kr/goods/view?no=${encodeURIComponent(no)}`;
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
@@ -41,9 +52,15 @@ if(E.NTREX_PROXY){
 const won = n => Number(n||0).toLocaleString('en-US');
 const ascii = s => String(s||'').replace(/[^\x20-\x7E]/g,'.').replace(/\s+/g,' ').trim();  // strip non-ASCII (no broken glyphs)
 
-async function getHtml(url){
+async function getHtml(url, ua){
   const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), Number(E.NTREX_TIMEOUT_MS)||15000);
-  try{ const r=await fetch(url,{headers:{'User-Agent':UA,'Accept-Language':'ko-KR,ko;q=0.9'},signal:ctl.signal,dispatcher:DISPATCHER||undefined});
+  try{ const r=await fetch(url,{headers:{
+      'User-Agent':ua||UA,
+      'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language':'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Referer':'https://www.devicemart.co.kr/',
+      'Upgrade-Insecure-Requests':'1',
+    },signal:ctl.signal,dispatcher:DISPATCHER||undefined});
     if(!r.ok) throw new Error('HTTP '+r.status); return await r.text();
   } finally{ clearTimeout(t); }
 }
@@ -112,7 +129,7 @@ if(!ONE && (CYCLE>1 || (DAILY>0 && items.length>DAILY))){
 if(DEBUG){
   console.log('== price candidate diagnostics ==');
   for(const p of items.slice(0,ONE?1:3)){
-    try{ const html=await getHtml(siteUrl(p.ntx));
+    try{ const html=await getHtml(siteUrl(p.ntx), pickUA());
       console.log(`\n[${p.ntx}] title: ${title(html)}`);
       console.log(`  URL: ${siteUrl(p.ntx)}  ·  html length: ${html.length}`);
       console.log(`  base price (supply table): ${won(p.basePrice)}`);
@@ -124,17 +141,21 @@ if(DEBUG){
       uniq.slice(0,14).forEach(c=>console.log(`   - [${c.tag}] ${won(c.val)}   context: ${htmlContext(html,c.raw)}`));
       console.log(`  => picked: ${won(extractPrice(html))}`);
     }catch(e){ console.log(`[${p.ntx}] FAILED: ${e.message}`); }
-    await sleep(DELAY+jitter());
+    await sleep(gap());
   }
   console.log('\nNote: tell me which candidate is the real sale price (with its [tag] + context).');
   console.log('If none matches, the price is JS-rendered -> switch to a headless-browser fetch.');
   process.exit(0);
 }
 
+// 요청 순서 무작위(셔플) — 매일 같은 순서/패턴을 피해 봇 탐지↓ (분할 커버리지는 그대로 유지)
+for(let i=items.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [items[i],items[j]]=[items[j],items[i]]; }
+
 const day = new Date().toISOString().slice(0,10);
 const diffs=[]; let checked=0, failed=0, noprice=0, consecFail=0;
+let restIn=18+Math.floor(Math.random()*22);   // 18~39건마다 사람처럼 긴 휴식
 for(const p of items){
-  try{ const html=await getHtml(siteUrl(p.ntx)); const cur=extractPrice(html); checked++; consecFail=0;
+  try{ const html=await getHtml(siteUrl(p.ntx), pickUA()); const cur=extractPrice(html); checked++; consecFail=0;
     if(checked%50===0) console.log(`... ${checked}/${items.length} (changed ${diffs.length})`);   // 진행 표시
     if(!cur){ noprice++; }
     else if(p.basePrice>0 && cur!==p.basePrice){
@@ -142,9 +163,11 @@ for(const p of items){
       console.log(`CHANGED ${p.ed}/${p.ntx}: ${won(p.basePrice)} -> ${won(cur)}`);
     }
   }catch(e){ failed++; consecFail++;
-    if(consecFail>=MAXFAIL){ console.log(`\n연속 ${consecFail}건 실패 — 사이트 차단/장애로 보고 조기 종료(수집분 업로드). ※ 업무 PC 보호를 위해 즉시 중단합니다.`); break; }
+    if(consecFail>=MAXFAIL){ console.log(`\n연속 ${consecFail}건 실패 — 사이트 차단/장애로 보고 조기 종료(수집분 업로드). ※ IP 보호를 위해 즉시 중단합니다.`); break; }
   }
-  await sleep(DELAY+jitter());
+  await sleep(gap());
+  // 가끔(18~39건마다) 20~50초 긴 휴식 — 연속 트래픽 티 줄임
+  if(--restIn<=0){ const rest=20000+Math.floor(Math.random()*30000); console.log(`... 휴식 ${Math.round(rest/1000)}초`); await sleep(rest); restIn=18+Math.floor(Math.random()*22); }
 }
 console.log(`\nchecked ${checked} failed ${failed} noprice ${noprice} changed ${diffs.length}`);
 
