@@ -11,16 +11,20 @@
   const toObj = a => Array.isArray(a) ? MF.reduce((o,k,i)=>(o[k]=a[i],o),{}) : a;
   const PARTS = ()=> (window.MOUSER_PARTS||[]).map(toObj);
   const won = n => Number(n||0).toLocaleString('ko-KR');
-  // 자사(에듀이노) 상품 마스터 — 가격비교(엔티렉스) 공급가표 + 담당자 수정분을 ed(자사코드) 기준으로 조회.
-  //  MD가 마우저 행에 자사코드를 입력하면 이 마스터에서 상품명·판매가·공급가·소비자가를 찾아 우측에 노출.
-  const NF = window.NTREX_FIELDS || ['ed','ntx','name','price','supply','retail','note'];
-  const ntxObj = a => Array.isArray(a) ? NF.reduce((o,k,i)=>(o[k]=a[i],o),{}) : a;
-  function selfProducts(){
-    const base={};
-    (window.NTREX_PRODUCTS||[]).map(ntxObj).forEach(p=>{ const k=String(p.ed||'').trim(); if(k) base[k]=p; });
-    const ov=store('eduino.ntrex.products').get({})||{};   // 담당자 추가·수정분(가격비교와 동일 저장소)
-    Object.values(ov).forEach(o=>{ if(!o||o._del) return; const k=String(o.ed||'').trim(); if(k) base[k]={...(base[k]||{}),...o}; });
-    return base;
+  // 자사(에듀이노) 상품 마스터 — 이카운트 카탈로그(/api/catalog)에서 자사코드로 조회.
+  //  MD가 마우저 행에 자사코드(ed)를 입력하면 이카운트 상품명·판매가(출고단가/outPrice)를 우측에 노출하고 마진율을 계산.
+  //  (가격비교 엔티렉스 공급가표가 아니라 이카운트 실판매가 기준 — eduino.kr 판매가와 일치)
+  const normEd = s => String(s||'').trim().toUpperCase();
+  const catCache = {};   // ED(대문자) → 상품객체 | 'loading' | null(이카운트 없음)
+  function ensureCat(ed, cb){ const k=normEd(ed); if(!k) return;
+    if(catCache[k]!==undefined){ if(catCache[k]!=='loading' && cb) cb(); return; }
+    catCache[k]='loading';
+    fetch('/api/catalog?code='+encodeURIComponent(k)).then(r=>r.ok?r.json():null).then(d=>{
+      let prod=(d&&d.product)||null;
+      if(!prod && d && Array.isArray(d.options) && d.options.length===1) prod=d.options[0];   // 옵션 상품이 하나뿐이면 그 값 사용
+      catCache[k]=prod||null;
+      if(cb) cb();
+    }).catch(()=>{ catCache[k]=null; if(cb) cb(); });
   }
   // 자사(에듀이노)코드 매핑 { mouserNo: 자사코드 } — MD 팀 공유(coll 'mouser_edmap') + 로컬 캐시
   const EDMAP_KEY='eduino.mouser.edmap';
@@ -47,7 +51,6 @@
     const mfrs=[...new Set(all.map(p=>p.mfr))];
     let mfr=mfrs[0]||'', cat='', view='stock';
     let stockMap=null, stockAt='';   // 크론이 저장한 최신 재고맵(coll mouser_stock)
-    let selfMap=selfProducts();      // 자사코드(ed) → 자사 상품정보
     const catsOf=m=>[...new Set(all.filter(p=>p.mfr===m).map(p=>p.category).filter(Boolean))];
     cat=catsOf(mfr)[0]||'';
 
@@ -137,39 +140,49 @@
 
     // 마우저 매입가(직소싱 원가) — 크론 재고맵의 현재가 우선, 없으면 시드 기준가
     function mouserBuyOf(p){ const d=stockMap&&stockMap[p.mouserNo]; if(d&&d.found&&d.priceKRW>0) return d.priceKRW; return p.basePriceKRW||0; }
-    // 자사(에듀이노) 상품명 셀 — 마우저 상품명과 나란히 비교하도록 별도 컬럼
-    function selfNameCellHtml(ed){ ed=String(ed||'').trim();
+    // 행의 자사코드 — 팀 공유 매핑(edMap) 우선, 없으면 시드의 edCode
+    const edOf = no => { const em=edMap(); if(em[no]!=null) return em[no]; const p=all.find(x=>x.mouserNo===no); return (p&&p.edCode)||''; };
+    // 자사(에듀이노) 상품명 셀 — 이카운트 카탈로그 상품명(마우저 상품명과 나란히 비교)
+    function selfNameCellHtml(ed){ ed=normEd(ed);
       if(!ed) return `<span class="mo-hint">자사코드 입력 시</span>`;
-      const m=selfMap[ed];
-      if(!m) return `<span class="mo-none">자사 DB 없음 <span style="opacity:.7">(취급상품 등록)</span></span>`;
-      return `<div class="mo-snm">${esc(m.name||'(상품명 없음)')}</div>`;
+      const v=catCache[ed];
+      if(v===undefined||v==='loading') return `<span class="mo-hint">이카운트 조회 중…</span>`;
+      if(!v) return `<span class="mo-none">이카운트 DB 없음 <span style="opacity:.7">(코드 확인)</span></span>`;
+      return `<div class="mo-snm">${esc(v.name||'(상품명 없음)')}</div>`;
     }
-    // 자사 판매가 셀 — 에듀이노 판매가(price)
-    function sellCellHtml(ed){ ed=String(ed||'').trim();
+    // 자사 판매가 셀 — 이카운트 출고단가(outPrice) = 에듀이노 판매가
+    function sellCellHtml(ed){ ed=normEd(ed);
       if(!ed) return `<span class="mo-hint">–</span>`;
-      const m=selfMap[ed];
-      if(!m) return `<span class="mo-none">–</span>`;
-      return `<div class="mo-sup">${m.price?won(m.price):'<span class="mo-none">미등록</span>'}</div>`;
+      const v=catCache[ed];
+      if(v===undefined||v==='loading') return `<span class="mo-hint">…</span>`;
+      if(!v) return `<span class="mo-none">–</span>`;
+      return `<div class="mo-sup">${v.outPrice?won(v.outPrice):'<span class="mo-none">미등록</span>'}</div>`;
     }
     // 마진율 셀 — (자사 판매가 − 마우저 매입가) ÷ 자사 판매가 × 100. 마우저서 사와 자사가로 팔 때 마진.
-    function marginCellHtml(ed, buy){ ed=String(ed||'').trim();
-      const m=ed?selfMap[ed]:null; const sell=m?Number(m.price)||0:0;
-      if(!m||!sell) return `<span class="mo-none">-</span>`;
+    function marginCellHtml(ed, buy){ ed=normEd(ed);
+      const v=ed?catCache[ed]:null;
+      if(v==='loading'||v===undefined&&ed) return `<span class="mo-hint">…</span>`;
+      const sell=(v&&v!=='loading')?Number(v.outPrice)||0:0;
+      if(!v||!sell) return `<span class="mo-none">-</span>`;
       if(!buy) return `<span class="mo-none" title="마우저 매입가 미확인 · 자동갱신 후 표시">매입가 확인</span>`;
       const diff=sell-buy; const pct=Math.round(diff/sell*1000)/10;
       const cls=diff>0?'good':(diff<0?'bad':'same');
       return `<span class="mo-save ${cls}">${pct}%</span><div class="mo-savenote">마진 ${won(diff)}</div>`;
     }
-    function updateCompare(no){ const em=edMap(); const ed=em[no]!=null?em[no]:''; const p=all.find(x=>x.mouserNo===no);
+    function paintCompareCells(no){ const ed=edOf(no); const p=all.find(x=>x.mouserNo===no);
       const nmCell=moBody.querySelector(`[data-snm="${CSS.escape(no)}"]`); if(nmCell) nmCell.innerHTML=selfNameCellHtml(ed);
       const sellCell=moBody.querySelector(`[data-sell="${CSS.escape(no)}"]`); if(sellCell) sellCell.innerHTML=sellCellHtml(ed);
       const mgCell=moBody.querySelector(`[data-margin="${CSS.escape(no)}"]`); if(mgCell) mgCell.innerHTML=marginCellHtml(ed, p?mouserBuyOf(p):0);
+    }
+    // 자사코드로 이카운트 조회를 보장하고, 도착하면 해당 행의 자사명·판매가·마진율을 갱신
+    function updateCompare(no){ const ed=edOf(no);
+      if(ed) ensureCat(ed, ()=>{ if(root.isConnected) paintCompareCells(no); });
+      paintCompareCells(no);
     }
 
     function paint(){
       if(view==='orders'){ paintOrders(); return; }
       if(view==='changes'){ paintChanges(); return; }
-      selfMap=selfProducts();
       const list=rows(); const em=edMap();
       moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px);overflow:auto"><table class="mo-t" style="min-width:1040px">
         <colgroup><col class="c-no"><col class="c-nm"><col class="c-stk"><col class="c-buy"><col class="c-ed"><col class="c-snm"><col class="c-sup"><col class="c-save"><col class="c-act"></colgroup>
@@ -201,6 +214,8 @@
       moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>{ setEd(inp.dataset.ed, inp.value.trim()); updateCompare(inp.dataset.ed); });
       // 결제요청
       moBody.querySelectorAll('[data-req]').forEach(b=>b.onclick=()=>requestPay(b.dataset.req));
+      // 자사코드가 있는 행은 이카운트에서 상품명·판매가·마진율을 조회해 채움
+      list.forEach(p=>{ if(edOf(p.mouserNo)) updateCompare(p.mouserNo); });
       // 아침 크론이 저장한 최신 재고·가격·입고예정 표시(매 접속마다 실시간 호출 대신)
       fillStock(list);
     }
