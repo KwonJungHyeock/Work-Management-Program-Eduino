@@ -94,14 +94,16 @@ else{
   if(LIMIT) items=items.slice(0,LIMIT);
 }
 
-// 분할(선택) — 하루에 NTREX_DAILY_MAX 개씩 날짜별로 '순환' 조회(차단 위험↓).
-//   예) 604개·DAILY_MAX=200 → 4일에 나눠 각 상품을 4일마다 1회 확인.
+// 분할(선택) — 전체 목록을 여러 날에 '순환' 조회(하루 부하↓·차단 위험↓).
+//   NTREX_CYCLE_DAYS=3  → 3일에 걸쳐 전 상품 확인(각 상품 3일마다 1회). 권장.
+//   NTREX_DAILY_MAX=200 → 하루 최대 개수로 지정(주기는 자동 계산). CYCLE_DAYS 가 우선.
+const CYCLE=Number(E.NTREX_CYCLE_DAYS)||0;
 const DAILY=Number(E.NTREX_DAILY_MAX)||0;
 let CHUNK='';
-if(!ONE && DAILY>0 && items.length>DAILY){
-  const K=Math.ceil(items.length/DAILY);                 // 며칠에 걸쳐 도는지
-  const size=Math.ceil(items.length/K);                  // 하루치(균등 분배)
-  const idx=Math.floor(Date.now()/86400000)%K;           // 날짜 기준 순환 인덱스
+if(!ONE && (CYCLE>1 || (DAILY>0 && items.length>DAILY))){
+  const K=CYCLE>1 ? CYCLE : Math.ceil(items.length/DAILY);  // 며칠 주기로 도는지
+  const size=Math.ceil(items.length/K);                     // 하루치(균등 분배)
+  const idx=Math.floor(Date.now()/86400000)%K;              // 날짜 기준 순환 인덱스
   items=items.slice(idx*size,(idx+1)*size);
   CHUNK=`${idx+1}/${K}`;
   console.log(`daily chunk ${CHUNK} · ${items.length} items (전체 순환 ${K}일 주기)`);
