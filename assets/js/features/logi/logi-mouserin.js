@@ -74,10 +74,12 @@
         .mi-cal-nav:hover{background:var(--panel-2);border-color:#12886a;color:#12886a}
         .mi-cal-today{margin-left:auto;font-size:12px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);border-radius:8px;padding:5px 11px;cursor:pointer;color:#12886a}
         .mi-cal-today:hover{background:#eafaf3}
-        .mi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+        /* 요일 헤더와 날짜 그리드를 분리 + 날짜 행은 고정 높이 → 빈 칸 때문에 첫 주가 늘어나던 문제 방지 */
+        .mi-dowrow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+        .mi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;grid-auto-rows:44px;align-content:start}
         .mi-dow{text-align:center;font-size:11px;font-weight:800;color:var(--muted);padding:1px 0 3px}
         .mi-dow.sun{color:#c0392b}.mi-dow.sat{color:#0a63c2}
-        .mi-day{position:relative;height:46px;border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--ink-2);transition:border-color .12s,background .12s}
+        .mi-day{position:relative;min-height:0;border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--ink-2);transition:border-color .12s,background .12s}
         .mi-day.empty{border-color:transparent;background:transparent;cursor:default}
         .mi-day:hover:not(.empty):not(.sel){border-color:#12886a}
         .mi-day.has{background:#eafaf3;border-color:#bfe9d5;font-weight:800;color:#0f7259}
@@ -217,7 +219,8 @@
             <span class="t">${calY}년 ${calM+1}월</span>
             <button class="mi-cal-nav" data-nav="1">›</button>
             <button class="mi-cal-today" id="miCalToday">오늘</button></div>
-          <div class="mi-grid">${['일','월','화','수','목','금','토'].map((w,i)=>`<div class="mi-dow ${i===0?'sun':i===6?'sat':''}">${w}</div>`).join('')}${cells.join('')}</div>
+          <div class="mi-dowrow">${['일','월','화','수','목','금','토'].map((w,i)=>`<div class="mi-dow ${i===0?'sun':i===6?'sat':''}">${w}</div>`).join('')}</div>
+          <div class="mi-grid">${cells.join('')}</div>
           <div class="mi-cal-info">${dateFilter
             ? `<b>${esc(dateFilter)}</b> 입고 <b>${(agg[dateFilter]||{}).n||0}</b>건 · 수량 <b>${won((agg[dateFilter]||{}).q||0)}</b> · <span class="mi-cal-clear" id="miCalClear">전체 보기</span>`
             : `이번 달 입고 <b>${mN}</b>건 · 수량 <b>${won(mQ)}</b><br><span class="muted" style="font-size:11px">날짜를 누르면 그날 입고만 볼 수 있어요.</span>`}</div>`;

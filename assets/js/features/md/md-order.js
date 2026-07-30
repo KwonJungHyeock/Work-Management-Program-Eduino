@@ -114,6 +114,18 @@
       // 구매처명: 제품 자체 vendor > 이카운트 코드→이름표(구매처) > 자사
       const vendorName=p=>{ const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
         return v||(isJasa(p&&p.selfCode)?'자사':''); };
+      // 입점사 관리(인수인계 카드 · coll handover_md)의 '등급/정산' 분류를 정산구분 보조 소스로 사용.
+      //  배송정보 마스터(mdVendors)에 정산구분이 비어 있어도, 입점사 관리에서 분류된 값으로 자동 연동.
+      let cardSettle={};   // { normCo(입점사명): '월정산'|'선결제' }
+      const parseCardSettle=t=>{ const s=String(t||''); if(/월\s*정산|월정산/.test(s)) return '월정산'; if(/선결제|선결/.test(s)) return '선결제'; return ''; };
+      const cardSettleOf=n=>{ const k=normCo(n); return k?(cardSettle[k]||''):''; };
+      async function loadCardSettle(){ try{ const r=await fetch('/api/store?type=coll&coll=handover_md'); if(!r.ok) return false;
+        const d=await r.json(); const m={}; (d&&d.items||[]).forEach(it=>{ if(!it) return;
+          const cls=parseCardSettle(it.gradeSettle); const k=normCo(it.name||it.vendor||''); if(k&&cls&&!m[k]) m[k]=cls; });
+        cardSettle=m; return true; }catch(e){ return false; } };
+      // 정산구분 최종 판정: 배송정보 마스터 > 입점사 관리 카드 분류 > 상품(이카운트) 값
+      const resolveSettle=p=>{ const nm=vendorName(p); const ven=vendorObj(nm);
+        return normSettle((ven&&ven.settle)||cardSettleOf(nm)||(p&&p.settle)||''); };
       // 배송비 = 입점사 정보(배송정보 리스트) 우선 · 없으면 이카운트 상품 배송비 (리스트는 화면에서 수정 가능)
       const baseShipFor=p=>{ const vs=vendorShip(vendorName(p)); return vs>0?vs:(Number(p&&p.ship)||0); };
       // 무료배송 임계값 파싱: "5만원 이상"→{amount:50000} · "3만원 이상"→30000 · "5권 이상"→{qty:5}
@@ -337,7 +349,7 @@
           syncName(p);
           const ven=vendorObj(vendorName(p));
           const policy=(ven&&ven.policy||'').trim();
-          const settle=normSettle((ven&&ven.settle)||p.settle||'');   // 배송정보 리스트(월정산/선결제) 우선
+          const settle=resolveSettle(p);   // 배송정보 마스터 > 입점사 관리 카드 분류 > 상품값
           curSettle=settle;                                            // 자동조회 기준값(사용자가 미선택 시 사용)
           const unit=Number(p.inPrice)||0, qty=Number(form.qty)||1;   // 이카운트 금액합계 = 입고단가 × 수량
           const si=groupShipPreview(p, unit*qty, qty);   // 이미 담긴 같은 주문서 항목까지 합산해 무료조건 판정
@@ -395,7 +407,7 @@
           if(!p && !nameVal){ toast('미등록 코드입니다 — 품명을 입력하면 추가됩니다'); refreshLookup(); const n=nameEl(); if(n) n.focus(); return; }
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
-            vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&(vendorObj(vendorName(p))||{}).settle)||(p&&p.settle)||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
+            vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&resolveSettle(p))||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
             qty:Number($f('#fQty').value)||1, amount:(Number(p&&p.inPrice)||0)*(Number($f('#fQty').value)||1),
             baseShip:p?baseShipFor(p):0,   // 무료조건 미충족 시 부과할 기본 배송비(주문서 재계산용)
             ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(),
@@ -435,6 +447,8 @@
         { const scsv=$f('#sheetCsv'); if(scsv) scsv.onclick=()=>{ const {cols,rows}=sheetData(); downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`발주_구글시트_${todayStr()}.csv`); toast('CSV 저장'); }; }
         $f('#saveOrders').onclick=onSave;
         refreshLookup(); renderAll(); updateOrderHint(); codeEl.focus();
+        // 입점사 관리(카드) 정산 분류를 불러와 배송정보 마스터의 빈 정산구분을 보완 → 로드 후 조회 갱신
+        loadCardSettle().then(ok=>{ if(ok && root.isConnected) refreshLookup(); });
       }
 
       // 출고송장/입고 칸: 발주 시 배송비를 먼저 채우고(담당자가 나중에 송장번호로 덮어씀)
