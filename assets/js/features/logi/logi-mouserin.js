@@ -8,6 +8,7 @@
   const COLL='mouser_inbound';
   const CACHE='eduino.logi.mouserin';
   const KINDS=['중국 - 기존','중국 - 신제품','마우저 - 기존','마우저 - 신제품'];
+  const STATUSES=['대기','완료'];   // 입고여부
   const meU=()=>(Auth.user&&Auth.user())||{};
   const canEdit=()=> !!(Auth.isAdmin&&Auth.isAdmin()) || meU().dept==='logi' || meU().role==='lead';
   const won=n=>Number(n||0).toLocaleString('ko-KR');
@@ -33,8 +34,13 @@
         .mi-hd .mi-ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#e3f7ef;color:#12886a}
         .mi-hd .mi-ic svg{width:15px;height:15px}
         .mi-bd{padding:16px 20px}
-        .mi-add{display:grid;grid-template-columns:148px 118px 132px minmax(150px,1fr) 88px 124px 84px;gap:10px;align-items:end}
-        @media(max-width:1000px){.mi-add{grid-template-columns:1fr 1fr}}
+        .mi-add{display:grid;grid-template-columns:142px 116px 126px minmax(140px,1fr) 82px 120px 92px 78px;gap:10px;align-items:end}
+        @media(max-width:1040px){.mi-add{grid-template-columns:1fr 1fr}}
+        /* 입고여부 배지/셀렉트 색상 */
+        .mi-st{font-weight:800}
+        .mi-st.done{color:#12886a} .mi-st.wait{color:#b4530a}
+        .mi-stbadge{display:inline-block;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 10px}
+        .mi-stbadge.done{background:#e6f7f0;color:#12886a} .mi-stbadge.wait{background:#fff4e6;color:#b4530a}
         .mi-add label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:4px}
         .mi-in{width:100%;height:38px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font:inherit;background:var(--panel);color:var(--ink)}
         .mi-in:focus{outline:2px solid #12886a33;border-color:#12886a}
@@ -109,6 +115,7 @@
           <div><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off"></div>
           <div><label>입고 수량</label><input class="mi-in mi-qty" id="miQty" placeholder="0" inputmode="numeric"></div>
           <div><label>파일위치</label><select class="mi-in" id="miFile"><option value="없음">없음</option><option value="구글드라이브">구글드라이브</option></select></div>
+          <div><label>입고여부</label><select class="mi-in" id="miStatus">${STATUSES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
           <div><label>&nbsp;</label><button class="mi-addbtn" id="miAdd">추가</button></div>
         </div></div></div>`:''}
 
@@ -121,10 +128,10 @@
           </div>
           <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 320px)">
             <table class="mi-t">
-            <colgroup><col style="width:138px"><col style="width:112px"><col style="width:98px"><col><col style="width:76px"><col style="width:98px"><col style="width:100px">${editable?'<col style="width:44px">':''}</colgroup>
+            <colgroup><col style="width:138px"><col style="width:112px"><col style="width:98px"><col><col style="width:76px"><col style="width:98px"><col style="width:96px">${editable?'<col style="width:44px">':''}</colgroup>
             <thead><tr>
               <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
-              <th style="text-align:right">입고 수량</th><th>파일위치</th><th>등록</th>${editable?'<th></th>':''}
+              <th style="text-align:right">입고 수량</th><th>파일위치</th><th>입고여부</th>${editable?'<th></th>':''}
             </tr></thead><tbody id="miRows"></tbody></table>
           </div></div>
         </div>
@@ -169,7 +176,7 @@
             <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
             <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
             <td class="mi-file">${fileCellHtml(it,true)}</td>
-            <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td>
+            <td><select class="mi-cell mi-st ${it.status==='완료'?'done':'wait'}" data-f="status">${STATUSES.map(s=>`<option value="${esc(s)}" ${(it.status||'대기')===s?'selected':''}>${esc(s)}</option>`).join('')}</select></td>
             <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td></tr>`;
           return `<tr data-id="${id}">
             <td>${esc(it.date||'-')}</td>
@@ -178,7 +185,7 @@
             <td class="mi-name" title="${esc(it.name||'')}">${esc(it.name||'-')}</td>
             <td class="mi-qty">${won(num(it.qty))}</td>
             <td class="mi-file">${fileCellHtml(it,false)}</td>
-            <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td></tr>`;
+            <td><span class="mi-stbadge ${it.status==='완료'?'done':'wait'}">${esc(it.status||'대기')}</span></td></tr>`;
         }).join('');
         renderCal();
         if(!editable) return;
@@ -187,6 +194,7 @@
           tr.querySelectorAll('[data-f]').forEach(inp=>inp.onchange=()=>{ const f=inp.dataset.f;
             if(f==='qty'){ it.qty=num(inp.value); inp.value=it.qty; } else it[f]=inp.value.trim();
             persist(it);
+            if(f==='status'){ inp.className='mi-cell mi-st '+(it.status==='완료'?'done':'wait'); }   // 색만 즉시 갱신
             if(f==='qty' || f==='kind' || f==='date'){ render(); } });
           const db=tr.querySelector('[data-del]'); if(db) db.onclick=()=>{ if(!confirm('이 입고 내역을 삭제할까요?')) return;
             api.del(it.id); items=items.filter(x=>String(x.id)!==String(it.id)); store(CACHE).set(items); render(); toast('삭제했습니다'); };
@@ -233,16 +241,17 @@
       }
 
       if(editable){
-        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty'), fileEl=$('#miFile');
+        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty'), fileEl=$('#miFile'), statusEl=$('#miStatus');
         if(dateEl) dateEl.value=todayStr();   // 기본값: 오늘 (달력에서 변경 가능)
         const add=()=>{ const code=codeEl.value.trim(), name=nameEl.value.trim(), qty=num(qtyEl.value);
           if(!code && !name){ toast('상품코드 또는 제품명을 입력하세요'); codeEl.focus(); return; }
           const date=(dateEl&&dateEl.value)||todayStr();
           const file=(fileEl&&fileEl.value)||'없음';
-          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file, createdAt:nowISO() };
+          const status=(statusEl&&statusEl.value)||'대기';
+          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file, status, createdAt:nowISO() };
           items.push(item); persist(item);
           codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value=KINDS[0]; if(dateEl) dateEl.value=todayStr();
-          if(fileEl) fileEl.value='없음'; codeEl.focus();
+          if(fileEl) fileEl.value='없음'; if(statusEl) statusEl.value='대기'; codeEl.focus();
           q=''; const qEl=$('#miQ'); if(qEl) qEl.value=''; render();
           toast(`입고 추가 — ${date} · ${code||name} ${qty?'× '+won(qty):''}`); };
         $('#miAdd').onclick=add;
