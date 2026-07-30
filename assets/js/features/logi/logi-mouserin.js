@@ -23,7 +23,8 @@
     render(root){
       const editable=canEdit();
       let items=store(CACHE).get([])||[];    // 로컬 캐시 먼저 표시(즉시 렌더) → 서버 최신으로 교체
-      let q='';
+      let q='', dateFilter='';               // 검색어 · 달력에서 선택한 입고날짜(필터)
+      const _t=new Date(); let calY=_t.getFullYear(), calM=_t.getMonth();   // 달력 표시 연/월(0-based)
 
       root.innerHTML=`
       <style>
@@ -61,6 +62,33 @@
         .mi-chip{font-size:12px;font-weight:700;border-radius:9px;padding:5px 11px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--ink-2)}
         .mi-chip b{color:#12886a}
         .mi-search{height:36px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;min-width:200px;background:var(--panel);color:var(--ink)}
+        /* 좌: 입고 시트 · 우: 입고 일정 달력 */
+        .mi-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+        @media(max-width:1160px){.mi-layout{grid-template-columns:1fr}}
+        .mi-side .mi-card{margin-bottom:0}
+        .mi-cal-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+        .mi-cal-hd .t{font-weight:800;font-size:14.5px;color:var(--ink)}
+        .mi-cal-nav{border:1px solid var(--line-2);background:var(--panel);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:15px;line-height:1;color:var(--ink-2)}
+        .mi-cal-nav:hover{background:var(--panel-2);border-color:#12886a;color:#12886a}
+        .mi-cal-today{margin-left:auto;font-size:12px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);border-radius:8px;padding:5px 11px;cursor:pointer;color:#12886a}
+        .mi-cal-today:hover{background:#eafaf3}
+        .mi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+        .mi-dow{text-align:center;font-size:11px;font-weight:800;color:var(--muted);padding:1px 0 3px}
+        .mi-dow.sun{color:#c0392b}.mi-dow.sat{color:#0a63c2}
+        .mi-day{position:relative;height:46px;border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--ink-2);transition:border-color .12s,background .12s}
+        .mi-day.empty{border-color:transparent;background:transparent;cursor:default}
+        .mi-day:hover:not(.empty):not(.sel){border-color:#12886a}
+        .mi-day.has{background:#eafaf3;border-color:#bfe9d5;font-weight:800;color:#0f7259}
+        .mi-day.today{box-shadow:inset 0 0 0 2px #12886a55}
+        .mi-day.sel{background:#12886a;border-color:#12886a;color:#fff;font-weight:800}
+        .mi-day .dn{line-height:1}
+        .mi-day .badge{font-size:9.5px;font-weight:800;background:#12886a;color:#fff;border-radius:8px;padding:0 5px;line-height:15px;min-width:15px;text-align:center}
+        .mi-day.sel .badge{background:#fff;color:#12886a}
+        .mi-cal-info{margin-top:12px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:9px;line-height:1.6}
+        .mi-cal-info b{color:#12886a}
+        .mi-cal-clear{color:var(--muted);text-decoration:underline;cursor:pointer;font-weight:600}
+        .mi-fchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#0f7259;background:#eafaf3;border:1px solid #bfe9d5;border-radius:8px;padding:4px 10px}
+        .mi-fchip .x{cursor:pointer;font-weight:800}
       </style>
 
       <div class="mhead pad"><div class="mhead-row">
@@ -79,18 +107,27 @@
           <div><label>&nbsp;</label><button class="mi-addbtn" id="miAdd">추가</button></div>
         </div></div></div>`:''}
 
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <input class="mi-search" id="miQ" type="search" placeholder="상품코드·제품명 검색">
-        <span class="muted" id="miCount" style="font-size:12px;margin-left:auto"></span>
+      <div class="mi-layout">
+        <div class="mi-main">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <input class="mi-search" id="miQ" type="search" placeholder="상품코드·제품명 검색">
+            <span id="miFilter"></span>
+            <span class="muted" id="miCount" style="font-size:12px;margin-left:auto"></span>
+          </div>
+          <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 320px)">
+            <table class="mi-t">
+            <colgroup><col style="width:148px"><col style="width:88px"><col style="width:128px"><col><col style="width:94px"><col style="width:146px">${editable?'<col style="width:40px">':''}</colgroup>
+            <thead><tr>
+              <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
+              <th style="text-align:right">입고 수량</th><th>등록</th>${editable?'<th></th>':''}
+            </tr></thead><tbody id="miRows"></tbody></table>
+          </div></div>
+        </div>
+        <aside class="mi-side">
+          <div class="mi-card"><div class="mi-hd"><span class="mi-ic">${icon('check2')||icon('box')}</span> 입고 일정</div>
+            <div class="mi-bd mi-cal" id="miCal"></div></div>
+        </aside>
       </div>
-      <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 300px)">
-        <table class="mi-t">
-        <colgroup><col style="width:150px"><col style="width:92px"><col style="width:130px"><col style="width:330px"><col style="width:96px"><col style="width:150px">${editable?'<col style="width:40px">':''}<col></colgroup>
-        <thead><tr>
-          <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
-          <th style="text-align:right">입고 수량</th><th>등록</th>${editable?'<th></th>':''}<th></th>
-        </tr></thead><tbody id="miRows"></tbody></table>
-      </div></div>
       </div>`;
 
       const $=s=>root.querySelector(s);
@@ -104,15 +141,20 @@
         // 정렬: 입고날짜 최신순 → 같으면 등록 최신순(편집 중 행이 튀지 않게 createdAt 기준)
         const view=items.slice().sort((a,b)=> String(b.date||'').localeCompare(String(a.date||''))
             || String(b.createdAt||b.updatedAt||'').localeCompare(String(a.createdAt||a.updatedAt||'')))
-          .filter(it=>!term || ((it.code||'')+' '+(it.name||'')).toLowerCase().includes(term));
+          .filter(it=> (!dateFilter || it.date===dateFilter)
+            && (!term || ((it.code||'')+' '+(it.name||'')).toLowerCase().includes(term)));
         // 요약: 신제품/기존 건수 + 총 입고 수량
         const cNew=items.filter(it=>it.kind==='신제품').length, cOld=items.filter(it=>it.kind!=='신제품').length;
         const totQty=items.reduce((s,it)=>s+num(it.qty),0);
         sumEl.innerHTML=`<span class="mi-chip">전체 <b>${items.length}</b>건</span>
           <span class="mi-chip">신제품 <b>${cNew}</b> · 기존 <b>${cOld}</b></span>
           <span class="mi-chip">총 입고 수량 <b>${won(totQty)}</b></span>`;
+        // 달력 날짜필터 칩(선택 시 표시)
+        const fEl=$('#miFilter'); if(fEl) fEl.innerHTML = dateFilter
+          ? `<span class="mi-fchip">${icon('check2')||''} ${esc(dateFilter)} 입고<span class="x" id="miFClear" title="필터 해제">✕</span></span>` : '';
+        const fc=$('#miFClear'); if(fc) fc.onclick=()=>{ dateFilter=''; render(); };
         countEl.textContent=`${view.length}/${items.length}건`;
-        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?8:7}" class="nx-empty" style="padding:26px">${term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; return; }
+        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?7:6}" class="nx-empty" style="padding:26px">${dateFilter?esc(dateFilter)+' 입고 내역이 없습니다.':term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; renderCal(); return; }
         rowsEl.innerHTML=view.map(it=>{
           const id=esc(it.id); const isNew=it.kind==='신제품';
           if(editable) return `<tr data-id="${id}">
@@ -122,15 +164,16 @@
             <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
             <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
             <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td>
-            <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td><td></td></tr>`;
+            <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td></tr>`;
           return `<tr data-id="${id}">
             <td>${esc(it.date||'-')}</td>
             <td><span class="mi-kind ${isNew?'new':'old'}">${esc(it.kind||'기존')}</span></td>
             <td class="mono mi-code" title="${esc(it.code||'')}">${esc(it.code||'-')}</td>
             <td class="mi-name" title="${esc(it.name||'')}">${esc(it.name||'-')}</td>
             <td class="mi-qty">${won(num(it.qty))}</td>
-            <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td><td></td></tr>`;
+            <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td></tr>`;
         }).join('');
+        renderCal();
         if(!editable) return;
         // 인라인 편집 — 값 변경 시 해당 행만 저장(수량은 숫자 정규화)
         rowsEl.querySelectorAll('tr[data-id]').forEach(tr=>{ const it=items.find(x=>String(x.id)===tr.dataset.id); if(!it) return;
@@ -141,6 +184,36 @@
           const db=tr.querySelector('[data-del]'); if(db) db.onclick=()=>{ if(!confirm('이 입고 내역을 삭제할까요?')) return;
             api.del(it.id); items=items.filter(x=>String(x.id)!==String(it.id)); store(CACHE).set(items); render(); toast('삭제했습니다'); };
         });
+      }
+
+      // 입고 일정 달력 — 월별로 입고 예정/기록 건수를 표시, 날짜 클릭 시 시트를 그 날짜로 필터
+      function ymd(y,m,d){ return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+      function renderCal(){
+        const box=$('#miCal'); if(!box) return;
+        const agg={}; items.forEach(it=>{ const d=it.date; if(!d) return; const a=agg[d]=agg[d]||{n:0,q:0}; a.n++; a.q+=num(it.qty); });
+        const startDow=new Date(calY,calM,1).getDay(); const days=new Date(calY,calM+1,0).getDate();
+        const todayS=todayStr(); const mPrefix=`${calY}-${String(calM+1).padStart(2,'0')}`;
+        let mN=0, mQ=0; Object.keys(agg).forEach(k=>{ if(k.slice(0,7)===mPrefix){ mN+=agg[k].n; mQ+=agg[k].q; } });
+        const cells=[];
+        for(let i=0;i<startDow;i++) cells.push('<div class="mi-day empty"></div>');
+        for(let d=1;d<=days;d++){ const ds=ymd(calY,calM,d); const a=agg[ds];
+          const cls=['mi-day']; if(a) cls.push('has'); if(ds===todayS) cls.push('today'); if(ds===dateFilter) cls.push('sel');
+          cells.push(`<div class="${cls.join(' ')}" data-day="${ds}" title="${a?`입고 ${a.n}건 · 수량 ${won(a.q)}`:''}"><span class="dn">${d}</span>${a?`<span class="badge">${a.n}</span>`:''}</div>`); }
+        box.innerHTML=`
+          <div class="mi-cal-hd"><button class="mi-cal-nav" data-nav="-1">‹</button>
+            <span class="t">${calY}년 ${calM+1}월</span>
+            <button class="mi-cal-nav" data-nav="1">›</button>
+            <button class="mi-cal-today" id="miCalToday">오늘</button></div>
+          <div class="mi-grid">${['일','월','화','수','목','금','토'].map((w,i)=>`<div class="mi-dow ${i===0?'sun':i===6?'sat':''}">${w}</div>`).join('')}${cells.join('')}</div>
+          <div class="mi-cal-info">${dateFilter
+            ? `<b>${esc(dateFilter)}</b> 입고 <b>${(agg[dateFilter]||{}).n||0}</b>건 · 수량 <b>${won((agg[dateFilter]||{}).q||0)}</b> · <span class="mi-cal-clear" id="miCalClear">전체 보기</span>`
+            : `이번 달 입고 <b>${mN}</b>건 · 수량 <b>${won(mQ)}</b><br><span class="muted" style="font-size:11px">날짜를 누르면 그날 입고만 볼 수 있어요.</span>`}</div>`;
+        box.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ calM+=Number(b.dataset.nav);
+          if(calM<0){ calM=11; calY--; } if(calM>11){ calM=0; calY++; } renderCal(); });
+        const tb=box.querySelector('#miCalToday'); if(tb) tb.onclick=()=>{ const t=new Date(); calY=t.getFullYear(); calM=t.getMonth(); renderCal(); };
+        box.querySelectorAll('[data-day]').forEach(c=>{ if(c.classList.contains('empty')) return;
+          c.onclick=()=>{ dateFilter=(dateFilter===c.dataset.day)?'':c.dataset.day; render(); }; });
+        const cl=box.querySelector('#miCalClear'); if(cl) cl.onclick=()=>{ dateFilter=''; render(); };
       }
 
       if(editable){
