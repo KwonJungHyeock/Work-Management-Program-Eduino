@@ -52,17 +52,18 @@
         .mi-del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:4px 8px;border-radius:7px}
         .mi-del:hover{background:#fdecea;color:#c0392b}
         .mi-meta{font-size:11px;color:var(--muted);white-space:nowrap}
-        .mi-sum{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 14px}
+        .mi-sum{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
         .mi-chip{font-size:12px;font-weight:700;border-radius:9px;padding:5px 11px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--ink-2)}
         .mi-chip b{color:#12886a}
         .mi-search{height:36px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;min-width:200px;background:var(--panel);color:var(--ink)}
       </style>
 
-      <div class="nx-note" style="border-left-color:#12886a;background:#e9f8f1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span>${icon('box')} <b>마우저 입고</b> — 마우저에서 들여온 상품의 입고 내역을 직접 기록하고 수정합니다.
-        <span class="muted" style="font-size:12px">구분(기존/신제품)·상품코드·제품명·입고 수량을 입력하세요.</span></span>
-      </div>
-
+      <div class="mhead pad"><div class="mhead-row">
+        <div><div class="tt">마우저 입고</div>
+          <div class="ds">마우저에서 들여온 상품의 입고 내역을 직접 기록·수정합니다. 구분(기존/신제품)·상품코드·제품명·입고 수량을 입력하세요.</div></div>
+        <div class="mhead-act mi-sum" id="miSum"></div>
+      </div></div>
+      <div class="mbody">
       ${editable?`<div class="mi-card"><div class="mi-hd"><span class="mi-ic">${icon('box')}</span> 입고 추가</div>
         <div class="mi-bd"><div class="mi-add">
           <div><label>구분</label><select class="mi-in" id="miKind">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
@@ -72,17 +73,17 @@
           <div><button class="mi-addbtn" id="miAdd">추가</button></div>
         </div></div></div>`:''}
 
-      <div class="mi-sum" id="miSum"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <input class="mi-search" id="miQ" type="search" placeholder="상품코드·제품명 검색">
         <span class="muted" id="miCount" style="font-size:12px;margin-left:auto"></span>
       </div>
-      <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 380px)">
+      <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 300px)">
         <table class="mi-t"><thead><tr>
           <th style="width:110px">구분</th><th style="width:150px">상품코드</th><th>제품명</th>
           <th style="width:110px;text-align:right">입고 수량</th><th style="width:150px">등록</th>${editable?'<th style="width:44px"></th>':''}
         </tr></thead><tbody id="miRows"></tbody></table>
-      </div></div>`;
+      </div></div>
+      </div>`;
 
       const $=s=>root.querySelector(s);
       const rowsEl=$('#miRows'), sumEl=$('#miSum'), countEl=$('#miCount');
