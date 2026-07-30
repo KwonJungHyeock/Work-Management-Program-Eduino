@@ -138,8 +138,11 @@
 
     function rows(){ return all.filter(p=>p.mfr===mfr && p.category===cat); }
 
-    // 마우저 매입가(직소싱 원가) — 크론 재고맵의 현재가 우선, 없으면 시드 기준가
+    // 마우저 원가(현지 판매가) — 크론 재고맵의 현재가 우선, 없으면 시드 기준가
     function mouserBuyOf(p){ const d=stockMap&&stockMap[p.mouserNo]; if(d&&d.found&&d.priceKRW>0) return d.priceKRW; return p.basePriceKRW||0; }
+    // 마우저 매입가 = 원가 × 1.18 (부가세 10% + 관세 8%). 실제 국내 도착원가로 마진율 산정.
+    const VAT_DUTY = 1.18;
+    const buyVatOf = p => Math.round(mouserBuyOf(p)*VAT_DUTY);
     // 행의 자사코드 — 팀 공유 매핑(edMap) 우선, 없으면 시드의 edCode
     const edOf = no => { const em=edMap(); if(em[no]!=null) return em[no]; const p=all.find(x=>x.mouserNo===no); return (p&&p.edCode)||''; };
     // 자사(에듀이노) 상품명 셀 — 이카운트 카탈로그 상품명(마우저 상품명과 나란히 비교)
@@ -158,7 +161,7 @@
       if(!v) return `<span class="mo-none">–</span>`;
       return `<div class="mo-sup">${v.outPrice?won(v.outPrice):'<span class="mo-none">미등록</span>'}</div>`;
     }
-    // 마진율 셀 — (자사 판매가 − 마우저 매입가) ÷ 자사 판매가 × 100. 마우저서 사와 자사가로 팔 때 마진.
+    // 마진율 셀 — (자사 판매가 − 마우저 매입가) ÷ 자사 판매가 × 100. 매입가는 관·부가세 18% 포함가.
     function marginCellHtml(ed, buy){ ed=normEd(ed);
       const v=ed?catCache[ed]:null;
       if(v==='loading'||v===undefined&&ed) return `<span class="mo-hint">…</span>`;
@@ -172,7 +175,7 @@
     function paintCompareCells(no){ const ed=edOf(no); const p=all.find(x=>x.mouserNo===no);
       const nmCell=moBody.querySelector(`[data-snm="${CSS.escape(no)}"]`); if(nmCell) nmCell.innerHTML=selfNameCellHtml(ed);
       const sellCell=moBody.querySelector(`[data-sell="${CSS.escape(no)}"]`); if(sellCell) sellCell.innerHTML=sellCellHtml(ed);
-      const mgCell=moBody.querySelector(`[data-margin="${CSS.escape(no)}"]`); if(mgCell) mgCell.innerHTML=marginCellHtml(ed, p?mouserBuyOf(p):0);
+      const mgCell=moBody.querySelector(`[data-margin="${CSS.escape(no)}"]`); if(mgCell) mgCell.innerHTML=marginCellHtml(ed, p?buyVatOf(p):0);
     }
     // 자사코드로 이카운트 조회를 보장하고, 도착하면 해당 행의 자사명·판매가·마진율을 갱신
     function updateCompare(no){ const ed=edOf(no);
@@ -184,23 +187,24 @@
       if(view==='orders'){ paintOrders(); return; }
       if(view==='changes'){ paintChanges(); return; }
       const list=rows(); const em=edMap();
-      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px);overflow:auto"><table class="mo-t" style="min-width:1040px">
-        <colgroup><col class="c-no"><col class="c-nm"><col class="c-stk"><col class="c-buy"><col class="c-ed"><col class="c-snm"><col class="c-sup"><col class="c-save"><col class="c-act"></colgroup>
+      moBody.innerHTML=`<div class="nx-wrap" style="max-height:calc(100vh - 330px);overflow:auto"><table class="mo-t" style="min-width:1140px">
+        <colgroup><col class="c-no"><col class="c-nm"><col class="c-stk"><col class="c-buy"><col class="c-buy"><col class="c-ed"><col class="c-snm"><col class="c-sup"><col class="c-save"><col class="c-act"></colgroup>
         <thead><tr>
-          <th colspan="4" style="position:static;text-align:left;color:#0a3d62;font-size:12px;background:var(--panel-2)">▍마우저 (직소싱)</th>
+          <th colspan="5" style="position:static;text-align:left;color:#0a3d62;font-size:12px;background:var(--panel-2)">▍마우저 (직소싱)</th>
           <th colspan="4" class="zself" style="position:static;text-align:left;color:#0a3d62;font-size:12px">▍자사 (에듀이노)</th>
           <th style="position:static;background:var(--panel-2)"></th></tr>
         <tr>
-          <th>마우저 번호</th><th>마우저 상품명</th><th style="text-align:right">재고/입고</th><th style="text-align:right">마우저 매입가</th>
+          <th>마우저 번호</th><th>마우저 상품명</th><th style="text-align:right">재고/입고</th><th style="text-align:right">마우저 원가</th><th style="text-align:right">마우저 매입가</th>
           <th class="zself">자사코드</th><th class="zself">자사 상품명</th><th class="zself" style="text-align:right">자사 판매가</th><th class="zself">마진율</th>
           <th style="text-align:center">요청</th></tr></thead>
         <tbody>${list.length?list.map(p=>{
-          const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||''); const buy=mouserBuyOf(p);
+          const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||''); const buy=buyVatOf(p);
           return `<tr data-no="${esc(p.mouserNo)}">
             <td><a class="mo-code" href="${esc(prodUrl(p.mouserNo))}" target="_blank" rel="noopener">${esc(p.mouserNo)}</a><div class="muted" style="font-size:10.5px">${esc(p.mfrNo||'')}</div></td>
             <td style="white-space:normal;word-break:break-word;line-height:1.35">${esc(p.name||'')}</td>
             <td class="num" data-stk><span class="mo-stk wait">–</span></td>
             <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}</span><div class="mo-base">기준가</div></td>
+            <td class="num" data-buyvat><span class="mo-price">${won(Math.round(p.basePriceKRW*VAT_DUTY))}</span><div class="mo-base">관·부가세 18%</div></td>
             <td class="zself mo-ed">${canEdit()?`<input data-ed="${esc(p.mouserNo)}" value="${esc(ed)}" placeholder="미보유">`:esc(ed||'-')}</td>
             <td class="zself" data-snm="${esc(p.mouserNo)}" style="white-space:normal;word-break:break-word;line-height:1.35">${selfNameCellHtml(ed)}</td>
             <td class="zself num" data-sell="${esc(p.mouserNo)}">${sellCellHtml(ed)}</td>
@@ -209,7 +213,7 @@
               <input class="mo-qty" data-qty="${esc(p.mouserNo)}" value="1" inputmode="numeric" maxlength="2">
               <button class="mo-req" data-req="${esc(p.mouserNo)}" title="결제요청에 추가 + 마우저 장바구니에 담기">요청</button>
             </td></tr>`; }).join('')
-          :`<tr><td colspan="9" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
+          :`<tr><td colspan="10" class="nx-empty">이 카테고리에 품목이 없습니다.</td></tr>`}</tbody></table></div>`;
       // 자사코드 인라인 편집 → 저장 + 자사공급가·직소싱 절감 즉시 갱신
       moBody.querySelectorAll('[data-ed]').forEach(inp=>inp.onchange=()=>{ setEd(inp.dataset.ed, inp.value.trim()); updateCompare(inp.dataset.ed); });
       // 결제요청
@@ -225,7 +229,7 @@
       if(!stockMap){ if(st) st.innerHTML=' · <b style="color:var(--warn)">자동갱신 대기</b> — 매일 아침 자동조사 후 표시 (지금 즉시: <a href="/api/mouser-cron" target="_blank" rel="noopener">/api/mouser-cron</a> 1회 실행)'; return; }
       if(st) st.innerHTML=` · 자동갱신 <b>${esc((stockAt||'').slice(0,10))}</b> <a href="/api/mouser-cron" target="_blank" rel="noopener" title="지금 최신화" style="font-size:11px">↻ 지금</a>`;
       list.forEach(p=>{ const d=stockMap[p.mouserNo]; const tr=moBody.querySelector(`tr[data-no="${CSS.escape(p.mouserNo)}"]`); if(!tr) return;
-        const stkTd=tr.querySelector('[data-stk]'), prTd=tr.querySelector('[data-price]'), reqBtn=tr.querySelector('[data-req]');
+        const stkTd=tr.querySelector('[data-stk]'), prTd=tr.querySelector('[data-price]'), buyTd=tr.querySelector('[data-buyvat]'), reqBtn=tr.querySelector('[data-req]');
         if(!d || !d.found){ stkTd.innerHTML='<span class="mo-stk wait">확인불가</span>'; return; }
         if(d.restricted){   // 마우저 유통 구매불가 — 소싱 판단에 중요
           stkTd.innerHTML=`<span class="mo-stk" style="color:#8a6d00">구매제한</span><div class="mo-lead" title="${esc(d.restriction||'')}">마우저 구매불가</div>`;
@@ -242,8 +246,9 @@
           else{ const lead=String(d.lead||'').trim(); const leadTxt=lead&&!/^0\s*(일|day)/i.test(lead)?` · 리드 ${esc(lead)}`:'';
             info=`<span class="muted">입고예정 없음</span>${leadTxt}`; }
           stkTd.innerHTML=`<span class="mo-stk out">0</span><div class="mo-lead">${info}${srcNote}</div>`; }
-        if(d.priceKRW>0) prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회 매입가':'현재 매입가'}</div>`;
-        updateCompare(p.mouserNo);   // 실제 매입가 확보 → 직소싱 절감 재계산
+        if(d.priceKRW>0){ prTd.innerHTML=`<span class="mo-price">${won(d.priceKRW)}</span><div class="mo-base">${viaCart?'카트조회 원가':'현재 원가'}</div>`;
+          if(buyTd) buyTd.innerHTML=`<span class="mo-price">${won(Math.round(d.priceKRW*VAT_DUTY))}</span><div class="mo-base">관·부가세 18%</div>`; }
+        updateCompare(p.mouserNo);   // 실제 원가 확보 → 매입가·마진율 재계산
       });
     }
     async function loadStock(){ try{ const r=await fetch('/api/store?type=coll&coll=mouser_stock'); if(!r.ok) return;

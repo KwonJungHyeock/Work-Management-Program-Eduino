@@ -198,6 +198,7 @@ const NAV = [
       { key:'md.manual',    name:'업무 매뉴얼',        icon:'clipboard' },
   ]},
   { dept:'logi', name:'물류', full:'물류 관리', icon:'truck', items:[
+      { key:'logi.mouserin', name:'마우저 입고', icon:'box' },
       { key:'logi.manual', name:'업무 매뉴얼', icon:'clipboard' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
@@ -215,7 +216,7 @@ const NAV = [
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
 const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'cs.partners', 'cs.manual', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
   'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.tstpl', 'md.settle', 'md.manual',
-  'logi.manual'];
+  'logi.mouserin', 'logi.manual'];
 
 /* 게시판별 '수정 권한' — 관리자이거나, 계정에 editPerms로 명시 부여된 경우 true.
    (부서원의 자기 부서 기본 수정 권한과 별개로 그 위에 더해지는 교차 부여 · 관리자가 계정 화면에서 페이지별로 부여) */
