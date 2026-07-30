@@ -32,20 +32,25 @@
         .mi-hd .mi-ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#e3f7ef;color:#12886a}
         .mi-hd .mi-ic svg{width:15px;height:15px}
         .mi-bd{padding:16px 20px}
-        .mi-add{display:grid;grid-template-columns:120px 150px minmax(180px,1fr) 110px 92px;gap:10px;align-items:end}
-        @media(max-width:820px){.mi-add{grid-template-columns:1fr 1fr}}
+        .mi-add{display:grid;grid-template-columns:150px 110px 140px minmax(160px,1fr) 100px 84px;gap:10px;align-items:end}
+        @media(max-width:900px){.mi-add{grid-template-columns:1fr 1fr}}
         .mi-add label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:4px}
         .mi-in{width:100%;height:38px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font:inherit;background:var(--panel);color:var(--ink)}
         .mi-in:focus{outline:2px solid #12886a33;border-color:#12886a}
-        .mi-addbtn{height:38px;border:0;border-radius:9px;background:#12886a;color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
+        .mi-addbtn{height:38px;width:100%;border:0;border-radius:9px;background:#12886a;color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
         .mi-addbtn:hover{background:#0f7259}
-        table.mi-t{border-collapse:collapse;width:100%;font-size:13px}
+        /* 표는 고정 레이아웃 → 제품명이 길어도 다른 칸을 밀지 않고 칸 안에서 처리 */
+        table.mi-t{border-collapse:collapse;width:100%;font-size:13px;table-layout:fixed}
         table.mi-t th{background:var(--panel-2);color:var(--ink-2);font-size:11.5px;font-weight:800;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mi-t td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
         table.mi-t tr:hover td{background:var(--panel-2)}
         .mi-cell{width:100%;height:34px;border:1px solid transparent;border-radius:7px;padding:0 8px;font:inherit;background:transparent;color:var(--ink)}
         .mi-cell:hover{border-color:var(--line-2)} .mi-cell:focus{outline:0;border-color:#12886a;background:var(--panel)}
-        select.mi-cell{cursor:pointer}
+        select.mi-cell,input[type=date].mi-cell{cursor:pointer}
+        input[type=date].mi-cell{padding:0 6px}
+        /* 읽기전용 제품명 — 길면 말줄임(전체는 tooltip) */
+        .mi-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .mi-code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .mi-kind{display:inline-block;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 9px}
         .mi-kind.new{background:#fff4e6;color:#b4530a} .mi-kind.old{background:#eef4fb;color:#0a63c2}
         .mi-qty{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
@@ -66,11 +71,12 @@
       <div class="mbody">
       ${editable?`<div class="mi-card"><div class="mi-hd"><span class="mi-ic">${icon('box')}</span> 입고 추가</div>
         <div class="mi-bd"><div class="mi-add">
+          <div><label>입고날짜</label><input class="mi-in" id="miDate" type="date"></div>
           <div><label>구분</label><select class="mi-in" id="miKind">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
           <div><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off"></div>
           <div><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off"></div>
           <div><label>입고 수량</label><input class="mi-in mi-qty" id="miQty" placeholder="0" inputmode="numeric"></div>
-          <div><button class="mi-addbtn" id="miAdd">추가</button></div>
+          <div><label>&nbsp;</label><button class="mi-addbtn" id="miAdd">추가</button></div>
         </div></div></div>`:''}
 
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -78,9 +84,11 @@
         <span class="muted" id="miCount" style="font-size:12px;margin-left:auto"></span>
       </div>
       <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 300px)">
-        <table class="mi-t"><thead><tr>
-          <th style="width:110px">구분</th><th style="width:150px">상품코드</th><th>제품명</th>
-          <th style="width:110px;text-align:right">입고 수량</th><th style="width:150px">등록</th>${editable?'<th style="width:44px"></th>':''}
+        <table class="mi-t">
+        <colgroup><col style="width:150px"><col style="width:92px"><col style="width:130px"><col><col style="width:94px"><col style="width:118px">${editable?'<col style="width:40px">':''}</colgroup>
+        <thead><tr>
+          <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
+          <th style="text-align:right">입고 수량</th><th>등록</th>${editable?'<th></th>':''}
         </tr></thead><tbody id="miRows"></tbody></table>
       </div></div>
       </div>`;
@@ -93,7 +101,9 @@
 
       function render(){
         const term=q.trim().toLowerCase();
-        const view=items.slice().sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))
+        // 정렬: 입고날짜 최신순 → 같으면 등록 최신순(편집 중 행이 튀지 않게 createdAt 기준)
+        const view=items.slice().sort((a,b)=> String(b.date||'').localeCompare(String(a.date||''))
+            || String(b.createdAt||b.updatedAt||'').localeCompare(String(a.createdAt||a.updatedAt||'')))
           .filter(it=>!term || ((it.code||'')+' '+(it.name||'')).toLowerCase().includes(term));
         // 요약: 신제품/기존 건수 + 총 입고 수량
         const cNew=items.filter(it=>it.kind==='신제품').length, cOld=items.filter(it=>it.kind!=='신제품').length;
@@ -102,19 +112,22 @@
           <span class="mi-chip">신제품 <b>${cNew}</b> · 기존 <b>${cOld}</b></span>
           <span class="mi-chip">총 입고 수량 <b>${won(totQty)}</b></span>`;
         countEl.textContent=`${view.length}/${items.length}건`;
-        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?6:5}" class="nx-empty" style="padding:26px">${term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; return; }
+        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?7:6}" class="nx-empty" style="padding:26px">${term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; return; }
         rowsEl.innerHTML=view.map(it=>{
           const id=esc(it.id); const isNew=it.kind==='신제품';
           if(editable) return `<tr data-id="${id}">
+            <td><input class="mi-cell" data-f="date" type="date" value="${esc(it.date||'')}"></td>
             <td><select class="mi-cell" data-f="kind">${KINDS.map(k=>`<option value="${esc(k)}" ${it.kind===k?'selected':''}>${esc(k)}</option>`).join('')}</select></td>
             <td><input class="mi-cell" data-f="code" value="${esc(it.code||'')}" placeholder="상품코드"></td>
-            <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명"></td>
+            <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
             <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
             <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td>
             <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td></tr>`;
           return `<tr data-id="${id}">
+            <td>${esc(it.date||'-')}</td>
             <td><span class="mi-kind ${isNew?'new':'old'}">${esc(it.kind||'기존')}</span></td>
-            <td class="mono">${esc(it.code||'-')}</td><td>${esc(it.name||'-')}</td>
+            <td class="mono mi-code" title="${esc(it.code||'')}">${esc(it.code||'-')}</td>
+            <td class="mi-name" title="${esc(it.name||'')}">${esc(it.name||'-')}</td>
             <td class="mi-qty">${won(num(it.qty))}</td>
             <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td></tr>`;
         }).join('');
@@ -124,21 +137,23 @@
           tr.querySelectorAll('[data-f]').forEach(inp=>inp.onchange=()=>{ const f=inp.dataset.f;
             if(f==='qty'){ it.qty=num(inp.value); inp.value=it.qty; } else it[f]=inp.value.trim();
             persist(it);
-            if(f==='qty' || f==='kind'){ render(); } });
+            if(f==='qty' || f==='kind' || f==='date'){ render(); } });
           const db=tr.querySelector('[data-del]'); if(db) db.onclick=()=>{ if(!confirm('이 입고 내역을 삭제할까요?')) return;
             api.del(it.id); items=items.filter(x=>String(x.id)!==String(it.id)); store(CACHE).set(items); render(); toast('삭제했습니다'); };
         });
       }
 
       if(editable){
-        const kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty');
+        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty');
+        if(dateEl) dateEl.value=todayStr();   // 기본값: 오늘 (달력에서 변경 가능)
         const add=()=>{ const code=codeEl.value.trim(), name=nameEl.value.trim(), qty=num(qtyEl.value);
           if(!code && !name){ toast('상품코드 또는 제품명을 입력하세요'); codeEl.focus(); return; }
-          const item={ id:uuid(), day:todayStr(), kind:kindEl.value||'기존', code, name, qty };
+          const date=(dateEl&&dateEl.value)||todayStr();
+          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||'기존', code, name, qty, createdAt:nowISO() };
           items.push(item); persist(item);
-          codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value='기존'; codeEl.focus();
+          codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value='기존'; if(dateEl) dateEl.value=todayStr(); codeEl.focus();
           q=''; const qEl=$('#miQ'); if(qEl) qEl.value=''; render();
-          toast(`입고 추가 — ${code||name} ${qty?'× '+won(qty):''}`); };
+          toast(`입고 추가 — ${date} · ${code||name} ${qty?'× '+won(qty):''}`); };
         $('#miAdd').onclick=add;
         [codeEl,nameEl,qtyEl].forEach(elm=>elm.addEventListener('keydown',e=>{ if(e.key==='Enter') add(); }));
       }
