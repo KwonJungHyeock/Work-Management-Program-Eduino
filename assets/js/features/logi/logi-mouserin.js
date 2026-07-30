@@ -33,8 +33,9 @@
         .mi-hd .mi-ic{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#e3f7ef;color:#12886a}
         .mi-hd .mi-ic svg{width:15px;height:15px}
         .mi-bd{padding:16px 20px}
-        .mi-add{display:grid;grid-template-columns:150px 110px 140px minmax(160px,1fr) 100px 84px;gap:10px;align-items:end}
-        @media(max-width:900px){.mi-add{grid-template-columns:1fr 1fr}}
+        .mi-add{display:grid;grid-template-columns:148px 118px 132px minmax(150px,1fr) 88px 124px 84px;gap:10px;align-items:end}
+        @media(max-width:1000px){.mi-add{grid-template-columns:1fr 1fr}}
+        .mi-add .mi-fullrow{grid-column:1/-1}
         .mi-add label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:4px}
         .mi-in{width:100%;height:38px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font:inherit;background:var(--panel);color:var(--ink)}
         .mi-in:focus{outline:2px solid #12886a33;border-color:#12886a}
@@ -112,6 +113,8 @@
           <div><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off"></div>
           <div><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off"></div>
           <div><label>입고 수량</label><input class="mi-in mi-qty" id="miQty" placeholder="0" inputmode="numeric"></div>
+          <div><label>파일위치</label><select class="mi-in" id="miFile"><option value="없음">없음</option><option value="구글드라이브">구글드라이브</option></select></div>
+          <div id="miFileLinkWrap" class="mi-fullrow" style="display:none"><label>구글드라이브 접속 링크</label><input class="mi-in" id="miFileUrl" placeholder="접속 링크(URL) — 선택" autocomplete="off"></div>
           <div><label>&nbsp;</label><button class="mi-addbtn" id="miAdd">추가</button></div>
         </div></div></div>`:''}
 
@@ -243,18 +246,25 @@
       }
 
       if(editable){
-        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty');
+        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty'),
+              fileEl=$('#miFile'), fileUrlEl=$('#miFileUrl'), linkWrap=$('#miFileLinkWrap');
         if(dateEl) dateEl.value=todayStr();   // 기본값: 오늘 (달력에서 변경 가능)
+        // 파일위치=구글드라이브 선택 시에만 접속 링크 입력칸 노출
+        const syncFile=()=>{ if(linkWrap) linkWrap.style.display = (fileEl&&fileEl.value==='구글드라이브')?'':'none'; };
+        if(fileEl) fileEl.onchange=syncFile; syncFile();
         const add=()=>{ const code=codeEl.value.trim(), name=nameEl.value.trim(), qty=num(qtyEl.value);
           if(!code && !name){ toast('상품코드 또는 제품명을 입력하세요'); codeEl.focus(); return; }
           const date=(dateEl&&dateEl.value)||todayStr();
-          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file:'없음', fileUrl:'', createdAt:nowISO() };
+          const file=(fileEl&&fileEl.value)||'없음';
+          const fileUrl=(file==='구글드라이브'&&fileUrlEl)?fileUrlEl.value.trim():'';
+          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file, fileUrl, createdAt:nowISO() };
           items.push(item); persist(item);
-          codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value=KINDS[0]; if(dateEl) dateEl.value=todayStr(); codeEl.focus();
+          codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value=KINDS[0]; if(dateEl) dateEl.value=todayStr();
+          if(fileEl) fileEl.value='없음'; if(fileUrlEl) fileUrlEl.value=''; syncFile(); codeEl.focus();
           q=''; const qEl=$('#miQ'); if(qEl) qEl.value=''; render();
           toast(`입고 추가 — ${date} · ${code||name} ${qty?'× '+won(qty):''}`); };
         $('#miAdd').onclick=add;
-        [codeEl,nameEl,qtyEl].forEach(elm=>elm.addEventListener('keydown',e=>{ if(e.key==='Enter') add(); }));
+        [codeEl,nameEl,qtyEl,fileUrlEl].forEach(elm=>elm&&elm.addEventListener('keydown',e=>{ if(e.key==='Enter') add(); }));
       }
       const qEl=$('#miQ'); if(qEl) qEl.oninput=()=>{ q=qEl.value; render(); };
 
