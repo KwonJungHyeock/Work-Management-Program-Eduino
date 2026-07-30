@@ -118,7 +118,11 @@
       //  배송정보 마스터(mdVendors)에 정산구분이 비어 있어도, 입점사 관리에서 분류된 값으로 자동 연동.
       let cardSettle={};   // { normCo(입점사명): '월정산'|'선결제' }
       const parseCardSettle=t=>{ const s=String(t||''); if(/월\s*정산|월정산/.test(s)) return '월정산'; if(/선결제|선결/.test(s)) return '선결제'; return ''; };
-      const cardSettleOf=n=>{ const k=normCo(n); return k?(cardSettle[k]||''):''; };
+      const cardSettleOf=n=>{ const k=normCo(n); if(!k) return '';
+        if(cardSettle[k]) return cardSettle[k];
+        // 표기 차이(약칭·접미어 '아시아/코리아' 등) 보정 — 정규화 이름이 서로 접두 일치하고 4자 이상일 때만
+        if(k.length>=4){ for(const ck in cardSettle){ if(ck.length>=4 && (ck.startsWith(k)||k.startsWith(ck))) return cardSettle[ck]; } }
+        return ''; };
       async function loadCardSettle(){ try{ const r=await fetch('/api/store?type=coll&coll=handover_md'); if(!r.ok) return false;
         const d=await r.json(); const m={}; (d&&d.items||[]).forEach(it=>{ if(!it) return;
           const cls=parseCardSettle(it.gradeSettle); const k=normCo(it.name||it.vendor||''); if(k&&cls&&!m[k]) m[k]=cls; });

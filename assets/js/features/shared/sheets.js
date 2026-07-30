@@ -21,6 +21,9 @@
       render(root){
         const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
         const _me=(Auth.user&&Auth.user())||{};
+        // 주문건 묶음 키 — groupKeyFn(있으면 레코드에서 재계산) > groupKey 필드 > 개별(id)
+        //  (저장된 orderGroup 값이 제각각이어도 재계산 키로 같은 입점사·주문자·일자를 하나로 묶음)
+        const gkeyOf = r => cfg.groupKeyFn ? (cfg.groupKeyFn(r)||r.id) : (cfg.groupKey?String(r[cfg.groupKey]||r.id):r.id);
         // 기록 삭제 = 파트장급(파트장·관리자) · 단 cfg.delByDept 시 해당 부서 담당자도 삭제 가능
         const canDel=isAdmin || _me.role==='lead' || (cfg.delByDept && _me.dept===cfg.dept);
         root.innerHTML=`
@@ -116,8 +119,8 @@
           (cfg.filters||[]).forEach(f=>{ const v=fvals[f.k]; if(v) rows=rows.filter(r=>String(r[f.k]??'').trim()===v); });
           if(q){ const s=q.toLowerCase(); rows=rows.filter(r=>cfg.cols.some(c=>String(r[c.k]??'').toLowerCase().includes(s))); }
           if(cfg.ordKey){
-            // 발주 기록: 날짜 내림차순 + 같은 주문서(orderGroup) 인접 + 입력순(ord) 오름차순
-            const gkey=r=>cfg.groupKey?String(r[cfg.groupKey]||r.id):r.id;
+            // 발주 기록: 날짜 내림차순 + 같은 주문서 인접 + 입력순(ord) 오름차순
+            const gkey=gkeyOf;
             const gmin={}; rows.forEach(r=>{ const g=gkey(r), o=ordOf(r); if(gmin[g]==null||o<gmin[g]) gmin[g]=o; });
             rows.sort((a,b)=> (dateDir==='asc'?dayOf(a).localeCompare(dayOf(b)):dayOf(b).localeCompare(dayOf(a))) || (gmin[gkey(a)]-gmin[gkey(b)]) || (ordOf(a)-ordOf(b)));
           } else {
@@ -176,17 +179,18 @@
           $('#meta').textContent=`${from} ~ ${to} · 총 ${rows.length.toLocaleString()}건`;
           const CAP=2000; const show=rows.slice(0,CAP);
           const head=`<thead><tr>${cfg.cols.map(c=>`<th>${esc(c.h)}</th>`).join('')}${hasActions?'<th></th>':''}</tr></thead>`;
-          // 같은 주문서(orderGroup)가 2건 이상이면 하나의 주문건으로 표시
-          const grpCnt={}; if(cfg.groupKey) show.forEach(r=>{ const g=r[cfg.groupKey]; if(g) grpCnt[g]=(grpCnt[g]||0)+1; });
+          // 같은 주문서가 2건 이상이면 하나의 주문건으로 표시(재계산 키 기준)
+          const canGroup=!!(cfg.groupKey||cfg.groupKeyFn);
+          const grpCnt={}; if(canGroup) show.forEach(r=>{ const g=gkeyOf(r); if(g) grpCnt[g]=(grpCnt[g]||0)+1; });
           const MERGE=(cfg.groupMergeKeys&&cfg.groupMergeKeys.length)?cfg.groupMergeKeys:null;   // 주문건 공통 컬럼(rowspan 병합)
           const tdRowspan=(td,n)=> td.replace('<td', '<td data-msp="1" rowspan="'+n+'"');
           const rowCls=(r,base)=>{ const fl=cfg.rowFlag?cfg.rowFlag(r):''; return [base,fl].filter(Boolean).join(' '); };
           const rowHtml=(r,base)=>{ const c=rowCls(r,base); return `<tr${c?` class="${c}"`:''}>${cfg.cols.map(cc=>(editId===r.id?editCell(r,cc):cell(r,cc))).join('')}${hasActions?actionCell(r):''}</tr>`; };
           let bodyRows='';
           for(let i=0;i<show.length;){
-            const r=show[i]; const g=cfg.groupKey&&r[cfg.groupKey]; const grouped=g&&grpCnt[g]>1;
+            const r=show[i]; const g=canGroup?gkeyOf(r):''; const grouped=g&&grpCnt[g]>1;
             if(grouped && MERGE){
-              const gr=[]; let j=i; while(j<show.length && (cfg.groupKey&&show[j][cfg.groupKey])===g){ gr.push(show[j]); j++; }
+              const gr=[]; let j=i; while(j<show.length && canGroup && gkeyOf(show[j])===g){ gr.push(show[j]); j++; }
               const editingInGroup=gr.some(x=>x.id===editId);
               if(editingInGroup){ gr.forEach(x=>{ bodyRows+=rowHtml(x,'sv-grp'); }); }
               else gr.forEach((x,idx)=>{
@@ -359,6 +363,11 @@
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 같은 주문서는 묶여서 입력순으로 표시되며, ▲▼로 순서를 바꿀 수 있습니다. 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자', reorderable:true, ordKey:'ord', groupKey:'orderGroup',
+    // 주문건 묶음: 저장된 orderGroup 값이 제각각(주문자 표기 차이 등)이어도 '입점사·주문자·일자'를
+    //  정규화해 재계산 → 같은 주문자·같은 날·같은 입점사면 일부만 묶이던 문제 없이 하나로 묶음
+    groupKeyFn:r=>{ const nm=s=>String(s||'').replace(/[(（[][^)）\]]*[)）\]]/g,'').replace(/㈜|주식회사|유한회사|재단법인/g,'').replace(/\s/g,'').toLowerCase();
+      const v=nm(r.vendor), o=String(r.orderer||'').replace(/\s/g,'').toLowerCase(), d=String(r.day||r.date||'').slice(0,10);
+      return (v&&d)?('og:'+v+'|'+o+'|'+d):(r.orderGroup||r.id); },
     filters:[{k:'settle',label:'정산구분'},{k:'gubun',label:'구분'},{k:'orderStatus',label:'발주여부'}],   // 월정산/선결제 등 따로 보기
     rowFlag:r=>String(r.orderStatus||'')==='출고지연'?'sv-late':'',   // 출고지연 발주건은 빨갛게 강조
     // 하나의 주문서(여러 상품)는 발주 기록에서도 주문건 공통 컬럼을 rowspan 병합해 한 건으로 표시
