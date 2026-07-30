@@ -35,7 +35,6 @@
         .mi-bd{padding:16px 20px}
         .mi-add{display:grid;grid-template-columns:148px 118px 132px minmax(150px,1fr) 88px 124px 84px;gap:10px;align-items:end}
         @media(max-width:1000px){.mi-add{grid-template-columns:1fr 1fr}}
-        .mi-add .mi-fullrow{grid-column:1/-1}
         .mi-add label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:4px}
         .mi-in{width:100%;height:38px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font:inherit;background:var(--panel);color:var(--ink)}
         .mi-in:focus{outline:2px solid #12886a33;border-color:#12886a}
@@ -53,14 +52,8 @@
         /* 읽기전용 제품명 — 길면 말줄임(전체는 tooltip) */
         .mi-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .mi-code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        /* 파일위치 — 선택 + (구글드라이브 시) link 하이퍼링크만 표시 */
-        .mi-file{display:flex;flex-direction:column;gap:3px;align-items:flex-start;white-space:nowrap}
-        .mi-fsel{height:30px}
-        .mi-flk{display:inline-flex;align-items:center;gap:5px;font-size:12px}
-        .mi-lk{color:#0a63c2;font-weight:800;text-decoration:underline}
-        .mi-lk:hover{color:#0847a0}
-        .mi-lkbtn{border:1px solid var(--line-2);background:var(--panel);border-radius:6px;font-size:11px;padding:1px 6px;cursor:pointer;color:var(--ink-2)}
-        .mi-lkbtn:hover{border-color:#12886a;color:#12886a}
+        /* 파일위치 — 없음/구글드라이브 한 줄 선택(행 높이 일정하게) */
+        .mi-file{white-space:nowrap}
         .mi-kind{display:inline-block;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 9px}
         .mi-kind.new{background:#fff4e6;color:#b4530a} .mi-kind.old{background:#eef4fb;color:#0a63c2}
         .mi-qty{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
@@ -114,7 +107,6 @@
           <div><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off"></div>
           <div><label>입고 수량</label><input class="mi-in mi-qty" id="miQty" placeholder="0" inputmode="numeric"></div>
           <div><label>파일위치</label><select class="mi-in" id="miFile"><option value="없음">없음</option><option value="구글드라이브">구글드라이브</option></select></div>
-          <div id="miFileLinkWrap" class="mi-fullrow" style="display:none"><label>구글드라이브 접속 링크</label><input class="mi-in" id="miFileUrl" placeholder="접속 링크(URL) — 선택" autocomplete="off"></div>
           <div><label>&nbsp;</label><button class="mi-addbtn" id="miAdd">추가</button></div>
         </div></div></div>`:''}
 
@@ -193,26 +185,18 @@
           tr.querySelectorAll('[data-f]').forEach(inp=>inp.onchange=()=>{ const f=inp.dataset.f;
             if(f==='qty'){ it.qty=num(inp.value); inp.value=it.qty; } else it[f]=inp.value.trim();
             persist(it);
-            if(f==='qty' || f==='kind' || f==='date' || f==='file'){ render(); } });
-          // 파일위치=구글드라이브 → 접속 링크 입력/수정("link"만 하이퍼링크)
-          tr.querySelectorAll('[data-lk]').forEach(b=>b.onclick=()=>{ const url=prompt('구글드라이브 접속 링크(URL)를 입력하세요', it.fileUrl||'');
-            if(url===null) return; it.fileUrl=String(url).trim(); if(it.fileUrl && it.file!=='구글드라이브') it.file='구글드라이브'; persist(it); render(); });
+            if(f==='qty' || f==='kind' || f==='date'){ render(); } });
           const db=tr.querySelector('[data-del]'); if(db) db.onclick=()=>{ if(!confirm('이 입고 내역을 삭제할까요?')) return;
             api.del(it.id); items=items.filter(x=>String(x.id)!==String(it.id)); store(CACHE).set(items); render(); toast('삭제했습니다'); };
         });
       }
-      // 파일위치 셀 — 없음/구글드라이브 선택, 구글드라이브면 "link"만 하이퍼링크(영역 침범 없이 깔끔)
+      // 파일위치 셀 — 없음/구글드라이브 한 줄 선택(행 높이 일정)
       function fileCellHtml(it, edit){
-        const gd=it.file==='구글드라이브'; const url=it.fileUrl||'';
-        const link = gd
-          ? (url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="mi-lk">link</a>${edit?` <button class="mi-lkbtn" data-lk="1" title="링크 수정">✎</button>`:''}`
-                 : (edit ? `<button class="mi-lkbtn" data-lk="1">링크 추가</button>` : `<span class="muted">-</span>`))
-          : (edit ? '' : `<span class="muted">없음</span>`);
-        if(!edit) return link;
-        const sel=`<select class="mi-cell mi-fsel" data-f="file">
+        const gd=it.file==='구글드라이브';
+        if(edit) return `<select class="mi-cell" data-f="file">
             <option value="없음" ${!gd?'selected':''}>없음</option>
             <option value="구글드라이브" ${gd?'selected':''}>구글드라이브</option></select>`;
-        return `${sel}${link?`<span class="mi-flk">${link}</span>`:''}`;
+        return gd ? '구글드라이브' : '<span class="muted">없음</span>';
       }
 
       // 입고 일정 달력 — 월별로 입고 예정/기록 건수를 표시, 날짜 클릭 시 시트를 그 날짜로 필터
@@ -246,25 +230,20 @@
       }
 
       if(editable){
-        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty'),
-              fileEl=$('#miFile'), fileUrlEl=$('#miFileUrl'), linkWrap=$('#miFileLinkWrap');
+        const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), nameEl=$('#miName'), qtyEl=$('#miQty'), fileEl=$('#miFile');
         if(dateEl) dateEl.value=todayStr();   // 기본값: 오늘 (달력에서 변경 가능)
-        // 파일위치=구글드라이브 선택 시에만 접속 링크 입력칸 노출
-        const syncFile=()=>{ if(linkWrap) linkWrap.style.display = (fileEl&&fileEl.value==='구글드라이브')?'':'none'; };
-        if(fileEl) fileEl.onchange=syncFile; syncFile();
         const add=()=>{ const code=codeEl.value.trim(), name=nameEl.value.trim(), qty=num(qtyEl.value);
           if(!code && !name){ toast('상품코드 또는 제품명을 입력하세요'); codeEl.focus(); return; }
           const date=(dateEl&&dateEl.value)||todayStr();
           const file=(fileEl&&fileEl.value)||'없음';
-          const fileUrl=(file==='구글드라이브'&&fileUrlEl)?fileUrlEl.value.trim():'';
-          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file, fileUrl, createdAt:nowISO() };
+          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file, createdAt:nowISO() };
           items.push(item); persist(item);
           codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value=KINDS[0]; if(dateEl) dateEl.value=todayStr();
-          if(fileEl) fileEl.value='없음'; if(fileUrlEl) fileUrlEl.value=''; syncFile(); codeEl.focus();
+          if(fileEl) fileEl.value='없음'; codeEl.focus();
           q=''; const qEl=$('#miQ'); if(qEl) qEl.value=''; render();
           toast(`입고 추가 — ${date} · ${code||name} ${qty?'× '+won(qty):''}`); };
         $('#miAdd').onclick=add;
-        [codeEl,nameEl,qtyEl,fileUrlEl].forEach(elm=>elm&&elm.addEventListener('keydown',e=>{ if(e.key==='Enter') add(); }));
+        [codeEl,nameEl,qtyEl].forEach(elm=>elm&&elm.addEventListener('keydown',e=>{ if(e.key==='Enter') add(); }));
       }
       const qEl=$('#miQ'); if(qEl) qEl.oninput=()=>{ q=qEl.value; render(); };
 
