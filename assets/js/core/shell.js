@@ -99,17 +99,25 @@ function bootShell(){
   // 내비게이션 — 공통(홈)은 항상, CS·MD는 표시하되 권한 없는 기능은 잠금
   const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', logi:'#20b088', admin:'#f0a020' };
   const nav = $('nav');
+  // 메뉴 커스터마이즈 — 관리자가 드래그로 순서변경 · 더블클릭으로 이름변경. 전 직원 공유(공용 coll 'navcustom').
+  //  로컬 캐시로 즉시 적용 후 서버 최신본 반영. navCfg = { order:{dept:[key…]}, names:{key:label} }
+  let navCfg = store('eduino.navcustom').get({}) || {};
+  const navName = (key,def) => (navCfg.names && navCfg.names[key]) || def;
+  const orderItemsBy = (dept, items) => { const ord=(navCfg.order && navCfg.order[dept])||[]; if(!ord.length) return items;
+    const known=ord.map(k=>items.find(it=>it.key===k)).filter(Boolean); const seen=new Set(known.map(it=>it.key));
+    return [...known, ...items.filter(it=>!seen.has(it.key))]; };
   NAV.forEach(g=>{
     if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
     const grp = el('div','nav-group'+(g.common?' nav-group-top':''));
+    grp.dataset.dept = g.dept;
     grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
     // 홈(공통)은 제목 없이 버튼만 — 업무 기능이 메인이므로 상단은 간결하게
     grp.innerHTML = g.common ? '' : `<div class="nav-glabel"><span class="gi">${icon(g.icon)}</span>
       <span class="gtx"><b>${esc(g.name)}</b><small>${esc(g.full)}</small></span></div>`;
-    g.items.forEach(it=>{
+    orderItemsBy(g.dept, g.items).forEach(it=>{
       const locked = !g.common && g.dept!=='admin' && !hasPerm(it.key);
-      const item = el('div','nav-item'+(locked?' locked':'')); item.dataset.key = it.key;
-      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(it.name)}</span>${locked?`<span class="lock">${icon('lock')}</span>`:`<span class="nav-badge" style="display:none;margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;line-height:18px;text-align:center"></span>`}`;
+      const item = el('div','nav-item'+(locked?' locked':'')); item.dataset.key = it.key; item.dataset.defname = it.name;
+      item.innerHTML = `${icon(it.icon||'chevron')}<span class="txt">${esc(navName(it.key, it.name))}</span>${locked?`<span class="lock">${icon('lock')}</span>`:`<span class="nav-badge" style="display:none;margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;line-height:18px;text-align:center"></span>`}`;
       item.onclick = ()=>{ location.hash = it.key; };
       grp.appendChild(item);
     });
@@ -126,6 +134,50 @@ function bootShell(){
     it.onclick=()=>{ location.hash='admin.insights'; };
     lg.appendChild(it); nav.appendChild(lg);
   }
+
+  // ── 메뉴 커스터마이즈: 관리자만 드래그 순서변경 · 더블클릭 이름변경 (전 직원 공유) ──
+  (function navCustomize(){
+    async function saveCfg(){ store('eduino.navcustom').set(navCfg);
+      try{ await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'navcustom',
+        item:{ id:'v1', order:navCfg.order||{}, names:navCfg.names||{}, updatedBy:(me.user&&me.user.name)||'', updatedAt:new Date().toISOString() }})}); }catch(e){} }
+    function applyCfg(){   // 서버 최신본을 현재 DOM에 반영(순서 + 이름)
+      nav.querySelectorAll('.nav-group').forEach(grp=>{ const dept=grp.dataset.dept;
+        const items=[...grp.querySelectorAll('.nav-item')]; const byKey={}; items.forEach(x=>byKey[x.dataset.key]=x);
+        const ord=(navCfg.order&&navCfg.order[dept])||[]; const seen=new Set();
+        ord.forEach(k=>{ if(byKey[k]){ grp.appendChild(byKey[k]); seen.add(k); } });          // 저장된 순서 먼저
+        items.forEach(x=>{ if(!seen.has(x.dataset.key)) grp.appendChild(x); });                // 신규(미저장)는 뒤로
+      });
+      nav.querySelectorAll('.nav-item').forEach(x=>{ const t=x.querySelector('.txt'); if(t) t.textContent=navName(x.dataset.key, x.dataset.defname||t.textContent); });
+    }
+    // 서버 최신 순서·이름 반영(캐시와 다르면 재적용)
+    fetchColl('navcustom').then(items=>{ const c=(items||[]).find(x=>x&&x.id==='v1'); if(c){ navCfg={ order:c.order||{}, names:c.names||{} }; store('eduino.navcustom').set(navCfg); applyCfg(); } });
+    if(!isAdmin) return;   // 편집(순서·이름)은 관리자만
+    nav.classList.add('can-reorder');
+    // 이름변경 — 더블클릭 → 입력(빈 값이면 기본 이름으로 복원)
+    nav.querySelectorAll('.nav-item').forEach(it=>{ it.title='관리자: 드래그로 순서변경 · 더블클릭으로 이름변경';
+      it.addEventListener('dblclick',e=>{ e.preventDefault(); const key=it.dataset.key, def=it.dataset.defname||'';
+        const cur=navName(key,def); const nn=prompt(`메뉴 이름 변경 (비우면 기본값 "${def}"으로 복원)`, cur);
+        if(nn==null) return; navCfg.names=navCfg.names||{}; const v=String(nn).trim();
+        if(!v || v===def){ delete navCfg.names[key]; } else { navCfg.names[key]=v; }
+        const t=it.querySelector('.txt'); if(t) t.textContent=navName(key,def); saveCfg(); toast('메뉴 이름을 저장했습니다'); });
+    });
+    // 순서변경 — 드래그(같은 그룹 안에서만)
+    let dragEl=null, dragGrp=null;
+    const afterEl=(grp,y)=>[...grp.querySelectorAll('.nav-item:not(.dragging)')].reduce((best,el2)=>{
+      const b=el2.getBoundingClientRect(); const off=y-b.top-b.height/2; return (off<0&&off>best.off)?{off,el:el2}:best; },{off:-Infinity,el:null}).el;
+    nav.querySelectorAll('.nav-group').forEach(grp=>{
+      if(grp.querySelectorAll('.nav-item').length<2) return;
+      grp.querySelectorAll('.nav-item').forEach(it=>{ it.setAttribute('draggable','true');
+        it.addEventListener('dragstart',e=>{ dragEl=it; dragGrp=grp; it.classList.add('dragging'); try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',it.dataset.key);}catch(_){}});
+        it.addEventListener('dragend',()=>{ it.classList.remove('dragging');
+          if(dragGrp){ const dept=dragGrp.dataset.dept; navCfg.order=navCfg.order||{};
+            navCfg.order[dept]=[...dragGrp.querySelectorAll('.nav-item')].map(x=>x.dataset.key).filter(Boolean); saveCfg(); toast('메뉴 순서를 저장했습니다'); }
+          dragEl=null; dragGrp=null; });
+      });
+      grp.addEventListener('dragover',e=>{ if(!dragEl||dragGrp!==grp) return; e.preventDefault();
+        const a=afterEl(grp,e.clientY); if(a==null) grp.appendChild(dragEl); else grp.insertBefore(dragEl,a); });
+    });
+  })();
 
   // 사이드바 알림 배지 — 미처리 콜백(CS·관리자) · 안 읽은 공지(전원)
   const setBadge=(key,n)=>{ const s=nav.querySelector(`.nav-item[data-key="${key}"] .nav-badge`); if(!s) return;

@@ -77,6 +77,10 @@
 .nav-item.on{background:#2d3745;color:#fff;font-weight:700}
 .nav-item.on::before{content:"";position:absolute;left:-2px;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--dept,var(--red))}
 .nav-item.on .ic{color:var(--dept,#fff)}
+/* 관리자 메뉴 커스터마이즈 — 드래그 순서변경 · 더블클릭 이름변경 */
+.side-nav.can-reorder .nav-item{cursor:grab}
+.side-nav.can-reorder .nav-item:active{cursor:grabbing}
+.nav-item.dragging{opacity:.45;background:#3a4557}
 .nav-collapsed .nav-item{justify-content:center;padding:8px 0}
 .nav-collapsed .nav-item .txt{display:none}
 .nav-collapsed .nav-item.on::before{left:0}
