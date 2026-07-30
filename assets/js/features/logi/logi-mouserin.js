@@ -85,10 +85,10 @@
       </div>
       <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 300px)">
         <table class="mi-t">
-        <colgroup><col style="width:150px"><col style="width:92px"><col style="width:130px"><col><col style="width:94px"><col style="width:118px">${editable?'<col style="width:40px">':''}</colgroup>
+        <colgroup><col style="width:150px"><col style="width:92px"><col style="width:130px"><col style="width:330px"><col style="width:96px"><col style="width:150px">${editable?'<col style="width:40px">':''}<col></colgroup>
         <thead><tr>
           <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
-          <th style="text-align:right">입고 수량</th><th>등록</th>${editable?'<th></th>':''}
+          <th style="text-align:right">입고 수량</th><th>등록</th>${editable?'<th></th>':''}<th></th>
         </tr></thead><tbody id="miRows"></tbody></table>
       </div></div>
       </div>`;
@@ -112,7 +112,7 @@
           <span class="mi-chip">신제품 <b>${cNew}</b> · 기존 <b>${cOld}</b></span>
           <span class="mi-chip">총 입고 수량 <b>${won(totQty)}</b></span>`;
         countEl.textContent=`${view.length}/${items.length}건`;
-        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?7:6}" class="nx-empty" style="padding:26px">${term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; return; }
+        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?8:7}" class="nx-empty" style="padding:26px">${term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; return; }
         rowsEl.innerHTML=view.map(it=>{
           const id=esc(it.id); const isNew=it.kind==='신제품';
           if(editable) return `<tr data-id="${id}">
@@ -122,14 +122,14 @@
             <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
             <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
             <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td>
-            <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td></tr>`;
+            <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td><td></td></tr>`;
           return `<tr data-id="${id}">
             <td>${esc(it.date||'-')}</td>
             <td><span class="mi-kind ${isNew?'new':'old'}">${esc(it.kind||'기존')}</span></td>
             <td class="mono mi-code" title="${esc(it.code||'')}">${esc(it.code||'-')}</td>
             <td class="mi-name" title="${esc(it.name||'')}">${esc(it.name||'-')}</td>
             <td class="mi-qty">${won(num(it.qty))}</td>
-            <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td></tr>`;
+            <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td><td></td></tr>`;
         }).join('');
         if(!editable) return;
         // 인라인 편집 — 값 변경 시 해당 행만 저장(수량은 숫자 정규화)
