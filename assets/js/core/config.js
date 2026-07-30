@@ -198,7 +198,7 @@ const NAV = [
       { key:'md.manual',    name:'업무 매뉴얼',        icon:'clipboard' },
   ]},
   { dept:'logi', name:'물류', full:'물류 관리', icon:'truck', items:[
-      { key:'logi.mouserin', name:'마우저 입고', icon:'box' },
+      { key:'logi.mouserin', name:'자사제품 입고', icon:'box' },
       { key:'logi.manual', name:'업무 매뉴얼', icon:'clipboard' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[

@@ -7,7 +7,7 @@
 (function(){
   const COLL='mouser_inbound';
   const CACHE='eduino.logi.mouserin';
-  const KINDS=['기존','신제품'];
+  const KINDS=['중국 - 기존','중국 - 신제품','마우저 - 기존','마우저 - 신제품'];
   const meU=()=>(Auth.user&&Auth.user())||{};
   const canEdit=()=> !!(Auth.isAdmin&&Auth.isAdmin()) || meU().dept==='logi' || meU().role==='lead';
   const won=n=>Number(n||0).toLocaleString('ko-KR');
@@ -19,7 +19,7 @@
   };
 
   MODULES['logi.mouserin']={
-    title:'마우저 입고', icon:'box',
+    title:'자사제품 입고', icon:'box',
     render(root){
       const editable=canEdit();
       let items=store(CACHE).get([])||[];    // 로컬 캐시 먼저 표시(즉시 렌더) → 서버 최신으로 교체
@@ -45,17 +45,25 @@
         table.mi-t th{background:var(--panel-2);color:var(--ink-2);font-size:11.5px;font-weight:800;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mi-t td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
         table.mi-t tr:hover td{background:var(--panel-2)}
-        .mi-cell{width:100%;height:34px;border:1px solid transparent;border-radius:7px;padding:0 8px;font:inherit;background:transparent;color:var(--ink)}
+        .mi-cell{width:100%;min-width:0;height:34px;border:1px solid transparent;border-radius:7px;padding:0 8px;font:inherit;background:transparent;color:var(--ink)}
         .mi-cell:hover{border-color:var(--line-2)} .mi-cell:focus{outline:0;border-color:#12886a;background:var(--panel)}
         select.mi-cell,input[type=date].mi-cell{cursor:pointer}
         input[type=date].mi-cell{padding:0 6px}
         /* 읽기전용 제품명 — 길면 말줄임(전체는 tooltip) */
         .mi-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .mi-code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        /* 파일위치 — 선택 + (구글드라이브 시) link 하이퍼링크만 표시 */
+        .mi-file{display:flex;flex-direction:column;gap:3px;align-items:flex-start;white-space:nowrap}
+        .mi-fsel{height:30px}
+        .mi-flk{display:inline-flex;align-items:center;gap:5px;font-size:12px}
+        .mi-lk{color:#0a63c2;font-weight:800;text-decoration:underline}
+        .mi-lk:hover{color:#0847a0}
+        .mi-lkbtn{border:1px solid var(--line-2);background:var(--panel);border-radius:6px;font-size:11px;padding:1px 6px;cursor:pointer;color:var(--ink-2)}
+        .mi-lkbtn:hover{border-color:#12886a;color:#12886a}
         .mi-kind{display:inline-block;font-size:11.5px;font-weight:800;border-radius:6px;padding:2px 9px}
         .mi-kind.new{background:#fff4e6;color:#b4530a} .mi-kind.old{background:#eef4fb;color:#0a63c2}
         .mi-qty{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-        .mi-del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:4px 8px;border-radius:7px}
+        .mi-del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:4px 5px;border-radius:7px}
         .mi-del:hover{background:#fdecea;color:#c0392b}
         .mi-meta{font-size:11px;color:var(--muted);white-space:nowrap}
         .mi-sum{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
@@ -63,7 +71,7 @@
         .mi-chip b{color:#12886a}
         .mi-search{height:36px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;min-width:200px;background:var(--panel);color:var(--ink)}
         /* 좌: 입고 시트 · 우: 입고 일정 달력 */
-        .mi-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+        .mi-layout{display:grid;grid-template-columns:minmax(0,1fr) 316px;gap:18px;align-items:start}
         @media(max-width:1160px){.mi-layout{grid-template-columns:1fr}}
         .mi-side .mi-card{margin-bottom:0}
         .mi-cal-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px}
@@ -92,8 +100,8 @@
       </style>
 
       <div class="mhead pad"><div class="mhead-row">
-        <div><div class="tt">마우저 입고</div>
-          <div class="ds">마우저에서 들여온 상품의 입고 내역을 직접 기록·수정합니다. 구분(기존/신제품)·상품코드·제품명·입고 수량을 입력하세요.</div></div>
+        <div><div class="tt">자사제품 입고</div>
+          <div class="ds">자사제품(중국·마우저)의 입고 내역을 직접 기록·수정합니다. 구분·상품코드·제품명·입고 수량·파일위치를 입력하세요.</div></div>
         <div class="mhead-act mi-sum" id="miSum"></div>
       </div></div>
       <div class="mbody">
@@ -116,10 +124,10 @@
           </div>
           <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 320px)">
             <table class="mi-t">
-            <colgroup><col style="width:148px"><col style="width:88px"><col style="width:128px"><col><col style="width:94px"><col style="width:146px">${editable?'<col style="width:40px">':''}</colgroup>
+            <colgroup><col style="width:142px"><col style="width:118px"><col style="width:104px"><col><col style="width:78px"><col style="width:106px"><col style="width:108px">${editable?'<col style="width:44px">':''}</colgroup>
             <thead><tr>
               <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
-              <th style="text-align:right">입고 수량</th><th>등록</th>${editable?'<th></th>':''}
+              <th style="text-align:right">입고 수량</th><th>파일위치</th><th>등록</th>${editable?'<th></th>':''}
             </tr></thead><tbody id="miRows"></tbody></table>
           </div></div>
         </div>
@@ -144,7 +152,7 @@
           .filter(it=> (!dateFilter || it.date===dateFilter)
             && (!term || ((it.code||'')+' '+(it.name||'')).toLowerCase().includes(term)));
         // 요약: 신제품/기존 건수 + 총 입고 수량
-        const cNew=items.filter(it=>it.kind==='신제품').length, cOld=items.filter(it=>it.kind!=='신제품').length;
+        const cNew=items.filter(it=>/신제품/.test(it.kind||'')).length, cOld=items.filter(it=>!/신제품/.test(it.kind||'')).length;
         const totQty=items.reduce((s,it)=>s+num(it.qty),0);
         sumEl.innerHTML=`<span class="mi-chip">전체 <b>${items.length}</b>건</span>
           <span class="mi-chip">신제품 <b>${cNew}</b> · 기존 <b>${cOld}</b></span>
@@ -154,23 +162,25 @@
           ? `<span class="mi-fchip">${icon('check2')||''} ${esc(dateFilter)} 입고<span class="x" id="miFClear" title="필터 해제">✕</span></span>` : '';
         const fc=$('#miFClear'); if(fc) fc.onclick=()=>{ dateFilter=''; render(); };
         countEl.textContent=`${view.length}/${items.length}건`;
-        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?7:6}" class="nx-empty" style="padding:26px">${dateFilter?esc(dateFilter)+' 입고 내역이 없습니다.':term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; renderCal(); return; }
+        if(!view.length){ rowsEl.innerHTML=`<tr><td colspan="${editable?8:7}" class="nx-empty" style="padding:26px">${dateFilter?esc(dateFilter)+' 입고 내역이 없습니다.':term?'검색 결과가 없습니다.':'아직 입고 내역이 없습니다.'+(editable?' 위에서 추가하세요.':'')}</td></tr>`; renderCal(); return; }
         rowsEl.innerHTML=view.map(it=>{
-          const id=esc(it.id); const isNew=it.kind==='신제품';
+          const id=esc(it.id); const isNew=/신제품/.test(it.kind||'');
           if(editable) return `<tr data-id="${id}">
             <td><input class="mi-cell" data-f="date" type="date" value="${esc(it.date||'')}"></td>
             <td><select class="mi-cell" data-f="kind">${KINDS.map(k=>`<option value="${esc(k)}" ${it.kind===k?'selected':''}>${esc(k)}</option>`).join('')}</select></td>
             <td><input class="mi-cell" data-f="code" value="${esc(it.code||'')}" placeholder="상품코드"></td>
             <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
             <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
+            <td class="mi-file">${fileCellHtml(it,true)}</td>
             <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td>
             <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td></tr>`;
           return `<tr data-id="${id}">
             <td>${esc(it.date||'-')}</td>
-            <td><span class="mi-kind ${isNew?'new':'old'}">${esc(it.kind||'기존')}</span></td>
+            <td><span class="mi-kind ${isNew?'new':'old'}">${esc(it.kind||'-')}</span></td>
             <td class="mono mi-code" title="${esc(it.code||'')}">${esc(it.code||'-')}</td>
             <td class="mi-name" title="${esc(it.name||'')}">${esc(it.name||'-')}</td>
             <td class="mi-qty">${won(num(it.qty))}</td>
+            <td class="mi-file">${fileCellHtml(it,false)}</td>
             <td class="mi-meta">${esc(it.whoName||'-')}<div>${esc(fmtWhen(it.updatedAt))}</div></td></tr>`;
         }).join('');
         renderCal();
@@ -180,10 +190,26 @@
           tr.querySelectorAll('[data-f]').forEach(inp=>inp.onchange=()=>{ const f=inp.dataset.f;
             if(f==='qty'){ it.qty=num(inp.value); inp.value=it.qty; } else it[f]=inp.value.trim();
             persist(it);
-            if(f==='qty' || f==='kind' || f==='date'){ render(); } });
+            if(f==='qty' || f==='kind' || f==='date' || f==='file'){ render(); } });
+          // 파일위치=구글드라이브 → 접속 링크 입력/수정("link"만 하이퍼링크)
+          tr.querySelectorAll('[data-lk]').forEach(b=>b.onclick=()=>{ const url=prompt('구글드라이브 접속 링크(URL)를 입력하세요', it.fileUrl||'');
+            if(url===null) return; it.fileUrl=String(url).trim(); if(it.fileUrl && it.file!=='구글드라이브') it.file='구글드라이브'; persist(it); render(); });
           const db=tr.querySelector('[data-del]'); if(db) db.onclick=()=>{ if(!confirm('이 입고 내역을 삭제할까요?')) return;
             api.del(it.id); items=items.filter(x=>String(x.id)!==String(it.id)); store(CACHE).set(items); render(); toast('삭제했습니다'); };
         });
+      }
+      // 파일위치 셀 — 없음/구글드라이브 선택, 구글드라이브면 "link"만 하이퍼링크(영역 침범 없이 깔끔)
+      function fileCellHtml(it, edit){
+        const gd=it.file==='구글드라이브'; const url=it.fileUrl||'';
+        const link = gd
+          ? (url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="mi-lk">link</a>${edit?` <button class="mi-lkbtn" data-lk="1" title="링크 수정">✎</button>`:''}`
+                 : (edit ? `<button class="mi-lkbtn" data-lk="1">링크 추가</button>` : `<span class="muted">-</span>`))
+          : (edit ? '' : `<span class="muted">없음</span>`);
+        if(!edit) return link;
+        const sel=`<select class="mi-cell mi-fsel" data-f="file">
+            <option value="없음" ${!gd?'selected':''}>없음</option>
+            <option value="구글드라이브" ${gd?'selected':''}>구글드라이브</option></select>`;
+        return `${sel}${link?`<span class="mi-flk">${link}</span>`:''}`;
       }
 
       // 입고 일정 달력 — 월별로 입고 예정/기록 건수를 표시, 날짜 클릭 시 시트를 그 날짜로 필터
@@ -222,9 +248,9 @@
         const add=()=>{ const code=codeEl.value.trim(), name=nameEl.value.trim(), qty=num(qtyEl.value);
           if(!code && !name){ toast('상품코드 또는 제품명을 입력하세요'); codeEl.focus(); return; }
           const date=(dateEl&&dateEl.value)||todayStr();
-          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||'기존', code, name, qty, createdAt:nowISO() };
+          const item={ id:uuid(), day:todayStr(), date, kind:kindEl.value||KINDS[0], code, name, qty, file:'없음', fileUrl:'', createdAt:nowISO() };
           items.push(item); persist(item);
-          codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value='기존'; if(dateEl) dateEl.value=todayStr(); codeEl.focus();
+          codeEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value=KINDS[0]; if(dateEl) dateEl.value=todayStr(); codeEl.focus();
           q=''; const qEl=$('#miQ'); if(qEl) qEl.value=''; render();
           toast(`입고 추가 — ${date} · ${code||name} ${qty?'× '+won(qty):''}`); };
         $('#miAdd').onclick=add;
