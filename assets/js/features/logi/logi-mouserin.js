@@ -65,8 +65,8 @@
         .mi-chip b{color:#12886a}
         .mi-search{height:36px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;min-width:200px;background:var(--panel);color:var(--ink)}
         /* 좌: 입고 시트 · 우: 입고 일정 달력 */
-        .mi-layout{display:grid;grid-template-columns:minmax(0,1fr) 316px;gap:18px;align-items:start}
-        @media(max-width:1160px){.mi-layout{grid-template-columns:1fr}}
+        .mi-layout{display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:18px;align-items:start}
+        @media(max-width:1220px){.mi-layout{grid-template-columns:1fr}}
         .mi-side .mi-card{margin-bottom:0}
         .mi-cal-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px}
         .mi-cal-hd .t{font-weight:800;font-size:14.5px;color:var(--ink)}
@@ -119,7 +119,7 @@
           </div>
           <div class="mi-card"><div style="overflow:auto;max-height:calc(100vh - 320px)">
             <table class="mi-t">
-            <colgroup><col style="width:142px"><col style="width:118px"><col style="width:104px"><col><col style="width:78px"><col style="width:106px"><col style="width:108px">${editable?'<col style="width:44px">':''}</colgroup>
+            <colgroup><col style="width:138px"><col style="width:112px"><col style="width:98px"><col><col style="width:76px"><col style="width:98px"><col style="width:100px">${editable?'<col style="width:44px">':''}</colgroup>
             <thead><tr>
               <th>입고날짜</th><th>구분</th><th>상품코드</th><th>제품명</th>
               <th style="text-align:right">입고 수량</th><th>파일위치</th><th>등록</th>${editable?'<th></th>':''}
