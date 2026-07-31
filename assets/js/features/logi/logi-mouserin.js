@@ -42,15 +42,29 @@
         .mi-hd .mi-ic svg{width:15px;height:15px}
         .mi-hd .mi-hsum{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;font-weight:700;font-size:12px}
         .mi-bd{padding:14px 18px}
-        .mi-add{display:grid;grid-template-columns:130px 118px 104px 118px minmax(130px,1fr) 74px 78px;gap:9px;align-items:end}
-        @media(max-width:1080px){.mi-add{grid-template-columns:1fr 1fr}}
-        .mi-add label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
-        .mi-in{width:100%;height:38px;border:1px solid var(--line-2);border-radius:9px;padding:0 10px;font:inherit;background:var(--panel);color:var(--ink)}
+        /* 입고 추가 — 단품/묶음 모드 · 필드 정렬 */
+        .mi-addbar{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
+        .mi-fld{display:flex;flex-direction:column;gap:4px}
+        .mi-fld>label{font-size:11px;font-weight:700;color:var(--muted)}
+        .mi-fld.grow{flex:1 1 160px;min-width:150px}
+        .mi-in{height:36px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font:inherit;background:var(--panel);color:var(--ink)}
         .mi-in:focus{outline:2px solid #12886a33;border-color:#12886a}
-        .mi-addrow{display:flex;gap:8px;margin-top:10px}
-        .mi-addbtn{height:38px;padding:0 18px;border:0;border-radius:9px;background:#12886a;color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
+        .mi-modeseg{display:inline-flex;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;height:36px}
+        .mi-modeseg button{border:0;background:var(--panel);padding:0 14px;font-size:12.5px;font-weight:800;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+        .mi-modeseg button:first-child{border-left:0}.mi-modeseg button.on{background:#12886a;color:#fff}
+        .mi-addbtn{height:36px;padding:0 14px;border:0;border-radius:8px;background:#12886a;color:#fff;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap}
         .mi-addbtn:hover{background:#0f7259}
-        .mi-addbtn.bundle{background:#0a63c2}.mi-addbtn.bundle:hover{background:#0a53a0}
+        /* 모드별 필드 표시 */
+        .mode-single .b-only{display:none} .mode-bundle .s-only{display:none}
+        /* 묶음 세부품목 입력(추가 전) */
+        .mi-subedit{margin-top:12px;border-top:1px dashed var(--line-2);padding-top:12px}
+        .mi-subedit-hd{font-size:12px;font-weight:800;color:#0a63c2;margin-bottom:8px}
+        .mi-subrow-e{display:grid;grid-template-columns:130px minmax(150px,1fr) 80px 30px;gap:8px;margin-bottom:6px}
+        .mi-subrow-e input{height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font:inherit;background:var(--panel);color:var(--ink)}
+        .mi-subx{border:0;background:transparent;color:#b9c4d2;cursor:pointer;font-size:14px;border-radius:6px}
+        .mi-subx:hover{background:#fdecea;color:#c0392b}
+        .mi-submore{border:1px dashed #bcd3ee;background:#f0f6fd;color:#0a63c2;border-radius:8px;font-size:12px;font-weight:700;padding:6px 12px;cursor:pointer}
+        .mi-submore:hover{background:#e3eefb}
         /* 필터 바 */
         .mi-fbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
         .mi-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
@@ -97,6 +111,7 @@
         .mi-onocell{display:flex;align-items:center;gap:3px;min-width:0}
         /* 묶음 행 */
         tr.mi-brow>td{background:#f3f8ff}
+        .mi-bchip{display:inline-block;font-size:10.5px;font-weight:800;color:#0a63c2;background:#e8f1fc;border:1px solid #cfe0f5;border-radius:6px;padding:2px 7px}
         tr.mi-subrow>td{background:#fafcff;border-bottom:1px solid var(--line);padding-top:4px;padding-bottom:4px}
         tr.mi-subrow .ind{color:#9db4d0;font-size:12px;padding-left:6px}
         .mi-subadd{border:1px dashed #bcd3ee;background:#f0f6fd;color:#0a63c2;border-radius:7px;font-size:11.5px;font-weight:700;padding:3px 9px;cursor:pointer}
@@ -143,20 +158,23 @@
       <div class="mbody">
       ${editable?`<div class="mi-card"><div class="mi-hd"><span class="mi-ic">${icon('box')}</span> 입고 추가</div>
         <div class="mi-bd">
-          <div class="mi-add">
-            <div><label>입고날짜</label><input class="mi-in" id="miDate" type="date"></div>
-            <div><label>구분</label><select class="mi-in" id="miKind">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
-            <div><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off"></div>
-            <div><label>마우저 주문번호</label><input class="mi-in" id="miOrder" placeholder="예: 281234465" autocomplete="off"></div>
-            <div><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off"></div>
-            <div><label>입고 수량</label><input class="mi-in mi-qty" id="miQty" placeholder="0" inputmode="numeric"></div>
-            <div><label>파일위치</label><select class="mi-in" id="miFile"><option value="None">None</option><option value="drive">drive</option></select></div>
+          <div class="mi-addbar mode-single" id="miAddBar">
+            <div class="mi-fld"><label>추가유형</label>
+              <span class="mi-modeseg" id="miMode"><button type="button" data-m="단품" class="on">단품</button><button type="button" data-m="묶음">묶음</button></span></div>
+            <div class="mi-fld"><label>입고날짜</label><input class="mi-in" id="miDate" type="date" style="width:130px"></div>
+            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:116px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
+            <div class="mi-fld s-only"><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off" style="width:110px"></div>
+            <div class="mi-fld"><label>마우저 주문번호</label><input class="mi-in" id="miOrder" placeholder="예: 281234465" autocomplete="off" style="width:128px"></div>
+            <div class="mi-fld grow s-only"><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off" style="width:100%"></div>
+            <div class="mi-fld s-only"><label>수량</label><input class="mi-in mi-qty" id="miQty" placeholder="0" inputmode="numeric" style="width:64px"></div>
+            <div class="mi-fld"><label>파일</label><select class="mi-in" id="miFile" style="width:78px"><option value="None">None</option><option value="drive">drive</option></select></div>
+            <div class="mi-fld"><label>입고여부</label><select class="mi-in" id="miStatus" style="width:82px">${STATUSES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
+            <div class="mi-fld"><label>&nbsp;</label><button class="mi-addbtn" id="miAdd">＋ 추가</button></div>
           </div>
-          <div class="mi-addrow">
-            <select class="mi-in" id="miStatus" style="width:110px;flex:none">${STATUSES.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select>
-            <button class="mi-addbtn" id="miAdd">＋ 추가</button>
-            <button class="mi-addbtn bundle" id="miAddBundle" title="마우저 주문번호 하나에 세부품목 여러 개">＋ 묶음 추가</button>
-            <span class="muted" style="font-size:11.5px;align-self:center">묶음은 주문번호만 입력 → 추가 후 펼쳐서 세부품목 입력</span>
+          <div class="mi-subedit b-only" id="miSubEdit">
+            <div class="mi-subedit-hd">세부품목 <span class="muted" style="font-weight:600">— 이 주문번호에 포함된 품목을 모두 입력한 뒤 [묶음 추가]</span></div>
+            <div id="miSubList"></div>
+            <button type="button" class="mi-submore" id="miSubMore">＋ 품목 추가</button>
           </div>
         </div></div>`:''}
 
@@ -260,9 +278,9 @@
           const onoCell=`<div class="mi-onocell"><button class="mi-tog" data-toggle="${id}">${open?'▼':'▶'}</button>${onoLink(it.orderNo)}</div>`;
           const parent=`<tr class="mi-brow" data-id="${id}">
             <td>${dateCell}</td><td>${kindCell}</td>
-            <td class="muted" style="font-size:11px">묶음 ${subs.length}품목</td>
+            <td><span class="mi-bchip">묶음 ${subs.length}</span></td>
             <td>${onoCell}</td>
-            <td class="mi-name" title="${esc(summary)}"><b>주문묶음</b> · ${esc(summary)}${subs.length>3?` 외 ${subs.length-3}`:''}</td>
+            <td class="mi-name" title="${esc(summary)}">${esc(summary)}${subs.length>3?` <span class="muted">외 ${subs.length-3}</span>`:''}</td>
             <td class="mi-qty">${won(qtyOf(it))}</td><td>${fileCell}</td><td>${stCell}</td>
             ${editable?`<td><button class="mi-del" data-del="${id}" title="묶음 삭제">✕</button></td>`:''}</tr>`;
           if(!open) return parent;
@@ -363,22 +381,45 @@
 
       if(editable){
         const dateEl=$('#miDate'), kindEl=$('#miKind'), codeEl=$('#miCode'), orderEl=$('#miOrder'), nameEl=$('#miName'), qtyEl=$('#miQty'), fileEl=$('#miFile'), statusEl=$('#miStatus');
+        const barEl=$('#miAddBar'), addBtn=$('#miAdd');
         if(dateEl) dateEl.value=todayStr();
+        let addMode='단품', draftSub=[{code:'',name:'',qty:''}];
         const common=()=>({ date:(dateEl&&dateEl.value)||todayStr(), kind:kindEl.value||KINDS[0], file:(fileEl&&fileEl.value)||'None', status:(statusEl&&statusEl.value)||'대기' });
-        const resetForm=()=>{ codeEl.value=''; orderEl.value=''; nameEl.value=''; qtyEl.value=''; kindEl.value=KINDS[0]; if(dateEl)dateEl.value=todayStr(); if(fileEl)fileEl.value='None'; if(statusEl)statusEl.value='대기'; };
+        const resetCommon=()=>{ kindEl.value=KINDS[0]; if(dateEl)dateEl.value=todayStr(); if(fileEl)fileEl.value='None'; if(statusEl)statusEl.value='대기'; orderEl.value=''; };
+        const clearFilters=()=>{ preset='all'; q=''; if(qEl)qEl.value=''; dateFilter=''; waitOnly=false;
+          $('#miSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.p==='all')); $('#miDates').classList.remove('on'); };
+        // 묶음 세부품목 입력(추가 전에 그 자리에서)
+        function renderSubList(){ const box=$('#miSubList'); if(!box) return;
+          box.innerHTML=draftSub.map((s,i)=>`<div class="mi-subrow-e" data-i="${i}">
+            <input data-sf="code" value="${esc(s.code||'')}" placeholder="상품코드">
+            <input data-sf="name" value="${esc(s.name||'')}" placeholder="제품명">
+            <input data-sf="qty" value="${esc(String(s.qty||''))}" placeholder="수량" inputmode="numeric">
+            <button type="button" class="mi-subx" data-x="${i}" title="삭제">✕</button></div>`).join('');
+          box.querySelectorAll('.mi-subrow-e').forEach(row=>{ const i=+row.dataset.i;
+            row.querySelectorAll('[data-sf]').forEach(inp=>inp.oninput=()=>{ const f=inp.dataset.sf; draftSub[i][f]=f==='qty'?inp.value.replace(/[^\d]/g,''):inp.value; });
+            const x=row.querySelector('[data-x]'); if(x) x.onclick=()=>{ draftSub.splice(i,1); if(!draftSub.length) draftSub=[{code:'',name:'',qty:''}]; renderSubList(); }; });
+        }
+        function setMode(m){ addMode=m; if(barEl){ barEl.classList.toggle('mode-single',m==='단품'); barEl.classList.toggle('mode-bundle',m==='묶음'); }
+          const se=$('#miSubEdit'); if(se) se.style.display=(m==='묶음')?'':'none';
+          $('#miMode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.m===m));
+          if(addBtn) addBtn.textContent=(m==='묶음')?'＋ 묶음 추가':'＋ 추가';
+          if(m==='묶음') renderSubList(); }
+        $('#miMode').querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+        $('#miSubMore').onclick=()=>{ draftSub.push({code:'',name:'',qty:''}); renderSubList(); };
+        setMode('단품');
         const addSingle=()=>{ const code=codeEl.value.trim(), name=nameEl.value.trim(), orderNo=orderEl.value.trim(), qty=num(qtyEl.value);
           if(!code&&!name){ toast('상품코드 또는 제품명을 입력하세요'); codeEl.focus(); return; }
           const c=common(); const item={ id:uuid(), day:todayStr(), ...c, orderNo, code, name, qty, doneAt:c.status==='완료'?nowISO():'', createdAt:nowISO() };
-          items.push(item); persist(item); resetForm(); codeEl.focus(); preset='all'; q=''; if(qEl)qEl.value=''; dateFilter=''; waitOnly=false;
-          $('#miSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.p==='all')); $('#miDates').classList.remove('on'); render();
+          items.push(item); persist(item); codeEl.value=''; nameEl.value=''; qtyEl.value=''; resetCommon(); codeEl.focus(); clearFilters(); render();
           toast(`입고 추가 — ${c.date} · ${code||name}`); };
         const addBundle=()=>{ const orderNo=orderEl.value.trim();
           if(!orderNo){ toast('묶음은 마우저 주문번호를 입력하세요'); orderEl.focus(); return; }
-          const c=common(); const item={ id:uuid(), bundle:true, day:todayStr(), ...c, orderNo, sub:[{code:codeEl.value.trim(),name:nameEl.value.trim(),qty:num(qtyEl.value)||''}], doneAt:c.status==='완료'?nowISO():'', createdAt:nowISO() };
-          items.push(item); expanded.add(item.id); persist(item); resetForm(); orderEl.focus(); preset='all'; q=''; if(qEl)qEl.value=''; dateFilter=''; waitOnly=false;
-          $('#miSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.p==='all')); $('#miDates').classList.remove('on'); render();
-          toast(`묶음(주문 ${orderNo}) 추가 — 펼쳐서 세부품목을 입력하세요`); };
-        $('#miAdd').onclick=addSingle; $('#miAddBundle').onclick=addBundle;
+          const sub=draftSub.map(s=>({code:(s.code||'').trim(),name:(s.name||'').trim(),qty:num(s.qty)})).filter(s=>s.code||s.name||s.qty);
+          if(!sub.length){ toast('세부품목을 1개 이상 입력하세요'); return; }
+          const c=common(); const item={ id:uuid(), bundle:true, day:todayStr(), ...c, orderNo, sub, doneAt:c.status==='완료'?nowISO():'', createdAt:nowISO() };
+          items.push(item); persist(item); resetCommon(); draftSub=[{code:'',name:'',qty:''}]; renderSubList(); orderEl.focus(); clearFilters(); render();
+          toast(`묶음(주문 ${orderNo}) 추가 — ${sub.length}품목`); };
+        if(addBtn) addBtn.onclick=()=> addMode==='묶음'?addBundle():addSingle();
         [codeEl,nameEl,qtyEl].forEach(elm=>elm&&elm.addEventListener('keydown',e=>{ if(e.key==='Enter') addSingle(); }));
       }
 
