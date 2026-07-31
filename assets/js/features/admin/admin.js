@@ -20,7 +20,7 @@
     .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
   // 사이드바 NAV엔 없지만 수정 권한 부여가 필요한 내장 기록판(발주 기록·상담 기록 등)
   [{dept:'cs',extra:[{key:'cs.records',name:'CS상담 기록'}]},
-   {dept:'md',extra:[{key:'md.records',name:'발주 기록'},{key:'md.tsrecords',name:'TS상담 기록'}]}]
+   {dept:'md',extra:[{key:'md.records',name:'발주 기록'},{key:'md.tsrecords',name:'TS상담 기록'},{key:'md.vendors',name:'입점사 정보 수정'}]}]
     .forEach(x=>{ const g=FEATURES.find(f=>f.dept===x.dept); if(g) x.extra.forEach(e=>{ if(!g.items.some(i=>i.key===e.key)) g.items.push(e); }); });
   const deptDefault=dept=>{ const g=FEATURES.find(x=>x.dept===dept); return g?g.items.map(it=>it.key):[]; };
   const randCode=()=>{ const s='ABCDEFGHJKLMNPRSTUVWXYZ23456789'; let o=''; for(let i=0;i<6;i++) o+=s[Math.floor((crypto.getRandomValues(new Uint32Array(1))[0]/4294967296)*s.length)]; return 'ED-'+o; };

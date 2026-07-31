@@ -79,8 +79,12 @@
     title:'입점사 발주', icon:'truck',
     render(root){
       let tab='entry', dirtyMaster=false, dirtyVendor=false;
-      // 팀원은 실무(발주 입력)만 · 상품 마스터·입점사 정보·연동 설정은 관리자 전용
+      // 팀원은 실무(발주 입력)만 · 이카운트 매핑·연동 설정은 관리자 전용
       const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
+      // 입점사 정보(배송비·정산조건 등) 수정 권한 — 관리자 또는 대표가 '팀 설정'에서 부여(md.vendors)
+      const _u=(Auth.user&&Auth.user())||{};
+      const hasCap=k=> (Array.isArray(_u.perms)&&_u.perms.includes(k)) || (Array.isArray(_u.editPerms)&&_u.editPerms.includes(k));
+      const canVendors=isAdmin || hasCap('md.vendors');
       // 정산구분 정규화: 옛 값 원/선 → 월정산/선결제
       const normSettle=s=>{ s=String(s||'').trim();
         if(s==='원'||s==='월'||s==='월정산') return '월정산';
@@ -238,8 +242,8 @@
         <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
           <div class="t" data-t="records">발주 기록</div>
+          ${canVendors?`<div class="t" data-t="vendor">입점사 정보</div>`:''}
           ${isAdmin?`<div class="t" data-t="catmap">이카운트 매핑</div>
-          <div class="t" data-t="vendor">입점사 정보</div>
           <div class="t" data-t="settings">연동 설정</div>`:''}
         </div>
       </div>
@@ -247,7 +251,9 @@
       const body=root.querySelector('#ordBody');
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
-      const draw=()=>{ if(!isAdmin && tab!=='entry' && tab!=='records') tab='entry';
+      // 탭 접근 가드: 발주입력·발주기록은 전원 · 입점사 정보는 권한자 · 이카운트/연동설정은 관리자
+      const tabOk=t=> t==='entry'||t==='records'||(t==='vendor'&&canVendors)||((t==='catmap'||t==='settings')&&isAdmin);
+      const draw=()=>{ if(!tabOk(tab)) tab='entry';
         return tab==='entry'?drawEntry(): tab==='records'?embedModule(body,'md.records'): tab==='catmap'?drawCatMap(): tab==='vendor'?drawVendors(): drawSettings(); };
 
       /* ---------------- 발주 입력 ---------------- */

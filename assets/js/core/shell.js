@@ -89,6 +89,7 @@ function bootShell(){
     if(isAdmin) return true;
     if(isLead && key==='admin.insights') return true;  // 파트장 → 자기 파트 업무 현황
     if(deptOpen.has(key) && d===myDept) return true;   // 누적 시트 등 직무 기본 열람
+    if(key==='md.order' && perms && perms.includes('md.vendors')) return true;   // 입점사 정보 수정 권한자 → 발주 페이지 접근
     if(perms) return perms.includes(key);
     return d===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
