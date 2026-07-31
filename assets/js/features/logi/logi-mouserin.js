@@ -95,7 +95,8 @@
         .mi-del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:4px 5px;border-radius:7px}
         .mi-del:hover{background:#fdecea;color:#c0392b}
         /* 박스카드 — 구분 · 입고여부 */
-        select.mi-kindsel{font-weight:800;border:1px solid var(--line-2);border-radius:8px;background:var(--panel)}
+        select.mi-kindsel{font-weight:800;border:1px solid var(--line-2);border-radius:8px;background:var(--panel);padding:0 2px 0 6px}
+        select.mi-filesel{padding:0 2px 0 6px}
         select.mi-kindsel.k-mo{background:#fff4ec;border-color:#f2cdb0;color:#b4530a}
         select.mi-kindsel.k-cn{background:#eef4fb;border-color:#cfe0f5;color:#0a63c2}
         .mi-stbtn{width:100%;height:30px;border:1px solid;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer}
@@ -162,7 +163,7 @@
             <div class="mi-fld"><label>추가유형</label>
               <span class="mi-modeseg" id="miMode"><button type="button" data-m="단품" class="on">단품</button><button type="button" data-m="묶음">묶음</button></span></div>
             <div class="mi-fld"><label>입고날짜</label><input class="mi-in" id="miDate" type="date" style="width:130px"></div>
-            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:116px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
+            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:128px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
             <div class="mi-fld s-only"><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off" style="width:110px"></div>
             <div class="mi-fld"><label>마우저 주문번호</label><input class="mi-in" id="miOrder" placeholder="예: 281234465" autocomplete="off" style="width:128px"></div>
             <div class="mi-fld grow s-only"><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off" style="width:100%"></div>
@@ -196,7 +197,7 @@
               </div>
               <div style="overflow:auto;max-height:calc(100vh - 380px)">
                 <table class="mi-t">
-                <colgroup><col style="width:126px"><col style="width:104px"><col style="width:92px"><col style="width:118px"><col><col style="width:66px"><col style="width:70px"><col style="width:86px">${editable?'<col style="width:40px">':''}</colgroup>
+                <colgroup><col style="width:134px"><col style="width:146px"><col style="width:88px"><col style="width:112px"><col><col style="width:56px"><col style="width:80px"><col style="width:82px">${editable?'<col style="width:36px">':''}</colgroup>
                 <thead><tr>
                   <th>입고날짜</th><th>구분</th><th>상품코드</th><th>마우저 주문번호</th><th>제품명</th>
                   <th style="text-align:right">수량</th><th>파일</th><th>입고여부</th>${editable?'<th></th>':''}
@@ -262,7 +263,7 @@
         const id=esc(it.id); const done=isDone(it); const st=done?'done':'wait';
         const kc=kindCls(it.kind);
         const fileCell=editable
-          ? `<select class="mi-cell" data-f="file"><option value="None" ${fileNorm(it.file)!=='drive'?'selected':''}>None</option><option value="drive" ${fileNorm(it.file)==='drive'?'selected':''}>drive</option></select>`
+          ? `<select class="mi-cell mi-filesel" data-f="file"><option value="None" ${fileNorm(it.file)!=='drive'?'selected':''}>None</option><option value="drive" ${fileNorm(it.file)==='drive'?'selected':''}>drive</option></select>`
           : (fileNorm(it.file)==='drive'?'drive':'<span class="muted">None</span>');
         const stCell=editable
           ? `<button class="mi-stbtn ${st}" data-status="${id}" title="${done&&it.doneAt?'완료 '+esc(fmtWhenD(it.doneAt)):'클릭하면 완료/대기 전환'}">${done?'완료':'대기'}</button>`
