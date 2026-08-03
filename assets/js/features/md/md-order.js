@@ -119,10 +119,13 @@
       //  엔티렉스 공급가표(ntrex-data.js)의 에듀이노코드 = 엔티렉스에서 소싱하는 상품이므로, 구매처가 안 잡혀도 입점사=엔티렉스로 연동
       const NTREX_SELF=(()=>{ const s=new Set(); ((typeof window!=='undefined'&&window.NTREX_PRODUCTS)||[]).forEach(r=>{ const c=Array.isArray(r)?r[0]:(r&&r.ed); const k=normCode(c); if(k) s.add(k); }); return s; })();
       const inNtrex=p=> !!(p && NTREX_SELF.has(normCode(p.selfCode||p.code)));
-      // 구매처명: 제품 자체 vendor > 이카운트 코드→이름표(구매처) > (엔티렉스 취급상품) 엔티렉스 > 자사
-      const vendorName=p=>{ const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
+      // 구매처명: (엔티렉스 취급상품) 엔티렉스 고정 > 제품 vendor > 이카운트 코드→이름표(구매처) > 자사
+      //  ※ 엔티렉스 취급상품은 구매처 고정 — 이카운트 구매처가 '디바이스마트'/'(주)엔티렉스' 등으로 달라도
+      //     입점사 마스터명(엔티렉스)과 불일치해 정산(월/선결제)·배송비가 누락되던 문제 방지.
+      const vendorName=p=>{
+        if(inNtrex(p)) return '엔티렉스';
+        const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
         if(v) return v;
-        if(inNtrex(p)) return '엔티렉스';                 // 이카운트 구매처 미지정이라도 가격비교 취급상품이면 엔티렉스로 연동
         return isJasa(p&&p.selfCode)?'자사':''; };
       // 입점사 관리(인수인계 카드 · coll handover_md)의 '등급/정산' 분류를 정산구분 보조 소스로 사용.
       //  배송정보 마스터(mdVendors)에 정산구분이 비어 있어도, 입점사 관리에서 분류된 값으로 자동 연동.
