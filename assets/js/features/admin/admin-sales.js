@@ -133,16 +133,19 @@
 
       // ── 유형별 분석 — 발주/후불 매출·입점사 매입을 선택 축으로 분해 ──
       const BK_PALETTE=['#1f6feb','#7a5af8','#12886a','#c9781a','#d24d86','#0e7d9c','#6a8f1a','#b0295a','#4457c9','#5b6b7f','#e0567f','#2f9e6f','#8a6d3b'];
+      // 축 정의 [id, 라벨, 값 후보키(보드별 필드명 차이 흡수)] — cs.postpay 담당자=agent, 고객유형=custType 등
       const bkDims=()=> bkSrc==='cs'
-        ? [['custType','고객유형'],['route','주문경로'],['whoName','담당자'],['gubun','구분']]
-        : [['settle','정산구분'],['gubun','구분'],['whoName','담당자'],['vendor','입점사']];
-      function breakdown(recs, dimKey){ const by={};
-        (recs||[]).forEach(r=>{ let k=String(r[dimKey]==null?'':r[dimKey]).trim(); if(!k) k='(미지정)'; const amt=parseNum(r.amount);
+        ? [['custType','고객유형',['custType','customerType']],['route','주문경로',['route']],['agent','담당자',['agent','whoName','who']],['gubun','구분',['gubun']]]
+        : [['settle','정산구분',['settle']],['gubun','구분',['gubun']],['whoName','담당자',['whoName','who','handler']],['vendor','입점사',['vendor']]];
+      const bkKeys=()=>{ const d=bkDims().find(x=>x[0]===bkDim); return d?d[2]:[bkDim]; };
+      const pick=(r,keys)=>{ for(const k of keys){ const v=r[k]; if(v!=null && String(v).trim()) return String(v).trim(); } return '(미지정)'; };
+      function breakdown(recs, keys){ const by={};
+        (recs||[]).forEach(r=>{ const k=pick(r,keys); const amt=parseNum(r.amount);
           const o=by[k]=by[k]||{amount:0,count:0}; o.amount+=amt; o.count++; });
         return Object.keys(by).map(k=>({k,amount:by[k].amount,count:by[k].count})).sort((a,b)=>b.amount-a.amount); }
       function renderBreakCard(){ const host=body.querySelector('#slBreakCard'); if(!host) return;
         const src = bkSrc==='cs' ? _csAll.filter(r=>r.gubun==='발주'||r.gubun==='후불') : _mdAll;
-        let rows=breakdown(src, bkDim);
+        let rows=breakdown(src, bkKeys());
         if(rows.length>12){ const tail=rows.slice(12); const etc=tail.reduce((o,r)=>({amount:o.amount+r.amount,count:o.count+r.count}),{amount:0,count:0});
           rows=rows.slice(0,12).concat([{k:'기타 '+tail.length+'종',amount:etc.amount,count:etc.count}]); }
         const total=rows.reduce((s,r)=>s+r.amount,0), maxA=Math.max(1,...rows.map(r=>r.amount));
