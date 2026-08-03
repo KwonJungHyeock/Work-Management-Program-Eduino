@@ -8,9 +8,7 @@
   const COLL='mouser_inbound';
   const CACHE='eduino.logi.mouserin';
   const KINDS=['중국 - 기존','중국 - 신제품','마우저 - 기존','마우저 - 신제품'];
-  // 저장값(위)은 유지 · 화면 표기는 압축(출처는 색으로 구분) — 중국·기존 / 마우저·신 …
-  const KIND_LABEL={'중국 - 기존':'중국·기존','중국 - 신제품':'중국·신','마우저 - 기존':'마우저·기존','마우저 - 신제품':'마우저·신'};
-  const kindLabel=k=>KIND_LABEL[k]||k||'';
+  const kindLabel=k=>k||'';   // 표기는 전체 유지(기존/신제품) · 출처는 색으로 구분
   const STATUSES=['대기','완료'];
   const MOUSER_ORDER_URL='https://www.mouser.kr/OrderHistory/';
   const meU=()=>(Auth.user&&Auth.user())||{};
@@ -89,7 +87,8 @@
         table.mi-t th{background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:9px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mi-t td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
         table.mi-t tr:hover td{background:var(--panel-2)}
-        .mi-cell{width:100%;min-width:0;height:32px;border:1px solid transparent;border-radius:7px;padding:0 7px;font:inherit;background:transparent;color:var(--ink)}
+        .mi-cell{width:100%;min-width:0;height:32px;border:1px solid transparent;border-radius:7px;padding:0 7px;font-family:inherit;font-size:13px;background:transparent;color:var(--ink)}
+        select.mi-cell,input.mi-cell{font-size:13px}
         .mi-cell:hover{border-color:var(--line-2)} .mi-cell:focus{outline:0;border-color:#12886a;background:var(--panel)}
         select.mi-cell,input[type=date].mi-cell{cursor:pointer} input[type=date].mi-cell{padding:0 5px}
         .mi-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -165,7 +164,7 @@
           <div class="mi-addbar mode-single" id="miAddBar">
             <div class="mi-fld"><label>추가유형</label>
               <span class="mi-modeseg" id="miMode"><button type="button" data-m="단품" class="on">단품</button><button type="button" data-m="묶음">묶음</button></span></div>
-            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:106px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(kindLabel(k))}</option>`).join('')}</select></div>
+            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:128px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(kindLabel(k))}</option>`).join('')}</select></div>
             <div class="mi-fld"><label>입고날짜</label><input class="mi-in" id="miDate" type="date" style="width:130px"></div>
             <div class="mi-fld s-only"><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off" style="width:110px"></div>
             <div class="mi-fld"><label>마우저 주문번호</label><input class="mi-in" id="miOrder" placeholder="예: 281234465" autocomplete="off" style="width:128px"></div>
@@ -200,7 +199,7 @@
               </div>
               <div style="overflow:auto;max-height:calc(100vh - 380px)">
                 <table class="mi-t">
-                <colgroup><col style="width:104px"><col style="width:126px"><col style="width:126px"><col style="width:110px"><col><col style="width:54px"><col style="width:72px"><col style="width:78px">${editable?'<col style="width:36px">':''}</colgroup>
+                <colgroup><col style="width:132px"><col style="width:116px"><col style="width:118px"><col style="width:104px"><col style="min-width:190px"><col style="width:54px"><col style="width:66px"><col style="width:76px">${editable?'<col style="width:34px">':''}</colgroup>
                 <thead><tr>
                   <th>구분</th><th>입고날짜</th><th>상품코드</th><th>마우저 주문번호</th><th>제품명</th>
                   <th style="text-align:right">수량</th><th>파일</th><th>입고여부</th>${editable?'<th></th>':''}
@@ -306,7 +305,7 @@
         // 단일 품목
         if(editable) return `<tr data-id="${id}">
           <td>${kindCell}</td><td>${dateCell}</td>
-          <td><input class="mi-cell mi-code" data-f="code" value="${esc(it.code||'')}" placeholder="상품코드"></td>
+          <td><input class="mi-cell" data-f="code" value="${esc(it.code||'')}" placeholder="상품코드"></td>
           <td><input class="mi-cell" data-f="orderNo" value="${esc(it.orderNo||'')}" placeholder="주문번호" title="${esc(it.orderNo||'')}"></td>
           <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
           <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
