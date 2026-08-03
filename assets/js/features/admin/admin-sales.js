@@ -48,6 +48,8 @@
     render(root){
       const now=new Date(); const cym=ymOf(now); const cday=cym+'-'+pad(now.getDate());
       let preset='m1', from=cym, to=cym;   // 프리셋: YYYY-MM · 직접설정(custom): YYYY-MM-DD
+      // 유형별 분석 상태 — 소스(CS 발주/후불 · MD 매입) × 분석 축 · 기간 필터된 데이터 캐시
+      let bkSrc='cs', bkDim='custType', _csAll=[], _mdAll=[];
       root.innerHTML=`
       <style>
         .sl-period{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px}
@@ -83,6 +85,14 @@
         .sl-legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
         .sl-empty{padding:22px;text-align:center;color:var(--muted);font-size:13px}
         .sl-note{color:var(--muted);font-size:11.5px;margin-top:12px}
+        /* 유형별 분석 컨트롤 */
+        .bk-ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+        .bk-ctrl .seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
+        .bk-ctrl .seg button{border:0;background:var(--panel);padding:6px 11px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+        .bk-ctrl .seg button:first-child{border-left:0}
+        .bk-ctrl .seg.bk-src button.on{background:#0a3d62;color:#fff}
+        .bk-ctrl .seg.bk-dim button.on{background:var(--active-bg);color:var(--red)}
+        .bk-bars{display:flex;flex-direction:column;gap:2px}
       </style>
       <div class="mhead">
         <div class="tt">매출 데이터</div>
@@ -121,6 +131,37 @@
           <div class="sl-legend"><span><i style="background:${CS_COLOR}"></i>CS 견적/발주/후불</span><span><i style="background:${MD_COLOR}"></i>MD 입점사 발주</span></div>`;
       }
 
+      // ── 유형별 분석 — 발주/후불 매출·입점사 매입을 선택 축으로 분해 ──
+      const BK_PALETTE=['#1f6feb','#7a5af8','#12886a','#c9781a','#d24d86','#0e7d9c','#6a8f1a','#b0295a','#4457c9','#5b6b7f','#e0567f','#2f9e6f','#8a6d3b'];
+      const bkDims=()=> bkSrc==='cs'
+        ? [['custType','고객유형'],['route','주문경로'],['whoName','담당자'],['gubun','구분']]
+        : [['settle','정산구분'],['gubun','구분'],['whoName','담당자'],['vendor','입점사']];
+      function breakdown(recs, dimKey){ const by={};
+        (recs||[]).forEach(r=>{ let k=String(r[dimKey]==null?'':r[dimKey]).trim(); if(!k) k='(미지정)'; const amt=parseNum(r.amount);
+          const o=by[k]=by[k]||{amount:0,count:0}; o.amount+=amt; o.count++; });
+        return Object.keys(by).map(k=>({k,amount:by[k].amount,count:by[k].count})).sort((a,b)=>b.amount-a.amount); }
+      function renderBreakCard(){ const host=body.querySelector('#slBreakCard'); if(!host) return;
+        const src = bkSrc==='cs' ? _csAll.filter(r=>r.gubun==='발주'||r.gubun==='후불') : _mdAll;
+        let rows=breakdown(src, bkDim);
+        if(rows.length>12){ const tail=rows.slice(12); const etc=tail.reduce((o,r)=>({amount:o.amount+r.amount,count:o.count+r.count}),{amount:0,count:0});
+          rows=rows.slice(0,12).concat([{k:'기타 '+tail.length+'종',amount:etc.amount,count:etc.count}]); }
+        const total=rows.reduce((s,r)=>s+r.amount,0), maxA=Math.max(1,...rows.map(r=>r.amount));
+        const dimLabel=(bkDims().find(d=>d[0]===bkDim)||['',''])[1];
+        const srcLabel=bkSrc==='cs'?'발주+후불 매출':'입점사 발주 매입';
+        host.innerHTML=`
+          <div class="bk-ctrl">
+            <span class="seg bk-src">${[['cs','CS 발주/후불'],['md','MD 입점사 발주']].map(([v,l])=>`<button data-src="${v}" class="${bkSrc===v?'on':''}">${l}</button>`).join('')}</span>
+            <span class="seg bk-dim">${bkDims().map(([v,l])=>`<button data-dim="${v}" class="${bkDim===v?'on':''}">${l}</button>`).join('')}</span>
+            <span class="tot" style="margin-left:auto;font-size:12.5px;color:var(--muted)">${esc(srcLabel)} · <b style="color:var(--ink)">${esc(dimLabel)}별</b> 합계 <b style="color:var(--ink)">${won(total)}원</b></span></div>
+          ${rows.length?`<div class="bk-bars">${rows.map((r,i)=>{ const c=BK_PALETTE[i%BK_PALETTE.length];
+            return `<div class="sl-row" style="grid-template-columns:110px 1fr 150px"><div class="lbl"><span class="dot" style="background:${c}"></span>${esc(r.k)}</div>
+              <div class="sl-bar"><i style="width:${Math.max(r.amount?4:0,Math.round(r.amount/maxA*100))}%;background:${c}"></i></div>
+              <div class="sl-amt">${won(r.amount)}<small>원 · ${r.count}건</small></div></div>`; }).join('')}</div>`
+            :'<div class="sl-empty">이 기간·기준의 데이터가 없습니다.</div>'}`;
+        host.querySelectorAll('.bk-src button').forEach(b=>b.onclick=()=>{ if(bkSrc===b.dataset.src) return; bkSrc=b.dataset.src; bkDim=bkDims()[0][0]; renderBreakCard(); });
+        host.querySelectorAll('.bk-dim button').forEach(b=>b.onclick=()=>{ bkDim=b.dataset.dim; renderBreakCard(); });
+      }
+
       async function load(){
         body.innerHTML=`<div class="muted" style="padding:18px">불러오는 중…</div>`;
         // from/to 를 일(day) 경계로 정규화 — 프리셋(월)은 월 시작~말일, 직접설정은 선택 일자 그대로
@@ -134,6 +175,7 @@
         if(!root.isConnected) return;
         const inRange=r=>{ const d=dayOf(r); return d && d>=fromDay && d<=toDay; };   // 선택 기간(일 단위) 필터
         const csAll=csPacks.flat().filter(inRange), mdAll=mdPacks.flat().filter(inRange);
+        _csAll=csAll; _mdAll=mdAll;   // 유형별 분석 카드가 재조회 없이 축만 바꿔 다시 그림
         // 월별 추이용 — 필터된 레코드를 월로 재분류
         const csByM={}, mdByM={}; months.forEach(m=>{ csByM[m]=[]; mdByM[m]=[]; });
         csAll.forEach(r=>{ const m=dayOf(r).slice(0,7); if(csByM[m]) csByM[m].push(r); });
@@ -163,7 +205,11 @@
           </div>
           <div class="sl-trend"><h3>${icon('chart')} 월별 매출 추이</h3><div class="sub">${esc(rangeLabel)} · 파랑=CS · 보라=MD</div>
             ${trendChart(months,csT,mdT)}</div>
-          <div class="sl-note">※ CS 매출 합계는 <b>발주+후불</b>만 집계합니다(견적은 견적서 단계라 합계 제외 · 구분 행에는 그대로 표시). 입점사 발주 '매입'은 발주(입고)금액 기준(수량×입고단가)입니다.</div>`;
+          <div class="sl-trend" style="margin-top:16px"><h3>${icon('grid')} 유형별 분석</h3>
+            <div class="sub">${esc(rangeLabel)} · 발주/후불 매출·입점사 매입을 선택한 기준(고객유형·경로·담당자 등)으로 분해</div>
+            <div id="slBreakCard"></div></div>
+          <div class="sl-note">※ CS 매출 합계는 <b>발주+후불</b>만 집계합니다(견적은 견적서 단계라 합계 제외 · 구분 행에는 그대로 표시). 입점사 발주 '매입'은 발주(입고)금액 기준(수량×입고단가)입니다. 유형별 분석의 CS는 <b>발주+후불</b>만 대상입니다.</div>`;
+        renderBreakCard();
 
         body.querySelectorAll('.sl-period .seg button').forEach(b=>b.onclick=()=>{ preset=b.dataset.p;
           if(preset!=='custom'){ [from,to]=presetRange(preset,cym); } else { from=cym+'-01'; to=cday; }   // 직접설정 초기값: 이번 달 1일 ~ 오늘
