@@ -154,7 +154,7 @@
       <div class="mhead">
         <div class="tt">매출 데이터</div>
         <div class="ds">내부(발주/후불) 매출과 CAFE24 매출통계를 기간·유형별로 집계합니다.</div>
-        <div class="mtabs" id="slTabs"><div class="t on" data-t="internal">발주/후불 매출</div><div class="t" data-t="cafe24">CAFE24 매출통계</div></div>
+        <div class="mtabs" id="slTabs"><div class="t on" data-t="internal">발주/후불 매출 데이터</div><div class="t" data-t="cafe24">전체 매출</div></div>
       </div>
       <div class="mbody wide" id="slBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>
       <div class="mbody wide" id="slCafe" style="display:none"></div>`;
