@@ -140,9 +140,9 @@ module.exports = async function handler(req, res) {
       if (!code) return res.status(400).json({ ok: false, error: 'code required' });
       const v = await redis(['HGET', CATALOG_KEY, code]);
       let product = null; if (v) { try { product = JSON.parse(v); } catch (e) {} }
-      // 정확히 일치하는 상품이 있으면 즉시 반환(옵션 없는 상품 = 기존 동작 유지)
-      if (product) return res.status(200).json({ ok: true, product, options: [] });
-      // 일치 없음 → 옵션 상품 후보(예: 'P-D10' → 'P-D10-1','P-D10-2'…) 목록 반환
+      // 옵션(변형) 상품 후보 — 자기 자신 + 'code-*' 접두 (예: SP-F91 → SP-F91-1, SP-F91-2)
+      //  ※ 'SP-F91'처럼 자기 자신이 상품이면서 하위 변형도 있는 경우, 예전엔 exact match에서 끊겨
+      //     옵션(코끼리·토끼 등)이 안 보였음 → 변형이 있으면 정확일치 상품도 옵션 목록에 포함해 함께 노출.
       const prefix = code + '-';
       const flat = await redis(['HGETALL', CATALOG_KEY]);
       const options = [];
@@ -155,7 +155,10 @@ module.exports = async function handler(req, res) {
         }
       }
       options.sort((a, b) => String(a.selfCode).localeCompare(String(b.selfCode), undefined, { numeric: true }));
-      return res.status(200).json({ ok: true, product: null, options: options.slice(0, 60) });
+      // 정확일치 상품이 있고 하위 변형이 없으면 = 옵션 없는 단일 상품(기존 동작 유지)
+      if (product && options.length <= 1) return res.status(200).json({ ok: true, product, options: [] });
+      // 변형이 있으면 옵션 목록으로 노출(정확일치 상품도 포함) · 정확일치 없으면 후보만
+      return res.status(200).json({ ok: true, product: product || null, options: options.slice(0, 60) });
     }
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});

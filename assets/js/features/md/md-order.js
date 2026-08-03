@@ -354,14 +354,14 @@
             // 로컬 상품 마스터에 없으면 서버 카탈로그(셀메이트)에서 조회
             box.className='lookup'; box.innerHTML=`${icon('cloud')} 카탈로그 조회 중…`;
             fetchCatalog(code).then(res=>{ if(codeEl.value.trim()!==code) return;
-              if(res.product){ catCache[normCode(code)]=res.product; refreshLookup(); }
-              else if(res.options && res.options.length){   // 옵션 상품 — 선택 리스트 표시
+              if(res.options && res.options.length){   // 옵션(변형) 상품 — 선택 리스트 우선(정확일치 상품이어도 변형 있으면 선택)
                 syncName(null); box.className='lookup';
                 box.innerHTML=`<div style="font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">옵션 상품 <b style="color:var(--red)">${res.options.length}</b>개 — 선택하세요</div>
                   <div class="opt-list">${res.options.map((o,i)=>`<button type="button" class="opt-row" data-i="${i}">
                     <span class="oc">${esc(o.selfCode)}</span>${o.option?`<span class="oopt">${esc(o.option)}</span>`:''}<span class="on">${o.name?esc(o.name):'<span class="muted">(품명 없음)</span>'}</span></button>`).join('')}</div>`;
                 box.querySelectorAll('.opt-row').forEach(r=>r.onclick=()=>pickOption(res.options[+r.dataset.i]));
               }
+              else if(res.product){ catCache[normCode(code)]=res.product; refreshLookup(); }
               else { syncName(null); box.className='lookup warn'; box.innerHTML=`${icon('alert')} 이카운트 미등록 코드 — <b>품명을 직접 입력</b>하면 그대로 발주에 추가됩니다.`; } });
             return null;
           }
