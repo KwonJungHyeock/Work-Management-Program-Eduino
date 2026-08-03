@@ -132,7 +132,8 @@
         function cell(r,c){
           // 계산 컬럼(예: 처리현황) — 저장값이 아니라 다른 칸으로부터 파생 표시
           if(c.compute){ const cv=c.compute(r);
-            if(c.badge){ const okc=/완료/.test(cv); const col=okc?'var(--ok)':'var(--danger)', bg=okc?'var(--ok-bg)':'var(--danger-soft)';
+            if(c.badge){ if(!String(cv==null?'':cv).trim()) return '<td></td>';   // 빈 값 → 빈 배지 대신 빈 칸(예: 발주취소·입고완료의 처리칸)
+              const okc=/완료/.test(cv); const col=okc?'var(--ok)':'var(--danger)', bg=okc?'var(--ok-bg)':'var(--danger-soft)';
               return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;color:${col};background:${bg}">${esc(cv)}</span></td>`; }
             return `<td style="white-space:nowrap">${esc(cv)}</td>`; }
           let v=r[c.k]; if(c.money) v=fmtNum(v)+'원'; else if(c.num) v=fmtNum(v); else v=v==null?'':String(v);
@@ -142,8 +143,8 @@
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:800;color:${col};background:${col}1a;border-radius:6px;padding:2px 9px">${esc(v)}</span></td>`; }
           // 구분/분류/상태 값별 색상 배지 (지연·취소·수정필요=빨강 · 해결완료=초록 · 처리중=주황)
           if(c.tag && v && typeof tagBadge==='function'){
-            const cl=(v==='출고지연'||v==='발주취소'||/수정필요/.test(v))?{bg:'#fdeaea',fg:'#c53434'}
-              :v==='해결완료'?{bg:'#e6f7f0',fg:'#12886a'}:v==='처리중'?{bg:'#fff4e6',fg:'#b4530a'}:tagColor(v);
+            const cl=(v==='출고지연'||v==='발주취소'||v==='반품'||/수정필요/.test(v))?{bg:'#fdeaea',fg:'#c53434'}
+              :(v==='해결완료'||v==='입고완료')?{bg:'#e6f7f0',fg:'#12886a'}:v==='처리중'?{bg:'#fff4e6',fg:'#b4530a'}:tagColor(v);
             return `<td style="white-space:nowrap"><span style="display:inline-block;font-weight:700;border-radius:6px;padding:2px 9px;background:${cl.bg};color:${cl.fg}">${esc(v)}</span></td>`; }
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
@@ -394,8 +395,9 @@
       {k:'selfCode',h:'상품코드',w:56,wrap:true},
       {k:'name',h:'품명',w:112,wrap:true}, {k:'qty',h:'수량',w:32,num:true},
       {k:'ship',h:'배송비',w:52,num:true,money:true},
-      {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','발주취소','출고지연']},   // 입점사에 발주 넣었는지 · 출고지연 시 행 강조
+      {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','입고완료','발주취소','반품','출고지연']},   // 입점사에 발주 넣었는지 · 출고지연 시 행 강조
       {k:'invoice',h:'송장번호',w:70,wrap:true},                     // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
       {k:'shipInfo',h:'배송정보/비고',w:106,wrap:true},
-      {k:'__pstatus',h:'처리',w:56,compute:r=>((r.invoice||'').toString().trim()?'송장완료':'송장필요'),badge:true} ] });
+      // 처리(송장) — 발주취소·입고완료는 송장 대상이 아니므로 비움(송장필요 미표시) · 그 외 송장번호 있으면 송장완료
+      {k:'__pstatus',h:'처리',w:56,compute:r=>{ const os=String(r.orderStatus||''); if(os==='발주취소'||os==='입고완료') return ''; return (r.invoice||'').toString().trim()?'송장완료':'송장필요'; },badge:true} ] });
 })();
