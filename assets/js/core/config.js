@@ -194,6 +194,7 @@ const NAV = [
       { key:'md.pricewatch', name:'가격비교',           icon:'chart' },
       { key:'md.tsnotes',   name:'TS상담 메모',        icon:'clipboard' },
       { key:'md.tstpl',     name:'기술상담 템플릿',     icon:'chat' },
+      { key:'md.sales',     name:'매출 데이터',        icon:'chart' },
       { key:'md.settle',    name:'일일결산',           icon:'check2' },
       { key:'md.extra',     name:'부가기능',           icon:'grid' },
       { key:'md.manual',    name:'업무 매뉴얼',        icon:'clipboard' },
@@ -205,7 +206,6 @@ const NAV = [
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.approvals', name:'결재함', icon:'inbox' },
       { key:'admin.insights', name:'업무 현황', icon:'chart' },
-      { key:'admin.sales', name:'매출 데이터', icon:'chart' },
       { key:'admin.team', name:'팀 설정', icon:'users' },
       { key:'admin.share', name:'공유 범위', icon:'share' },
       { key:'admin.audit', name:'감사 로그', icon:'clipboard' },

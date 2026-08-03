@@ -86,7 +86,7 @@
     return [cym,cym];
   }
 
-  MODULES['admin.sales']={
+  MODULES['md.sales']={
     title:'매출 데이터', icon:'chart',
     render(root){
       const now=new Date(); const cym=ymOf(now); const cday=cym+'-'+pad(now.getDate());
@@ -187,18 +187,24 @@
         const slot=(W-padL-padR)/n, bw=Math.min(22,Math.max(6,slot/3));
         const yBase=H-padB, ih=H-padT-padB;
         const hOf=v=>ih*(v/max);
-        let bars='',labels='';
+        let bars='',labels=''; const csPts=[], mdPts=[];
         const showEvery=Math.ceil(n/12);
         months.forEach((m,i)=>{ const cx=padL+slot*i+slot/2;
-          bars+=`<rect x="${(cx-bw-2).toFixed(1)}" y="${(yBase-hOf(csT[i])).toFixed(1)}" width="${bw}" height="${hOf(csT[i]).toFixed(1)}" rx="3" fill="${CS_COLOR}"/>`;
-          bars+=`<rect x="${(cx+2).toFixed(1)}" y="${(yBase-hOf(mdT[i])).toFixed(1)}" width="${bw}" height="${hOf(mdT[i]).toFixed(1)}" rx="3" fill="${MD_COLOR}"/>`;
+          const csY=yBase-hOf(csT[i]), mdY=yBase-hOf(mdT[i]);
+          bars+=`<rect x="${(cx-bw-2).toFixed(1)}" y="${csY.toFixed(1)}" width="${bw}" height="${hOf(csT[i]).toFixed(1)}" rx="3" fill="${CS_COLOR}" opacity="0.82"/>`;
+          bars+=`<rect x="${(cx+2).toFixed(1)}" y="${mdY.toFixed(1)}" width="${bw}" height="${hOf(mdT[i]).toFixed(1)}" rx="3" fill="${MD_COLOR}" opacity="0.82"/>`;
+          csPts.push([cx-2-bw/2,csY]); mdPts.push([cx+2+bw/2,mdY]);
           if(i%showEvery===0) labels+=`<text x="${cx.toFixed(1)}" y="${H-9}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(m.slice(2))}</text>`;
         });
         const gy=yBase-ih*0.5;
+        // 각 계열의 막대 꼭짓점을 잇는 추세선 + 점
+        const lineOf=(pts,c)=> (n>1?`<polyline fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')}"/>`:'')
+          + pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#fff" stroke="${c}" stroke-width="1.8"/>`).join('');
+        const trend=lineOf(csPts,'#123a6b')+lineOf(mdPts,'#4a2f9e');
         return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
           <text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
           <line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-dasharray="3 3"/>
-          <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${labels}</svg>
+          <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${trend}${labels}</svg>
           <div class="sl-legend"><span><i style="background:${CS_COLOR}"></i>CS 견적/발주/후불</span><span><i style="background:${MD_COLOR}"></i>MD 입점사 발주</span></div>`;
       }
 
@@ -311,13 +317,18 @@
         function cfTrend(months, vals){ if(!months.length) return '<div class="sl-empty">표시할 월이 없습니다.</div>';
           const W=680,H=190,padL=10,padR=10,padT=22,padB=30,n=months.length,max=Math.max(1,...vals);
           const slot=(W-padL-padR)/n, bw=Math.min(30,Math.max(8,slot*0.5)), yBase=H-padB, ih=H-padT-padB; let bars='',labels=''; const showEvery=Math.ceil(n/12);
-          months.forEach((m,i)=>{ const cx=padL+slot*i+slot/2, h=ih*(vals[i]/max);
-            bars+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${(yBase-h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3" fill="${CS_COLOR}"/>`;
+          const pts=[]; // 막대 위 꼭짓점(선그래프용)
+          months.forEach((m,i)=>{ const cx=padL+slot*i+slot/2, h=ih*(vals[i]/max); const ty=yBase-h;
+            bars+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${ty.toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3" fill="${CS_COLOR}" opacity="0.82"/>`;
+            pts.push([cx,ty]);
             if(i%showEvery===0) labels+=`<text x="${cx.toFixed(1)}" y="${H-9}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(m.slice(2))}</text>`; });
           const gy=yBase-ih*0.5;
+          // 막대 꼭짓점을 잇는 선 + 데이터 포인트(점) — 추세를 선그래프로 함께 표시
+          const line = n>1 ? `<polyline fill="none" stroke="#123a6b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')}"/>` : '';
+          const dots = pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.4" fill="#fff" stroke="#123a6b" stroke-width="2"/>`).join('');
           return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="height:auto"><text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
             <line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-dasharray="3 3"/>
-            <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${labels}</svg>`; }
+            <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${line}${dots}${labels}</svg>`; }
         function emptyHtml(){ return `<div class="sl-empty" style="padding:40px">${icon('upload')}<div style="margin:10px 0 14px">아직 업로드된 CAFE24 매출이 없습니다.</div>
           <button class="btn pri" id="cfUpEmpty">${icon('upload')} CSV 업로드</button>
           <div class="muted" style="font-size:12px;margin-top:12px">CAFE24 매출 CSV(판매처명·공급처명·상품코드·합계금액·수령자주소)를 월별로 올리세요.</div></div>`; }

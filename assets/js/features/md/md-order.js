@@ -83,10 +83,14 @@
       if(window.__mdOrderTab){ tab=window.__mdOrderTab; try{ delete window.__mdOrderTab; }catch(e){ window.__mdOrderTab=null; } }
       // 팀원은 실무(발주 입력)만 · 이카운트 매핑·연동 설정은 관리자 전용
       const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
-      // 입점사 정보(배송비·정산조건 등) 수정 권한 — 관리자 또는 대표가 '팀 설정'에서 부여(md.vendors)
+      // 입점사 정보(배송비·정산조건 등) — 열람/수정 권한 분리
+      //  · 수정: 관리자 또는 대표가 '팀 설정'에서 부여(md.vendors)
+      //  · 열람: 수정 권한자 + MD 파트장(파트장은 열람만, 수정은 권한 부여 후)
       const _u=(Auth.user&&Auth.user())||{};
       const hasCap=k=> (Array.isArray(_u.perms)&&_u.perms.includes(k)) || (Array.isArray(_u.editPerms)&&_u.editPerms.includes(k));
-      const canVendors=isAdmin || hasCap('md.vendors');
+      const isMdLead = _u.dept==='md' && _u.role==='lead';
+      const canEditVendors = isAdmin || hasCap('md.vendors');
+      const canViewVendors = canEditVendors || isMdLead;
       // 정산구분 정규화: 옛 값 원/선 → 월정산/선결제
       const normSettle=s=>{ s=String(s||'').trim();
         if(s==='원'||s==='월'||s==='월정산') return '월정산';
@@ -253,7 +257,7 @@
         <div class="mtabs">
           <div class="t" data-t="entry">발주 입력</div>
           <div class="t" data-t="records">발주 기록</div>
-          ${canVendors?`<div class="t" data-t="vendor">입점사 정보</div>`:''}
+          ${canViewVendors?`<div class="t" data-t="vendor">입점사 정보</div>`:''}
           ${isAdmin?`<div class="t" data-t="catmap">이카운트 매핑</div>
           <div class="t" data-t="settings">연동 설정</div>`:''}
         </div>
@@ -263,7 +267,7 @@
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       // 탭 접근 가드: 발주입력·발주기록은 전원 · 입점사 정보는 권한자 · 이카운트/연동설정은 관리자
-      const tabOk=t=> t==='entry'||t==='records'||(t==='vendor'&&canVendors)||((t==='catmap'||t==='settings')&&isAdmin);
+      const tabOk=t=> t==='entry'||t==='records'||(t==='vendor'&&canViewVendors)||((t==='catmap'||t==='settings')&&isAdmin);
       const draw=()=>{ if(!tabOk(tab)) tab='entry';
         return tab==='entry'?drawEntry(): tab==='records'?embedModule(body,'md.records'): tab==='catmap'?drawCatMap(): tab==='vendor'?drawVendors(): drawSettings(); };
 
@@ -594,25 +598,28 @@
           <input type="file" id="venFile" accept=".xlsx,.csv,.tsv,.txt,text/csv" class="hidden">
           <div class="card">
             <div class="card-hd">${icon('truck')}<b>입점사 정보</b> <span class="muted" style="font-size:12.5px">· 배송비(vat포함)·무료배송조건·담당자</span>
-              <span class="badge soon" id="vDirty" style="display:${dirtyVendor?'':'none'}">● 저장 안 됨</span>
+              ${canEditVendors?`<span class="badge soon" id="vDirty" style="display:${dirtyVendor?'':'none'}">● 저장 안 됨</span>`:'<span class="badge" style="background:var(--line-2);color:var(--muted);font-weight:700">읽기 전용</span>'}
               <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn sm" id="addVen">${icon('plus')}행 추가</button>
+                ${canEditVendors?`<button class="btn sm" id="addVen">${icon('plus')}행 추가</button>
                 <button class="btn sm" id="impVenFile">${icon('upload')}파일 불러오기<span style="font-weight:500;color:var(--muted);font-size:11px">·xlsx/csv</span></button>
-                <button class="btn sm" id="impVenPaste">${icon('clipboard')}붙여넣기</button>
+                <button class="btn sm" id="impVenPaste">${icon('clipboard')}붙여넣기</button>`:''}
                 <button class="btn sm" id="expVen">${icon('download')}CSV 내보내기</button>
-                <button class="btn sm pri" id="saveVen">${icon('save')}저장</button></span></div>
+                ${canEditVendors?`<button class="btn sm pri" id="saveVen">${icon('save')}저장</button>`:''}</span></div>
             <div class="card-bd" style="padding:0"><div class="ven-tbl"><table class="tbl" id="venTable"></table></div></div>
           </div>
-          <div class="note" style="margin-top:12px">배송비는 <b>입점사별 고정 금액</b>(vat포함)이 기본이며 공급가·부가세는 ÷11로 자동 분리됩니다.
+          <div class="note" style="margin-top:12px">${canEditVendors
+            ? `배송비는 <b>입점사별 고정 금액</b>(vat포함)이 기본이며 공급가·부가세는 ÷11로 자동 분리됩니다.
             <b>무료배송조건</b>은 발주 입력 시 자동 조회에 함께 표시됩니다. 회사 배송정보 리스트(<span class="mono" style="font-size:12px">integrations/source-data/입점사_배송정보.csv</span>)를 <b>CSV 불러오기</b>로 한 번에 등록하세요.
-            헤더(입점사명/업체명·정산구분·배송비·무료배송조건/배송조건·담당자·연락처·발주메일·특이사항)를 자동 인식합니다. 수정 후 <b>저장</b>.</div>
+            헤더(입점사명/업체명·정산구분·배송비·무료배송조건/배송조건·담당자·연락처·발주메일·특이사항)를 자동 인식합니다. 수정 후 <b>저장</b>.`
+            : `현재 <b>읽기 전용</b>으로 열람 중입니다. 배송비·정산조건 등을 <b>수정</b>하려면 관리자에게 <b>입점사 정보 수정 권한</b>을 요청하세요. (요청하기 › 권한 요청)`}</div>
           <div id="venPasteBox" class="hidden" style="margin-top:14px"></div>`;
         renderVen();
-        body.querySelector('#saveVen').onclick=()=>{ saveVendors(); dirtyVendor=false; body.querySelector('#vDirty').style.display='none'; toast('저장되었습니다'); };
-        body.querySelector('#addVen').onclick=()=>{ vendors.unshift({name:'',ship:3000,policy:'',manager:'',contact:'',email:'',note:''}); markVendorDirty(); renderVen(); };
         body.querySelector('#expVen').onclick=()=>{ const cols=['입점사명','정산구분','배송비','무료배송조건','담당자','연락처','발주메일','계좌정보','특이사항'];
           const rows=vendors.map(v=>[v.name,v.settle||'',v.ship||'',v.policy||'',v.manager||'',v.contact||'',v.email||'',v.account||'',v.note||'']);
           downloadBlob(new Blob([toCSV(cols,rows)],{type:'text/csv'}),`입점사정보_${todayStr()}.csv`); toast('CSV 저장'); };
+        if(!canEditVendors) return;   // 열람 전용(파트장 등) — 아래 수정 액션 미연결
+        body.querySelector('#saveVen').onclick=()=>{ saveVendors(); dirtyVendor=false; body.querySelector('#vDirty').style.display='none'; toast('저장되었습니다'); };
+        body.querySelector('#addVen').onclick=()=>{ vendors.unshift({name:'',ship:3000,policy:'',manager:'',contact:'',email:'',note:''}); markVendorDirty(); renderVen(); };
         const vf=body.querySelector('#venFile');
         body.querySelector('#impVenFile').onclick=()=>vf.click();
         vf.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return;
@@ -691,22 +698,25 @@
           <th style="min-width:180px">발주메일</th><th style="min-width:190px">계좌정보 <span style="font-weight:500;color:var(--muted);font-size:11px">(선결제 결제요청 자동)</span></th><th style="min-width:120px">특이사항</th><th style="width:34px"></th></tr></thead><tbody></tbody>`;
         const tb=t.querySelector('tbody');
         if(!vendors.length){ tb.innerHTML=`<tr><td colspan="12" class="muted" style="text-align:center;padding:16px">입점사가 없습니다. “행 추가” 또는 CSV 불러오기.</td></tr>`; return; }
+        const ro = canEditVendors?'':'readonly'; // 열람 전용 시 입력 잠금
         vendors.forEach((v,i)=>{ const s=vat(v.ship); const tr=el('tr');
           const jasa = v.name==='자사';
-          tr.innerHTML=`<td>${jasa?'<span class="vbadge jasa">자사</span> ':''}<input type="text" data-k="name" value="${esc(v.name)}" style="width:${jasa?'88px':'100%'}"></td>
-            <td><input type="text" data-k="settle" value="${esc(v.settle||'')}" placeholder="-"></td>
-            <td><input type="number" data-k="ship" value="${esc(v.ship)}" style="text-align:right"></td>
+          tr.innerHTML=`<td>${jasa?'<span class="vbadge jasa">자사</span> ':''}<input type="text" data-k="name" value="${esc(v.name)}" style="width:${jasa?'88px':'100%'}" ${ro}></td>
+            <td><input type="text" data-k="settle" value="${esc(v.settle||'')}" placeholder="-" ${ro}></td>
+            <td><input type="number" data-k="ship" value="${esc(v.ship)}" style="text-align:right" ${ro}></td>
             <td class="num mono">${fmtNum(s.supply)}</td><td class="num mono">${fmtNum(s.tax)}</td>
-            <td><input type="text" data-k="policy" value="${esc(v.policy||'')}" placeholder="예: 3,000원 - 20만원 이상 무료"></td>
-            <td><input type="text" data-k="manager" value="${esc(v.manager||'')}"></td>
-            <td><input type="text" data-k="contact" value="${esc(v.contact||'')}"></td>
-            <td><input type="text" data-k="email" value="${esc(v.email||'')}"></td>
-            <td><input type="text" data-k="account" value="${esc(v.account||'')}" placeholder="은행 / 계좌번호 / 예금주"></td>
-            <td><input type="text" data-k="note" value="${esc(v.note||'')}"></td>
-            <td><button class="btn ghost sm">${icon('x')}</button></td>`;
-          tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value;
-            markVendorDirty(); if(inp.dataset.k==='ship') renderVen(); });
-          tr.querySelector('button').onclick=()=>{ vendors.splice(i,1); markVendorDirty(); renderVen(); };
+            <td><input type="text" data-k="policy" value="${esc(v.policy||'')}" placeholder="예: 3,000원 - 20만원 이상 무료" ${ro}></td>
+            <td><input type="text" data-k="manager" value="${esc(v.manager||'')}" ${ro}></td>
+            <td><input type="text" data-k="contact" value="${esc(v.contact||'')}" ${ro}></td>
+            <td><input type="text" data-k="email" value="${esc(v.email||'')}" ${ro}></td>
+            <td><input type="text" data-k="account" value="${esc(v.account||'')}" placeholder="은행 / 계좌번호 / 예금주" ${ro}></td>
+            <td><input type="text" data-k="note" value="${esc(v.note||'')}" ${ro}></td>
+            <td>${canEditVendors?`<button class="btn ghost sm">${icon('x')}</button>`:''}</td>`;
+          if(canEditVendors){
+            tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{ v[inp.dataset.k]= inp.dataset.k==='ship'?(Number(inp.value)||0):inp.value;
+              markVendorDirty(); if(inp.dataset.k==='ship') renderVen(); });
+            tr.querySelector('button').onclick=()=>{ vendors.splice(i,1); markVendorDirty(); renderVen(); };
+          }
           tb.appendChild(tr); });
       }
 
