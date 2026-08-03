@@ -300,10 +300,11 @@
 
       /* ================= CAFE24 매출통계 탭 ================= */
       function renderCafe24(host){
-        const st={preset:'all', dim:'ch', docs:[]};
-        const CF_PRESETS=[['all','전체'],['m12','최근 12개월'],['m6','최근 6개월'],['m3','최근 3개월'],['m1','최신 월']];
+        const st={preset:'all', dim:'ch', docs:[], from:'', to:''};
+        const CF_PRESETS=[['all','전체'],['m12','최근 12개월'],['m6','최근 6개월'],['m3','최근 3개월'],['m1','최신 월'],['custom','직접설정']];
         const inPreset=(ym,months)=>{ if(!months.length) return false; const last=months[months.length-1];
           if(st.preset==='all') return true; if(st.preset==='m1') return ym===last;
+          if(st.preset==='custom'){ const f=st.from||months[0], t=st.to||last; return ym>=f && ym<=t; }
           const back={m3:-2,m6:-5,m12:-11}[st.preset]; return back!=null ? ym>=addMonth(last,back) : true; };
         const mergeDims=sel=>{ const out={ch:{},sup:{},prod:{},cust:{}};
           sel.forEach(d=>['ch','sup','prod','cust'].forEach(K=>{ const m=(d.dims&&d.dims[K])||{}; Object.keys(m).forEach(k=>{ const o=out[K][k]=out[K][k]||{amount:0,count:0}; o.amount+=m[k].amount||0; o.count+=m[k].count||0; }); })); return out; };
@@ -322,7 +323,7 @@
           <div class="muted" style="font-size:12px;margin-top:12px">CAFE24 매출 CSV(판매처명·공급처명·상품코드·합계금액·수령자주소)를 월별로 올리세요.</div></div>`; }
         function draw(){ const docs=st.docs;
           if(!docs.length){ host.innerHTML=emptyHtml(); wire(); return; }
-          const months=docs.map(d=>d.ym); const sel=docs.filter(d=>inPreset(d.ym,months));
+          const months=docs.map(d=>d.ym); const last=months[months.length-1]; const sel=docs.filter(d=>inPreset(d.ym,months));
           const total=sel.reduce((s,d)=>s+(d.total||0),0), cnt=sel.reduce((s,d)=>s+(d.count||0),0);
           const dims=mergeDims(sel); const dimMap=dims[st.dim]||{};
           let rows=Object.keys(dimMap).map(k=>({k,amount:dimMap[k].amount,count:dimMap[k].count})).sort((a,b)=>b.amount-a.amount);
@@ -331,6 +332,7 @@
           host.innerHTML=`
             <div class="sl-period">
               <div class="seg">${CF_PRESETS.map(([p,l])=>`<button data-cp="${p}" class="${st.preset===p?'on':''}">${l}</button>`).join('')}</div>
+              ${st.preset==='custom'?`<span class="rng"><input type="month" id="cfFrom" value="${esc(st.from||months[0]||'')}" min="${esc(months[0]||'')}" max="${esc(last||'')}"> ~ <input type="month" id="cfTo" value="${esc(st.to||last||'')}" min="${esc(months[0]||'')}" max="${esc(last||'')}"></span>`:''}
               <span class="tot">업로드 <b>${docs.length}</b>개월 · 표시 <b>${sel.length}</b>개월</span>
               <button class="btn pri sm" id="cfUp" style="margin-left:8px">${icon('upload')} CSV 업로드</button></div>
             <div class="sl-grid" style="grid-template-columns:1fr 1fr 1fr">
@@ -354,8 +356,12 @@
           wire();
         }
         function wire(){
-          host.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{ st.preset=b.dataset.cp; draw(); });
+          host.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{ st.preset=b.dataset.cp;
+            if(st.preset==='custom'){ const ms=st.docs.map(d=>d.ym); if(!st.from) st.from=ms[0]||''; if(!st.to) st.to=ms[ms.length-1]||''; } draw(); });
           host.querySelectorAll('[data-cd]').forEach(b=>b.onclick=()=>{ st.dim=b.dataset.cd; draw(); });
+          const cf=host.querySelector('#cfFrom'), ct=host.querySelector('#cfTo');
+          if(cf) cf.onchange=()=>{ st.from=cf.value||st.from; if(st.from>st.to) st.to=st.from; draw(); };
+          if(ct) ct.onchange=()=>{ st.to=ct.value||st.to; if(st.to<st.from) st.from=st.to; draw(); };
           const up=host.querySelector('#cfUp')||host.querySelector('#cfUpEmpty'); if(up) up.onclick=openUpload;
           host.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('이 달 CAFE24 매출을 삭제할까요?')) return; await cafeDel(b.dataset.del); await loadC(); });
         }
