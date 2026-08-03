@@ -8,6 +8,9 @@
   const COLL='mouser_inbound';
   const CACHE='eduino.logi.mouserin';
   const KINDS=['중국 - 기존','중국 - 신제품','마우저 - 기존','마우저 - 신제품'];
+  // 저장값(위)은 유지 · 화면 표기는 압축(출처는 색으로 구분) — 중국·기존 / 마우저·신 …
+  const KIND_LABEL={'중국 - 기존':'중국·기존','중국 - 신제품':'중국·신','마우저 - 기존':'마우저·기존','마우저 - 신제품':'마우저·신'};
+  const kindLabel=k=>KIND_LABEL[k]||k||'';
   const STATUSES=['대기','완료'];
   const MOUSER_ORDER_URL='https://www.mouser.kr/OrderHistory/';
   const meU=()=>(Auth.user&&Auth.user())||{};
@@ -162,8 +165,8 @@
           <div class="mi-addbar mode-single" id="miAddBar">
             <div class="mi-fld"><label>추가유형</label>
               <span class="mi-modeseg" id="miMode"><button type="button" data-m="단품" class="on">단품</button><button type="button" data-m="묶음">묶음</button></span></div>
+            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:106px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(kindLabel(k))}</option>`).join('')}</select></div>
             <div class="mi-fld"><label>입고날짜</label><input class="mi-in" id="miDate" type="date" style="width:130px"></div>
-            <div class="mi-fld"><label>구분</label><select class="mi-in" id="miKind" style="width:128px">${KINDS.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
             <div class="mi-fld s-only"><label>상품코드</label><input class="mi-in" id="miCode" placeholder="예: P-T604" autocomplete="off" style="width:110px"></div>
             <div class="mi-fld"><label>마우저 주문번호</label><input class="mi-in" id="miOrder" placeholder="예: 281234465" autocomplete="off" style="width:128px"></div>
             <div class="mi-fld grow s-only"><label>제품명</label><input class="mi-in" id="miName" placeholder="제품명" autocomplete="off" style="width:100%"></div>
@@ -197,9 +200,9 @@
               </div>
               <div style="overflow:auto;max-height:calc(100vh - 380px)">
                 <table class="mi-t">
-                <colgroup><col style="width:134px"><col style="width:146px"><col style="width:88px"><col style="width:112px"><col><col style="width:56px"><col style="width:80px"><col style="width:82px">${editable?'<col style="width:36px">':''}</colgroup>
+                <colgroup><col style="width:104px"><col style="width:126px"><col style="width:126px"><col style="width:110px"><col><col style="width:54px"><col style="width:72px"><col style="width:78px">${editable?'<col style="width:36px">':''}</colgroup>
                 <thead><tr>
-                  <th>입고날짜</th><th>구분</th><th>상품코드</th><th>마우저 주문번호</th><th>제품명</th>
+                  <th>구분</th><th>입고날짜</th><th>상품코드</th><th>마우저 주문번호</th><th>제품명</th>
                   <th style="text-align:right">수량</th><th>파일</th><th>입고여부</th>${editable?'<th></th>':''}
                 </tr></thead><tbody id="miRows"></tbody></table>
               </div>
@@ -269,8 +272,8 @@
           ? `<button class="mi-stbtn ${st}" data-status="${id}" title="${done&&it.doneAt?'완료 '+esc(fmtWhenD(it.doneAt)):'클릭하면 완료/대기 전환'}">${done?'완료':'대기'}</button>`
           : `<span class="mi-stbadge ${st}">${done?'완료':'대기'}</span>`;
         const kindCell=editable
-          ? `<select class="mi-cell mi-kindsel ${kc}" data-f="kind">${KINDS.map(k=>`<option value="${esc(k)}" ${it.kind===k?'selected':''}>${esc(k)}</option>`).join('')}</select>`
-          : `<span class="mi-kind ${/신제품/.test(it.kind||'')?'new':'old'}" style="display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;${kc==='k-mo'?'background:#fff4ec;color:#b4530a':'background:#eef4fb;color:#0a63c2'}">${esc(it.kind||'-')}</span>`;
+          ? `<select class="mi-cell mi-kindsel ${kc}" data-f="kind">${KINDS.map(k=>`<option value="${esc(k)}" ${it.kind===k?'selected':''}>${esc(kindLabel(k))}</option>`).join('')}</select>`
+          : `<span class="mi-kind ${/신제품/.test(it.kind||'')?'new':'old'}" style="display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;${kc==='k-mo'?'background:#fff4ec;color:#b4530a':'background:#eef4fb;color:#0a63c2'}">${esc(kindLabel(it.kind)||'-')}</span>`;
         const dateCell=editable?`<input class="mi-cell" data-f="date" type="date" value="${esc(it.date||'')}">`:esc(it.date||'-');
 
         if(isBundle(it)){
@@ -278,7 +281,7 @@
           const summary=subs.map(s=>s.name||s.code).filter(Boolean).slice(0,3).join(', ')||'(세부품목 없음)';
           const onoCell=`<div class="mi-onocell"><button class="mi-tog" data-toggle="${id}">${open?'▼':'▶'}</button>${onoLink(it.orderNo)}</div>`;
           const parent=`<tr class="mi-brow" data-id="${id}">
-            <td>${dateCell}</td><td>${kindCell}</td>
+            <td>${kindCell}</td><td>${dateCell}</td>
             <td><span class="mi-bchip">묶음 ${subs.length}</span></td>
             <td>${onoCell}</td>
             <td class="mi-name" title="${esc(summary)}">${esc(summary)}${subs.length>3?` <span class="muted">외 ${subs.length-3}</span>`:''}</td>
@@ -302,15 +305,15 @@
         }
         // 단일 품목
         if(editable) return `<tr data-id="${id}">
-          <td>${dateCell}</td><td>${kindCell}</td>
-          <td><input class="mi-cell" data-f="code" value="${esc(it.code||'')}" placeholder="상품코드"></td>
+          <td>${kindCell}</td><td>${dateCell}</td>
+          <td><input class="mi-cell mi-code" data-f="code" value="${esc(it.code||'')}" placeholder="상품코드"></td>
           <td><input class="mi-cell" data-f="orderNo" value="${esc(it.orderNo||'')}" placeholder="주문번호" title="${esc(it.orderNo||'')}"></td>
           <td><input class="mi-cell" data-f="name" value="${esc(it.name||'')}" placeholder="제품명" title="${esc(it.name||'')}"></td>
           <td><input class="mi-cell mi-qty" data-f="qty" value="${esc(String(it.qty||''))}" inputmode="numeric" placeholder="0"></td>
           <td>${fileCell}</td><td>${stCell}</td>
           <td><button class="mi-del" data-del="${id}" title="삭제">✕</button></td></tr>`;
         return `<tr data-id="${id}">
-          <td>${dateCell}</td><td>${kindCell}</td>
+          <td>${kindCell}</td><td>${dateCell}</td>
           <td class="mi-code" title="${esc(it.code||'')}">${esc(it.code||'-')}</td>
           <td>${onoLink(it.orderNo)||'<span class="muted">-</span>'}</td>
           <td class="mi-name" title="${esc(it.name||'')}">${esc(it.name||'-')}</td>
