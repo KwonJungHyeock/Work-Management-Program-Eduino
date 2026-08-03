@@ -734,6 +734,9 @@
             .cm-hint{font-size:11px;color:var(--info);cursor:pointer;text-decoration:underline;margin-top:3px;display:inline-block}
             .cm-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
           </style>
+          <div class="card" style="margin-bottom:14px" id="dxCard"><div class="card-hd">${icon('alert')}<b>입점사 연동 진단</b>
+              <span class="muted" style="margin-left:auto;font-size:12px">상품코드 입력 시 '입점사 미지정 · 정산(월/선결제) 누락'이 왜 뜨는지 전수 점검</span></div>
+            <div class="card-bd" id="dxBody"><div class="muted" style="font-size:13px">${icon('cloud')} 진단 중…</div></div></div>
           <div class="cm-steps">
             <div class="cm-step"><span class="n">1</span><div><b>코드가 자동으로 나옵니다</b><br><span>지금 상품에 실제로 쓰이는 거래처코드를 아래에 자동으로 보여줘요. 코드를 몰라도 됩니다.</span></div></div>
             <div class="cm-step"><span class="n">2</span><div><b>회사명만 적으세요</b><br><span>각 코드 옆 칸에 이카운트 거래처명(예: (주)컴스마트)을 입력합니다.</span></div></div>
@@ -801,7 +804,32 @@
             // 표시용 base = 내장 거래처 기본값(VENDOR_DEFAULTS) + 관리자 저장값(우선) — 이미 매칭된 이름이 채워져 보임
             const vBase={ ...((typeof window!=='undefined'&&window.VENDOR_DEFAULTS)||{}), ...(cur.vendor||{}) };
             renderList(vL, facetV, vBase, 'vendor'); renderList(cL, facetC, cur.category, 'category'); updateSums();
+            renderDx(Number(d.products)||0, facetV, vBase);
           }catch(e){ if(vL) vL.innerHTML=`<div class="cm-empty">코드 목록을 불러오지 못했습니다(배포 환경에서 표시됩니다).</div>`; }
+        }
+        // 입점사 연동 진단 — 구매처코드 없음(미지정) / 코드는 있으나 입점사 미연동(정산누락) / 정상 을 전수 집계
+        function renderDx(total, vends, vBase){ const dx=body.querySelector('#dxBody'); if(!dx) return;
+          const withCode=(vends||[]).reduce((s,it)=>s+(Number(it.count)||0),0);
+          const noCode=Math.max(0, total-withCode);
+          let matched=0, unmatched=0; const bad=[];
+          (vends||[]).forEach(it=>{ const nm=catMapGet(vBase,it.code)||it.apiVendor||''; const ven=nm?vendorObj(nm):null;
+            if(ven && normSettle(ven.settle)) matched+=Number(it.count)||0;
+            else { unmatched+=Number(it.count)||0; bad.push({...it, nm}); } });
+          bad.sort((a,b)=>(b.count||0)-(a.count||0));
+          const kpi=(l,v,c)=>`<span style="font-size:12.5px;font-weight:700;color:${c};background:${c}14;border:1px solid ${c}44;border-radius:9px;padding:5px 11px">${l} <b>${fmtNum(v)}</b></span>`;
+          dx.innerHTML=`
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:${(noCode||bad.length)?'12px':'0'}">
+              ${kpi('전체 상품', total, '#0a63c2')}
+              ${kpi('구매처코드 없음 → 미지정', noCode, '#b4530a')}
+              ${kpi('코드 있으나 입점사 미연동', unmatched, '#c0392b')}
+              ${kpi('정상 연동', matched, '#12886a')}</div>
+            ${noCode>0?`<div class="note" style="font-size:12px;margin-bottom:${bad.length?'12px':'0'};border-left:4px solid #b4530a">🔧 <b>구매처코드 없음 ${fmtNum(noCode)}건</b> — 이카운트 품목에 <b>구매처(거래처)가 지정되지 않은</b> 상품입니다. 이름표로는 해결 불가 → <b>이카운트에서 해당 품목에 구매처를 지정</b>해야 자동 연동됩니다. (Seeed·직소싱 등 다수)</div>`:''}
+            ${bad.length?`<div style="font-size:12.5px;font-weight:700;margin-bottom:6px">코드는 있으나 입점사 미연동 <span class="muted" style="font-weight:600">— 아래 코드에 ①이름표 입력 + ②입점사 정보 등록 하면 정산 자동</span></div>
+              <div class="cm-list" style="max-height:220px;border:1px solid var(--line);border-radius:10px">${bad.slice(0,50).map(it=>`<div class="cm-row todo" style="grid-template-columns:118px minmax(0,1fr) 150px">
+                <div class="cc">${esc(it.code)}</div>
+                <div><div class="cm" title="${esc(it.sampleName||'')}">${fmtNum(it.count)}개 · 예: ${esc(it.sampleName||it.sampleCode||'-')}</div>${it.nm?`<div style="font-size:11px;color:#c0392b">이름표=“${esc(it.nm)}” → 입점사 마스터에 없음</div>`:'<div style="font-size:11px;color:var(--muted)">이름표 미입력(아래에서 회사명 입력)</div>'}</div>
+                <div style="font-size:11.5px;font-weight:700;color:${it.nm?'#c0392b':'#b4530a'}">${it.nm?'입점사 등록 필요':'이름표 입력 필요'}</div></div>`).join('')}${bad.length>50?`<div class="cm-empty" style="padding:10px">외 ${fmtNum(bad.length-50)}개 코드</div>`:''}</div>`
+              :(noCode?'':'<div style="font-size:12.5px;color:var(--ok)">✓ 코드가 있는 상품은 모두 입점사에 연동됩니다.</div>')}`;
         }
         loadFacet();
         body.querySelector('#reloadFacet').onclick=loadFacet;
