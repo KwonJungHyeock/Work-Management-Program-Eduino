@@ -87,18 +87,21 @@
         table.mi-t th{background:var(--panel-2);color:var(--ink-2);font-size:11px;font-weight:800;text-align:left;padding:9px 8px;border-bottom:1px solid var(--line-2);white-space:nowrap}
         table.mi-t td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
         table.mi-t tr:hover td{background:var(--panel-2)}
-        .mi-cell{width:100%;min-width:0;height:32px;border:1px solid transparent;border-radius:7px;padding:0 7px;font-family:inherit;font-size:13px;background:transparent;color:var(--ink)}
+        /* 입력칸도 일반 텍스트 셀과 같은 시작점(=td 패딩 8px)에서 시작하도록 자체 패딩·테두리 제거 → 세로 정렬 일치 */
+        .mi-cell{width:100%;min-width:0;height:32px;border:0;border-radius:7px;padding:0;font-family:inherit;font-size:13px;background:transparent;color:var(--ink)}
         select.mi-cell,input.mi-cell{font-size:13px}
-        .mi-cell:hover{border-color:var(--line-2)} .mi-cell:focus{outline:0;border-color:#12886a;background:var(--panel)}
-        select.mi-cell,input[type=date].mi-cell{cursor:pointer} input[type=date].mi-cell{padding:0 5px}
+        .mi-cell:hover{outline:1px solid var(--line-2);outline-offset:-1px} .mi-cell:focus{outline:2px solid #12886a;outline-offset:-2px;background:var(--panel)}
+        select.mi-cell,input[type=date].mi-cell{cursor:pointer} input[type=date].mi-cell{padding:0}
         .mi-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .mi-code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono)}
         .mi-qty{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
         .mi-del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:4px 5px;border-radius:7px}
         .mi-del:hover{background:#fdecea;color:#c0392b}
         /* 박스카드 — 구분 · 입고여부 */
-        select.mi-kindsel{font-weight:800;border:1px solid var(--line-2);border-radius:8px;background:var(--panel);padding:0 2px 0 6px}
-        select.mi-filesel{padding:0 2px 0 6px}
+        /* 구분 = 가운데 정렬 박스카드(내용 폭에 맞게 컴팩트) */
+        table.mi-t th:first-child,table.mi-t td:first-child{text-align:center}
+        select.mi-kindsel{font-weight:800;border:1px solid var(--line-2);border-radius:8px;background:var(--panel);padding:0 2px;text-align:center;text-align-last:center}
+        select.mi-filesel{padding:0;text-align:center;text-align-last:center}
         select.mi-kindsel.k-mo{background:#fff4ec;border-color:#f2cdb0;color:#b4530a}
         select.mi-kindsel.k-cn{background:#eef4fb;border-color:#cfe0f5;color:#0a63c2}
         .mi-stbtn{width:100%;height:30px;border:1px solid;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer}
@@ -199,7 +202,7 @@
               </div>
               <div style="overflow:auto;max-height:calc(100vh - 380px)">
                 <table class="mi-t">
-                <colgroup><col style="width:132px"><col style="width:116px"><col style="width:118px"><col style="width:104px"><col style="min-width:190px"><col style="width:54px"><col style="width:66px"><col style="width:76px">${editable?'<col style="width:34px">':''}</colgroup>
+                <colgroup><col style="width:112px"><col style="width:148px"><col style="width:104px"><col style="width:104px"><col style="min-width:190px"><col style="width:62px"><col style="width:64px"><col style="width:76px">${editable?'<col style="width:34px">':''}</colgroup>
                 <thead><tr>
                   <th>구분</th><th>입고날짜</th><th>상품코드</th><th>마우저 주문번호</th><th>제품명</th>
                   <th style="text-align:right">수량</th><th>파일</th><th>입고여부</th>${editable?'<th></th>':''}
