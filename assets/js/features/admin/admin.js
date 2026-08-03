@@ -60,6 +60,10 @@
         .perm-t td.c{text-align:center}.perm-t tr:last-child td{border-bottom:0}
         .perm-t input{width:16px;height:16px;cursor:pointer}
         .perm-t input[data-eperm]{accent-color:#e0313b}
+        /* 요청 딥링크로 자동 체크된 대상 행 강조 */
+        .perm-t tr.perm-hi td{background:#fff5db;box-shadow:inset 3px 0 0 #f0a020}
+        .rq-grant-banner{margin:0 0 14px;border:1px solid #f0d3a6;background:#fff8ec;border-radius:10px;padding:11px 14px;font-size:13px;color:#8a5200;display:flex;align-items:center;gap:9px;line-height:1.5}
+        .rq-grant-banner b{color:#6b3f00}
       </style>
       <div class="mhead pad">
         <div class="tt">팀원 계정 관리</div>
@@ -71,6 +75,7 @@
             <span class="muted" id="editHint" style="margin-left:auto;font-size:12.5px"></span>
             <button type="button" class="btn sm" id="newUser" style="margin-left:10px">${icon('plus')}신규 계정</button></div>
           <div class="card-bd">
+            <div id="rqGrantBanner"></div>
             <div class="u-form">
               <label class="fld">아이디<input type="text" id="fId" placeholder="cs.kim" autocomplete="off"></label>
               <label class="fld">이름<input type="text" id="fName" placeholder="김상담"></label>
@@ -133,6 +138,20 @@
         renderPerms(Array.isArray(u.perms)&&u.perms.length?u.perms:deptDefault(u.dept||'cs'), Array.isArray(u.editPerms)?u.editPerms:[]);
         setMasterLock(!!u.isMaster);
         $('#editHint').innerHTML=u.isMaster?`<b style="color:var(--warn)">대표 계정 · 이름/이메일/부서/접속코드 수정</b>`:`'${esc(u.loginId)}' 수정 중`; $('#fName').focus(); }
+      const pageName=key=>{ for(const g of FEATURES){ const it=(g.items||[]).find(i=>i.key===key); if(it) return `[${g.name}] ${it.name}`; } return key; };
+      // 권한 요청 '바로가기' 딥링크(window.__reqGrant) 원클릭 반영 — 요청자 편집폼 열고 대상 페이지 권한 자동 체크·강조
+      function applyReqGrant(){ const g=window.__reqGrant; if(!g||!g.loginId) return; try{ window.__reqGrant=null; }catch(e){}
+        const u=usersCache.find(x=>x.loginId===g.loginId) || (g.name&&usersCache.find(x=>x.name===g.name));
+        const banner=$('#rqGrantBanner');
+        if(!u){ if(banner) banner.innerHTML=`<div class="rq-grant-banner">${icon('alert')||''} 요청한 팀원 계정(<b>${esc(g.name||g.loginId)}</b>)을 목록에서 찾지 못했습니다. 계정을 확인하세요.</div>`; return; }
+        fillForm(u);
+        const box=$('#permPick'); const view=box&&box.querySelector(`[data-perm="${g.key}"]`), edit=box&&box.querySelector(`[data-eperm="${g.key}"]`);
+        const edit0=g.mode==='edit';
+        if(view) view.checked=true; if(edit0 && edit) edit.checked=true;
+        const row=(view||edit)&&(view||edit).closest('tr'); if(row){ row.classList.add('perm-hi'); setTimeout(()=>{ try{ row.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} },60); }
+        if(banner) banner.innerHTML=`<div class="rq-grant-banner">${icon('stamp')||''} 요청 반영 준비됨 — <b>${esc(u.name||u.loginId)}</b>에게 <b>${esc(pageName(g.key))}</b> <b>${edit0?'수정':'열람'} 권한</b>이 체크되었습니다. 확인 후 아래 <b>저장</b>을 누르면 부여됩니다.</div>`;
+        try{ root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
+      }
       renderPerms(deptDefault('cs'), []);
       // 신규 계정: 폼을 빈 상태로 초기화(수정 모드 해제) + 접속코드 자동 생성 → 바로 발급 가능
       $('#newUser').onclick=()=>{ resetForm(); $('#fCode').value=randCode(); $('#admStat').textContent=''; root.querySelector('.mbody').scrollIntoView({behavior:'smooth',block:'start'}); };
@@ -189,7 +208,7 @@
           t.querySelector('tbody').innerHTML=`<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--danger)">${esc(err.message)}</td></tr>`;
         }
       }
-      load();
+      load().then(applyReqGrant);
     }
   };
 

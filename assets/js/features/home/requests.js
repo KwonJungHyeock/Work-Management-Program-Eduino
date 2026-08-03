@@ -169,8 +169,11 @@
 
       function cardInbox(r){
         const canGo=r.cat==='perm'||!!r.refKey;
+        // 권한/마스터 요청은 관리자만 실제 조치 가능(팀 설정·이카운트 매핑 등 관리자 전용) → 부서장에겐 안내 표식
+        const adminOnly=(r.cat==='perm'||r.cat==='master');
+        const adminTag=(adminOnly && me.role!=='admin')?`<span title="이 요청은 관리자만 최종 처리(권한 부여·매핑)할 수 있습니다" style="font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;color:#8a5200;background:#fff3dc;border:1px solid #f0d3a6">관리자 처리</span>`:'';
         return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}" data-id="${esc(r.id)}">
-          <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} <span class="rq-ti">${esc(r.title)}</span></div>
+          <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} ${adminTag} <span class="rq-ti">${esc(r.title)}</span></div>
           <div class="rq-meta">요청자 <b>${esc(r.fromName)}</b>${r.fromDept?` (${esc(r.fromDept)})`:''} · ${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.permMode?` · ${r.permMode==='edit'?'수정':'열람'}권한`:''} · ${esc(fmtDay(r.createdAt))}</div>
           ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
           ${(r.status==='done'||r.status==='rejected')?`<div class="rq-reso ${r.status==='rejected'?'rej':''}">${r.status==='done'?'완료':'반려'} · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
