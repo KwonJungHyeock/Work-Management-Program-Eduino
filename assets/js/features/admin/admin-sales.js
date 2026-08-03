@@ -105,13 +105,15 @@
         .sl-period .tot{margin-left:auto;font-size:12.5px;color:var(--muted)} .sl-period .tot b{color:var(--ink)}
         .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
         @media(max-width:820px){.sl-grid{grid-template-columns:1fr}}
-        .sl-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
-        .sl-card .hd{padding:14px 18px 12px;color:#fff}
-        .sl-card.cs .hd{background:linear-gradient(135deg,#1a5fd0,#3f8bff)}
-        .sl-card.md .hd{background:linear-gradient(135deg,#6b4be6,#9578ff)}
-        .sl-card .hd h3{margin:0;font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:8px}
-        .sl-card .hd .sub{font-size:11.5px;opacity:.9;margin-top:3px}
-        .sl-card .hd .tot{font-size:26px;font-weight:800;margin-top:8px}.sl-card .hd .tot small{font-size:13px;opacity:.85;font-weight:700}
+        /* 사무적 KPI 카드 — 상단 액센트 바 + 평면 헤더 */
+        .sl-card{--ac:#516070;border:1px solid var(--line);border-top:3px solid var(--ac);border-radius:10px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
+        .sl-card.cs{--ac:#1f6feb} .sl-card.md{--ac:#6a5acd}
+        .sl-card .hd{padding:13px 18px 14px;background:var(--panel-2);border-bottom:1px solid var(--line)}
+        .sl-card .hd h3{margin:0;font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.02em;display:flex;align-items:center;gap:7px;text-transform:none}
+        .sl-card .hd h3 .ic{color:var(--ac)}
+        .sl-card .hd .sub{font-size:11px;color:var(--muted);margin-top:2px}
+        .sl-card .hd .tot{font-size:25px;font-weight:800;margin-top:9px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+        .sl-card .hd .tot small{font-size:12.5px;color:var(--muted);font-weight:600;margin-left:2px}
         .sl-card .bd{padding:14px 18px}
         .sl-row{display:grid;grid-template-columns:60px 1fr 130px;gap:10px;align-items:center;margin:9px 0;font-size:13px}
         .sl-row .lbl{font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:6px}
@@ -150,6 +152,10 @@
         .cf-mchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:5px 11px}
         .cf-mchip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:5px}
         .cf-mchip button:hover{background:#fdecea;color:#c0392b}
+        /* 사무적 탭 — 절제된 세그먼트 컨트롤 */
+        #slTabs{display:inline-flex;gap:0;background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:3px;margin-top:10px}
+        #slTabs .t{border:0;background:transparent;padding:7px 15px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:7px;transition:background .12s,color .12s}
+        #slTabs .t.on{background:var(--panel);color:var(--red);box-shadow:var(--sh-sm)}
       </style>
       <div class="mhead">
         <div class="tt">매출 데이터</div>
@@ -328,9 +334,9 @@
               <span class="tot">업로드 <b>${docs.length}</b>개월 · 표시 <b>${sel.length}</b>개월</span>
               <button class="btn pri sm" id="cfUp" style="margin-left:8px">${icon('upload')} CSV 업로드</button></div>
             <div class="sl-grid" style="grid-template-columns:1fr 1fr 1fr">
-              <div class="sl-card"><div class="hd" style="background:linear-gradient(135deg,#0a3d62,#1f6feb)"><h3>${icon('chart')} 총 매출</h3><div class="sub">CAFE24 · ${sel.length}개월</div><div class="tot">${won(total)}<small> 원</small></div></div></div>
-              <div class="sl-card"><div class="hd" style="background:linear-gradient(135deg,#12886a,#3bbf94)"><h3>${icon('box')} 주문 건수</h3><div class="sub">라인 수</div><div class="tot">${won(cnt)}<small> 건</small></div></div></div>
-              <div class="sl-card"><div class="hd" style="background:linear-gradient(135deg,#7a5af8,#a58bff)"><h3>${icon('check2')} 업로드 월</h3><div class="sub">최신 ${esc(months[months.length-1]||'-')}</div><div class="tot">${docs.length}<small> 개월</small></div></div></div>
+              <div class="sl-card" style="--ac:#1f6feb"><div class="hd"><h3>${icon('chart')} 총 매출</h3><div class="sub">CAFE24 · ${sel.length}개월</div><div class="tot">${won(total)}<small> 원</small></div></div></div>
+              <div class="sl-card" style="--ac:#12886a"><div class="hd"><h3>${icon('box')} 주문 건수</h3><div class="sub">라인 수</div><div class="tot">${won(cnt)}<small> 건</small></div></div></div>
+              <div class="sl-card" style="--ac:#7a5af8"><div class="hd"><h3>${icon('check2')} 업로드 월</h3><div class="sub">최신 ${esc(months[months.length-1]||'-')}</div><div class="tot">${docs.length}<small> 개월</small></div></div></div>
             </div>
             <div class="sl-grid2">
               <div class="sl-trend"><h3>${icon('chart')} 월별 매출 추이</h3><div class="sub">CAFE24 · 업로드된 월</div>${cfTrend(sel.map(d=>d.ym),sel.map(d=>d.total||0))}</div>
