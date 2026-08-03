@@ -86,6 +86,22 @@
     return [cym,cym];
   }
 
+  // 차트(svg.chart-svg) 호버 툴팁 배선 — [data-tip] 히트영역에 커서 올리면 해당 월 매출 표시
+  function attachChartTips(scope){
+    (scope||document).querySelectorAll('svg.chart-svg').forEach(svg=>{
+      const box=svg.closest('.sl-trend')||svg.parentElement; if(!box) return;
+      box.style.position='relative';
+      let tip=box.querySelector(':scope > .chart-tip');
+      if(!tip){ tip=document.createElement('div'); tip.className='chart-tip'; box.appendChild(tip); }
+      const move=e=>{ const r=box.getBoundingClientRect(); tip.style.left=(e.clientX-r.left)+'px'; tip.style.top=(e.clientY-r.top)+'px'; };
+      svg.querySelectorAll('[data-tip]').forEach(h=>{
+        h.addEventListener('mouseenter',e=>{ tip.textContent=h.getAttribute('data-tip')||''; tip.classList.add('on'); move(e); });
+        h.addEventListener('mousemove',move);
+        h.addEventListener('mouseleave',()=>tip.classList.remove('on'));
+      });
+    });
+  }
+
   MODULES['md.sales']={
     title:'매출 데이터', icon:'chart',
     render(root){
@@ -125,6 +141,11 @@
         .sl-trend{margin-top:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--sh-sm);padding:16px 18px}
         .sl-trend h3{margin:0 0 2px;font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:8px}
         .sl-trend .sub{font-size:11.5px;color:var(--muted);margin-bottom:8px}
+        /* 그래프 호버 툴팁 — 마우스 올린 월의 매출 표시 */
+        .chart-tip{position:absolute;pointer-events:none;background:#1a2230;color:#fff;font-size:11.5px;font-weight:700;line-height:1.5;padding:6px 10px;border-radius:8px;white-space:pre-line;box-shadow:0 6px 18px rgba(16,24,40,.28);opacity:0;transform:translate(-50%,calc(-100% - 12px));transition:opacity .09s;z-index:6}
+        .chart-tip.on{opacity:1}
+        svg.chart-svg [data-tip]{cursor:default}
+        svg.chart-svg [data-tip]:hover{fill:rgba(31,111,235,.06)}
         .sl-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:10px}
         .sl-legend span{display:inline-flex;align-items:center;gap:6px}
         .sl-legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
@@ -187,13 +208,14 @@
         const slot=(W-padL-padR)/n, bw=Math.min(22,Math.max(6,slot/3));
         const yBase=H-padB, ih=H-padT-padB;
         const hOf=v=>ih*(v/max);
-        let bars='',labels=''; const csPts=[], mdPts=[];
+        let bars='',labels='',hits=''; const csPts=[], mdPts=[];
         const showEvery=Math.ceil(n/12);
         months.forEach((m,i)=>{ const cx=padL+slot*i+slot/2;
           const csY=yBase-hOf(csT[i]), mdY=yBase-hOf(mdT[i]);
           bars+=`<rect x="${(cx-bw-2).toFixed(1)}" y="${csY.toFixed(1)}" width="${bw}" height="${hOf(csT[i]).toFixed(1)}" rx="3" fill="${CS_COLOR}" opacity="0.82"/>`;
           bars+=`<rect x="${(cx+2).toFixed(1)}" y="${mdY.toFixed(1)}" width="${bw}" height="${hOf(mdT[i]).toFixed(1)}" rx="3" fill="${MD_COLOR}" opacity="0.82"/>`;
           csPts.push([cx-2-bw/2,csY]); mdPts.push([cx+2+bw/2,mdY]);
+          hits+=`<rect x="${(padL+slot*i).toFixed(1)}" y="${(padT-6).toFixed(1)}" width="${slot.toFixed(1)}" height="${(yBase-padT+6).toFixed(1)}" fill="transparent" pointer-events="all" data-tip="${esc(m+'\nCS '+won(csT[i])+'원 · MD '+won(mdT[i])+'원\n합계 '+won(csT[i]+mdT[i])+'원')}"></rect>`;
           if(i%showEvery===0) labels+=`<text x="${cx.toFixed(1)}" y="${H-9}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(m.slice(2))}</text>`;
         });
         const gy=yBase-ih*0.5;
@@ -201,10 +223,10 @@
         const lineOf=(pts,c)=> (n>1?`<polyline fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')}"/>`:'')
           + pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#fff" stroke="${c}" stroke-width="1.8"/>`).join('');
         const trend=lineOf(csPts,'#123a6b')+lineOf(mdPts,'#4a2f9e');
-        return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
+        return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="100%" style="height:auto;font-family:inherit" xmlns="http://www.w3.org/2000/svg">
           <text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
           <line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-dasharray="3 3"/>
-          <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${trend}${labels}</svg>
+          <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${trend}${labels}${hits}</svg>
           <div class="sl-legend"><span><i style="background:${CS_COLOR}"></i>CS 견적/발주/후불</span><span><i style="background:${MD_COLOR}"></i>MD 입점사 발주</span></div>`;
       }
 
@@ -295,6 +317,7 @@
           </div>
           <div class="sl-note">※ 상단 매출 카드의 CS 합계는 <b>발주+후불</b>만 집계합니다(견적 제외). <b>유형별 분석</b>은 CS 견적/발주/후불을 <b>구분 필터</b>로 골라 고객유형(초·중·고·대·기관·개인·업체·입점사·파트너사)·경로·담당자로, MD는 입점사·정산구분·담당자로 분해합니다. 입점사 발주 '매입'은 발주(입고)금액 기준입니다.</div>`;
         renderBreakCard();
+        attachChartTips(body);
 
         body.querySelectorAll('.sl-period .seg button').forEach(b=>b.onclick=()=>{ preset=b.dataset.p;
           if(preset!=='custom'){ [from,to]=presetRange(preset,cym); } else { from=cym+'-01'; to=cday; }   // 직접설정 초기값: 이번 달 1일 ~ 오늘
@@ -316,19 +339,20 @@
           sel.forEach(d=>['ch','sup','prod','cust'].forEach(K=>{ const m=(d.dims&&d.dims[K])||{}; Object.keys(m).forEach(k=>{ const o=out[K][k]=out[K][k]||{amount:0,count:0}; o.amount+=m[k].amount||0; o.count+=m[k].count||0; }); })); return out; };
         function cfTrend(months, vals){ if(!months.length) return '<div class="sl-empty">표시할 월이 없습니다.</div>';
           const W=680,H=190,padL=10,padR=10,padT=22,padB=30,n=months.length,max=Math.max(1,...vals);
-          const slot=(W-padL-padR)/n, bw=Math.min(30,Math.max(8,slot*0.5)), yBase=H-padB, ih=H-padT-padB; let bars='',labels=''; const showEvery=Math.ceil(n/12);
+          const slot=(W-padL-padR)/n, bw=Math.min(30,Math.max(8,slot*0.5)), yBase=H-padB, ih=H-padT-padB; let bars='',labels='',hits=''; const showEvery=Math.ceil(n/12);
           const pts=[]; // 막대 위 꼭짓점(선그래프용)
           months.forEach((m,i)=>{ const cx=padL+slot*i+slot/2, h=ih*(vals[i]/max); const ty=yBase-h;
             bars+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${ty.toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3" fill="${CS_COLOR}" opacity="0.82"/>`;
             pts.push([cx,ty]);
+            hits+=`<rect x="${(padL+slot*i).toFixed(1)}" y="${(padT-6).toFixed(1)}" width="${slot.toFixed(1)}" height="${(yBase-padT+6).toFixed(1)}" fill="transparent" pointer-events="all" data-tip="${esc(m+'\n'+won(vals[i])+'원')}"></rect>`;
             if(i%showEvery===0) labels+=`<text x="${cx.toFixed(1)}" y="${H-9}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${esc(m.slice(2))}</text>`; });
           const gy=yBase-ih*0.5;
           // 막대 꼭짓점을 잇는 선 + 데이터 포인트(점) — 추세를 선그래프로 함께 표시
           const line = n>1 ? `<polyline fill="none" stroke="#123a6b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')}"/>` : '';
           const dots = pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.4" fill="#fff" stroke="#123a6b" stroke-width="2"/>`).join('');
-          return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="height:auto"><text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
+          return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="100%" style="height:auto"><text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
             <line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-dasharray="3 3"/>
-            <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${line}${dots}${labels}</svg>`; }
+            <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${line}${dots}${labels}${hits}</svg>`; }
         function emptyHtml(){ return `<div class="sl-empty" style="padding:40px">${icon('upload')}<div style="margin:10px 0 14px">아직 업로드된 CAFE24 매출이 없습니다.</div>
           <button class="btn pri" id="cfUpEmpty">${icon('upload')} CSV 업로드</button>
           <div class="muted" style="font-size:12px;margin-top:12px">CAFE24 매출 CSV(판매처명·공급처명·상품코드·합계금액·수령자주소)를 월별로 올리세요.</div></div>`; }
@@ -365,6 +389,7 @@
               <div class="cf-months" style="margin-top:8px">${docs.slice().reverse().map(d=>`<span class="cf-mchip">${esc(d.ym)} · ${won(d.total||0)}원 · ${d.count||0}건 <button data-del="${esc(d.id)}" title="삭제">✕</button></span>`).join('')}</div></div>
             <div class="sl-note">※ 분류 — 판매처: 후불·쿠팡·기업(기타발주)·파트너사(샘활코딩/아이스크림/엔티렉스)·카페24·스마트스토어 / 공급처: 자사·입점사 / 상품: A~E 자사부품·F,G,H,J 자사키트·S 자사과학키트·P 입점사 / 고객유형: 주소의 초·중·고·대, 그 외 개인·기업.</div>`;
           wire();
+          attachChartTips(host);
         }
         function wire(){
           host.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{ st.preset=b.dataset.cp;
