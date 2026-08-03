@@ -193,18 +193,25 @@ function bootShell(){
     try{
       const uid=me.user.loginId;
       const wantCb = isAdmin || myDept==='cs';
-      // 3개 컬렉션 병렬 조회(순차 왕복 → 1회 왕복으로 단축)
-      const [cbs, nts] = await Promise.all([
+      const wantReq = !!window.Req;
+      // 컬렉션 병렬 조회(순차 왕복 → 1회 왕복으로 단축)
+      const [cbs, nts, reqs] = await Promise.all([
         wantCb ? fetchColl('callbacks') : Promise.resolve(null),
         fetchColl('notice'),
+        wantReq ? fetchColl('requests') : Promise.resolve(null),
       ]);
-      let cbOpen=0, unreadN=0;
+      let cbOpen=0, unreadN=0, reqN=0;
+      // 요청 배지 — 처리자: 내가 처리할 미처리 요청 · 요청자: 완료/반려된 내 요청(미확인)
+      if(reqs && window.Req){ const u=me.user;
+        const inboxOpen = Req.isHandler(u)? Req.inbox(reqs,u).filter(r=>Req.OPEN(r.status)).length : 0;
+        let mineNew=0; try{ const seen=store('eduino.req.seenAt').get('')||''; mineNew=Req.fromMe(reqs,u).filter(r=>(r.status==='done'||r.status==='rejected')&&String(r.resolvedAt||'')>seen).length; }catch(e){}
+        reqN=inboxOpen+mineNew; setBadge('home.requests', reqN); }
       if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); }
       const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===uid)||(m.t==='dept'&&m.v===myDept));
       if(nts){ unreadN=nts.filter(x=>(noticeVisible(x.dept)||mentMe(x)) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
       badgeAt=Date.now();
-      // 알림 = 미확인 공지 + (CS/관리자) 미처리 콜백
-      const totalAlerts = unreadN + cbOpen;
+      // 알림 = 미확인 공지 + (CS/관리자) 미처리 콜백 + 요청(미처리/결과)
+      const totalAlerts = unreadN + cbOpen + reqN;
       setBadge('home.alerts', totalAlerts);
       // 브라우저 알림 — 확인필요 항목이 늘어나고 알림이 켜져 있으며 탭이 백그라운드일 때
       if(window.__prevAlerts!=null && totalAlerts>window.__prevAlerts){

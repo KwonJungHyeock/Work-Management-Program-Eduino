@@ -78,7 +78,9 @@
   MODULES['md.order']={
     title:'입점사 발주', icon:'truck',
     render(root){
+      // 딥링크(요청 처리함 [바로가기])로 특정 탭 지정 가능 — draw()의 tabOk가 권한/유효성 재검증
       let tab='entry', dirtyMaster=false, dirtyVendor=false;
+      if(window.__mdOrderTab){ tab=window.__mdOrderTab; try{ delete window.__mdOrderTab; }catch(e){ window.__mdOrderTab=null; } }
       // 팀원은 실무(발주 입력)만 · 이카운트 매핑·연동 설정은 관리자 전용
       const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
       // 입점사 정보(배송비·정산조건 등) 수정 권한 — 관리자 또는 대표가 '팀 설정'에서 부여(md.vendors)
