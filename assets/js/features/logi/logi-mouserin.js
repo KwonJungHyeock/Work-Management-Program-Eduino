@@ -9,7 +9,7 @@
   const CACHE='eduino.logi.mouserin';
   const KINDS=['중국 - 기존','중국 - 신제품','마우저 - 기존','마우저 - 신제품'];
   const kindLabel=k=>k||'';   // 표기는 전체 유지(기존/신제품) · 출처는 색으로 구분
-  const STATUSES=['대기','완료'];
+  const STATUSES=['대기','입고지연','완료'];
   const MOUSER_ORDER_URL='https://www.mouser.kr/OrderHistory/';
   const meU=()=>(Auth.user&&Auth.user())||{};
   const canEdit=()=> !!(Auth.isAdmin&&Auth.isAdmin()) || meU().dept==='logi' || meU().role==='lead';
@@ -104,12 +104,18 @@
         select.mi-filesel{padding:0;text-align:center;text-align-last:center}
         select.mi-kindsel.k-mo{background:#fff4ec;border-color:#f2cdb0;color:#b4530a}
         select.mi-kindsel.k-cn{background:#eef4fb;border-color:#cfe0f5;color:#0a63c2}
-        .mi-stbtn{width:100%;height:30px;border:1px solid;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer}
-        .mi-stbtn.done{background:#e6f7f0;border-color:#bfe9d5;color:#12886a}
-        .mi-stbtn.wait{background:#fff4e6;border-color:#f0d3a6;color:#b4530a}
         .mi-stbadge{display:inline-block;font-size:11.5px;font-weight:800;border-radius:7px;padding:3px 10px;border:1px solid}
         .mi-stbadge.done{background:#e6f7f0;border-color:#bfe9d5;color:#12886a}
         .mi-stbadge.wait{background:#fff4e6;border-color:#f0d3a6;color:#b4530a}
+        .mi-stbadge.delay{background:#fdecea;border-color:#f2c4c0;color:#c0392b}
+        /* 입고여부 = 대기/입고지연/완료 셀렉트(색 배지) + 예상 입고일 */
+        select.mi-ststat{width:100%;height:30px;border:1px solid;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;text-align:center;text-align-last:center;padding:0 2px;font-family:inherit}
+        select.mi-ststat.done{background:#e6f7f0;border-color:#bfe9d5;color:#12886a}
+        select.mi-ststat.wait{background:#fff4e6;border-color:#f0d3a6;color:#b4530a}
+        select.mi-ststat.delay{background:#fdecea;border-color:#f2c4c0;color:#c0392b}
+        .mi-eta{width:100%;height:24px;margin-top:4px;border:1px solid #f2c4c0;border-radius:7px;font-size:11px;padding:0 4px;color:#c0392b;background:var(--panel);font-family:inherit}
+        .mi-eta:focus{outline:1px solid #c0392b;outline-offset:-1px;border-color:#c0392b}
+        .mi-etatext{margin-top:3px;font-size:10.5px;font-weight:800;color:#c0392b;white-space:nowrap}
         /* 마우저 주문번호 */
         .mi-ono{color:#0a63c2;font-weight:700;font-family:var(--mono);font-size:12px;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:100%}
         .mi-ono:hover{text-decoration:underline}
@@ -148,6 +154,8 @@
         .mi-day .dn{line-height:1}
         .mi-day .badge{font-size:9.5px;font-weight:800;color:#fff;border-radius:8px;padding:0 5px;line-height:15px;min-width:15px;text-align:center;background:#12886a}
         .mi-day.pend .badge{background:#b4530a}
+        .mi-day .eta-dot{position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:#c0392b;box-shadow:0 0 0 2px var(--panel)}
+        .mi-day.sel .eta-dot{box-shadow:0 0 0 2px #12886a}
         .mi-day.sel .badge{background:#fff;color:#12886a}
         .mi-cal-info{margin-top:12px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:9px;line-height:1.6}
         .mi-cal-info b{color:#12886a}
@@ -202,7 +210,7 @@
               </div>
               <div style="overflow:auto;max-height:calc(100vh - 380px)">
                 <table class="mi-t">
-                <colgroup><col style="width:112px"><col style="width:148px"><col style="width:104px"><col style="width:104px"><col style="min-width:190px"><col style="width:62px"><col style="width:64px"><col style="width:76px">${editable?'<col style="width:34px">':''}</colgroup>
+                <colgroup><col style="width:112px"><col style="width:148px"><col style="width:104px"><col style="width:104px"><col style="min-width:190px"><col style="width:62px"><col style="width:64px"><col style="width:118px">${editable?'<col style="width:34px">':''}</colgroup>
                 <thead><tr>
                   <th>구분</th><th>입고날짜</th><th>상품코드</th><th>마우저 주문번호</th><th>제품명</th>
                   <th style="text-align:right">수량</th><th>파일</th><th>입고여부</th>${editable?'<th></th>':''}
@@ -235,6 +243,8 @@
       // 마우저 주문번호 셀(연결 링크)
       const onoLink=ono=>ono?`<a class="mi-ono" href="${esc(MOUSER_ORDER_URL)}" target="_blank" rel="noopener" title="마우저 주문내역에서 ${esc(ono)} 확인">${esc(ono)}</a>`:'';
       const kindCls=k=>/마우저/.test(k||'')?'k-mo':'k-cn';
+      const stCls=it=> isDone(it)?'done':(it&&it.status==='입고지연'?'delay':'wait');
+      const fmtMD=d=>{ if(!d) return ''; const p=String(d).split('-'); return p.length>=3?`${+p[1]}/${+p[2]}`:String(d); };
 
       function render(){
         const term=q.trim().toLowerCase(); const {from,to}=range();
@@ -244,9 +254,10 @@
         const pend=ranged.filter(it=>!isDone(it));
         const view=(waitOnly?pend:ranged).slice().sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')) || String(b.createdAt||b.updatedAt||'').localeCompare(String(a.createdAt||a.updatedAt||'')));
         // 요약(전체 · 대기 · 총수량) — mhead
-        const totQty=items.reduce((s,it)=>s+qtyOf(it),0); const pendAll=items.filter(it=>!isDone(it)).length;
+        const totQty=items.reduce((s,it)=>s+qtyOf(it),0);
+        const doneAll=items.filter(isDone).length; const delayAll=items.filter(it=>it.status==='입고지연').length; const waitAll=items.length-doneAll-delayAll;
         sumEl.innerHTML=`<span class="mi-chip">전체 <b>${items.length}</b>건</span>
-          <span class="mi-chip">대기 <b style="color:#b4530a">${pendAll}</b> · 완료 <b>${items.length-pendAll}</b></span>
+          <span class="mi-chip">대기 <b style="color:#b4530a">${waitAll}</b>${delayAll?` · 지연 <b style="color:#c0392b">${delayAll}</b>`:''} · 완료 <b>${doneAll}</b></span>
           <span class="mi-chip">총 수량 <b>${won(totQty)}</b></span>`;
         // 입고현황 카드 요약
         const vQty=view.reduce((s,it)=>s+qtyOf(it),0);
@@ -265,14 +276,16 @@
       }
 
       function rowHtml(it){
-        const id=esc(it.id); const done=isDone(it); const st=done?'done':'wait';
+        const id=esc(it.id); const done=isDone(it); const st=stCls(it); const stLabel=it.status||'대기';
         const kc=kindCls(it.kind);
         const fileCell=editable
           ? `<select class="mi-cell mi-filesel" data-f="file"><option value="None" ${fileNorm(it.file)!=='drive'?'selected':''}>None</option><option value="drive" ${fileNorm(it.file)==='drive'?'selected':''}>drive</option></select>`
           : (fileNorm(it.file)==='drive'?'drive':'<span class="muted">None</span>');
+        const etaEdit = it.status==='입고지연' ? `<input class="mi-eta" data-f="eta" type="date" value="${esc(it.eta||'')}" title="예상 입고일">` : '';
+        const etaView = (it.status==='입고지연'&&it.eta) ? `<div class="mi-etatext" title="예상 입고일">예상 ${esc(fmtMD(it.eta))}</div>` : '';
         const stCell=editable
-          ? `<button class="mi-stbtn ${st}" data-status="${id}" title="${done&&it.doneAt?'완료 '+esc(fmtWhenD(it.doneAt)):'클릭하면 완료/대기 전환'}">${done?'완료':'대기'}</button>`
-          : `<span class="mi-stbadge ${st}">${done?'완료':'대기'}</span>`;
+          ? `<select class="mi-ststat ${st}" data-status="${id}" title="${done&&it.doneAt?'완료 '+esc(fmtWhenD(it.doneAt)):'입고여부 선택'}">${STATUSES.map(s=>`<option value="${esc(s)}" ${stLabel===s?'selected':''}>${esc(s)}</option>`).join('')}</select>${etaEdit}`
+          : `<span class="mi-stbadge ${st}">${esc(stLabel)}</span>${etaView}`;
         const kindCell=editable
           ? `<select class="mi-cell mi-kindsel ${kc}" data-f="kind">${KINDS.map(k=>`<option value="${esc(k)}" ${it.kind===k?'selected':''}>${esc(kindLabel(k))}</option>`).join('')}</select>`
           : `<span class="mi-kind ${/신제품/.test(it.kind||'')?'new':'old'}" style="display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;${kc==='k-mo'?'background:#fff4ec;color:#b4530a':'background:#eef4fb;color:#0a63c2'}">${esc(kindLabel(it.kind)||'-')}</span>`;
@@ -322,7 +335,6 @@
           <td class="mi-qty">${won(num(it.qty))}</td><td>${fileCell}</td><td>${stCell}</td></tr>`;
       }
 
-      function setStatus(it, done){ it.status=done?'완료':'대기'; if(done) it.doneAt=nowISO(); else it.doneAt=''; persist(it); }
       function wire(){
         rowsEl.querySelectorAll('tr[data-id]').forEach(tr=>{ const it=items.find(x=>String(x.id)===tr.dataset.id); if(!it) return;
           // 묶음 펼침 토글 — 읽기 전용 열람자도 세부품목 확인 가능
@@ -337,8 +349,8 @@
           tr.querySelectorAll('[data-sub]').forEach(inp=>inp.onchange=()=>{ const i=+inp.dataset.sub, sf=inp.dataset.sf; it.sub=it.sub||[]; it.sub[i]=it.sub[i]||{};
             if(sf==='qty'){ it.sub[i].qty=num(inp.value); inp.value=it.sub[i].qty; render(); } else it.sub[i][sf]=inp.value.trim();
             persist(it); });
-          // 입고여부 토글(완료일 자동기록)
-          const sb=tr.querySelector('[data-status]'); if(sb) sb.onclick=()=>{ setStatus(it,!isDone(it)); render(); };
+          // 입고여부(대기·입고지연·완료) — 완료 시 완료일 자동기록
+          const sb=tr.querySelector('[data-status]'); if(sb) sb.onchange=()=>{ it.status=sb.value; it.doneAt=(it.status==='완료')?nowISO():''; persist(it); render(); };
           // 묶음 세부 추가/삭제
           const as=tr.querySelector('[data-addsub]'); if(as) as.onclick=()=>{ it.sub=it.sub||[]; it.sub.push({code:'',name:'',qty:''}); persist(it); render(); };
           const sd=tr.querySelector('[data-subdel]'); if(sd) sd.onclick=()=>{ const [,i]=sd.dataset.subdel.split(':'); it.sub.splice(+i,1); persist(it); render(); };
@@ -353,14 +365,18 @@
       function renderCal(){
         const box=$('#miCal'); if(!box) return;
         const agg={}; items.forEach(it=>{ const d=it.date; if(!d) return; const a=agg[d]=agg[d]||{n:0,q:0,pend:0}; a.n++; a.q+=qtyOf(it); if(!isDone(it)) a.pend++; });
+        // 예상 입고일(입고지연 건) — 별도 집계해 달력에 표시
+        const etaAgg={}; items.forEach(it=>{ if(it.status==='입고지연'&&it.eta){ const e=etaAgg[it.eta]=etaAgg[it.eta]||{n:0,q:0}; e.n++; e.q+=qtyOf(it); } });
         const startDow=new Date(calY,calM,1).getDay(); const days=new Date(calY,calM+1,0).getDate();
         const todayS=todayStr(); const mPrefix=`${calY}-${String(calM+1).padStart(2,'0')}`;
         let mN=0,mQ=0,mPend=0; Object.keys(agg).forEach(k=>{ if(k.slice(0,7)===mPrefix){ mN+=agg[k].n; mQ+=agg[k].q; mPend+=agg[k].pend; } });
+        let mEta=0; Object.keys(etaAgg).forEach(k=>{ if(k.slice(0,7)===mPrefix) mEta+=etaAgg[k].n; });
         const cells=[];
         for(let i=0;i<startDow;i++) cells.push('<div class="mi-day empty"></div>');
-        for(let d=1;d<=days;d++){ const ds=ymd(calY,calM,d); const a=agg[ds];
-          const cls=['mi-day']; if(a) cls.push(a.pend>0?'pend':'done'); if(ds===todayS) cls.push('today'); if(ds===dateFilter) cls.push('sel');
-          cells.push(`<div class="${cls.join(' ')}" data-day="${ds}" title="${a?`입고 ${a.n}건 · 수량 ${won(a.q)}${a.pend?` · 대기 ${a.pend}`:' · 전부완료'}`:''}"><span class="dn">${d}</span>${a?`<span class="badge">${a.n}</span>`:''}</div>`); }
+        for(let d=1;d<=days;d++){ const ds=ymd(calY,calM,d); const a=agg[ds]; const ea=etaAgg[ds];
+          const cls=['mi-day']; if(a) cls.push(a.pend>0?'pend':'done'); if(ea) cls.push('eta'); if(ds===todayS) cls.push('today'); if(ds===dateFilter) cls.push('sel');
+          const tp=[]; if(a) tp.push(`입고 ${a.n}건 · 수량 ${won(a.q)}${a.pend?` · 대기 ${a.pend}`:' · 전부완료'}`); if(ea) tp.push(`예상입고 ${ea.n}건 · 수량 ${won(ea.q)}`);
+          cells.push(`<div class="${cls.join(' ')}" data-day="${ds}" title="${esc(tp.join(' / '))}"><span class="dn">${d}</span>${a?`<span class="badge">${a.n}</span>`:''}${ea?'<span class="eta-dot"></span>':''}</div>`); }
         box.innerHTML=`
           <div class="mi-cal-hd"><button class="mi-cal-nav" data-nav="-1">‹</button><span class="t">${calY}년 ${calM+1}월</span>
             <button class="mi-cal-nav" data-nav="1">›</button><button class="mi-cal-today" id="miCalToday">오늘</button></div>
@@ -368,8 +384,8 @@
           <div class="mi-grid">${cells.join('')}</div>
           <div class="mi-cal-info">${dateFilter
             ? `<b>${esc(dateFilter)}</b> 입고 <b>${(agg[dateFilter]||{}).n||0}</b>건 · 수량 <b>${won((agg[dateFilter]||{}).q||0)}</b> · <span class="mi-cal-clear" id="miCalClear">전체 보기</span>`
-            : `이번 달 입고 <b>${mN}</b>건 · 수량 <b>${won(mQ)}</b>${mPend?` · <b style="color:#b4530a">대기 ${mPend}</b>`:''}`}
-            <div class="mi-cal-legend"><span><i style="background:#b4530a"></i>대기 있음</span><span><i style="background:#12886a"></i>전부 완료</span></div></div>`;
+            : `이번 달 입고 <b>${mN}</b>건 · 수량 <b>${won(mQ)}</b>${mPend?` · <b style="color:#b4530a">대기 ${mPend}</b>`:''}${mEta?` · <b style="color:#c0392b">예상입고 ${mEta}</b>`:''}`}
+            <div class="mi-cal-legend"><span><i style="background:#b4530a"></i>대기 있음</span><span><i style="background:#12886a"></i>전부 완료</span><span><i style="background:#c0392b;border-radius:50%"></i>예상 입고</span></div></div>`;
         box.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ calM+=Number(b.dataset.nav); if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} renderCal(); });
         const tb=box.querySelector('#miCalToday'); if(tb) tb.onclick=()=>{ const t=new Date(); calY=t.getFullYear(); calM=t.getMonth(); renderCal(); };
         box.querySelectorAll('[data-day]').forEach(c=>{ if(c.classList.contains('empty')) return; c.onclick=()=>{ dateFilter=(dateFilter===c.dataset.day)?'':c.dataset.day; render(); }; });
