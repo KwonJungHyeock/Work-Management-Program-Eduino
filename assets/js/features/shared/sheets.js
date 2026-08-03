@@ -101,7 +101,15 @@
         const myDept=(Auth.user&&Auth.user()||{}).dept;
         const canEdit=!!cfg.editable && (isAdmin || myDept===cfg.dept || (typeof canEditKey==='function'&&canEditKey(cfg.key)));
         const canReorder=!!cfg.reorderable && canEdit;
-        const hasActions=canDel||canEdit;
+        // 팀원(비처리자)은 특정 기록의 수정을 부서장/관리자에게 '요청'할 수 있음(문맥 요청)
+        const canReq = typeof window.openReqComposer==='function' && !!(window.Req && typeof window.Req.isHandler==='function' && !window.Req.isHandler(_me));
+        const hasActions=canDel||canEdit||canReq;
+        // 요청 딥링크용 기록 요약 라벨(날짜 + 짧은 식별 컬럼 몇 개)
+        function refLabelOf(r){ const vals=[]; const d=r.day||r.date||r[cfg.dateField]||''; if(d) vals.push(String(d));
+          const dateLike=s=>/^\d{1,4}[-/.]\d{1,2}([-/.]\d{1,2})?$/.test(s);
+          for(const c of (cfg.cols||[])){ if(vals.length>=3) break; if(c.wrap) continue; const v=c.compute?c.compute(r):r[c.k];
+            if(v!=null && String(v).trim()){ const s=String(v).trim(); if(s.length<=24 && !dateLike(s) && !vals.includes(s)) vals.push(s); } }
+          return vals.join(' · ')||('기록 '+(r.id||'')); }
         const dayOf=r=>String(r.day||r.date||'').slice(0,10);
         const ordOf=r=> r.ord!=null ? Number(r.ord) : (r.createdAt ? (Date.parse(r.createdAt)||0) : 0);
 
@@ -171,6 +179,7 @@
           return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end;align-items:center">
             ${canReorder?`<button class="sv-mv" data-a="up" data-id="${esc(r.id)}" title="위로 이동">▲</button><button class="sv-mv" data-a="down" data-id="${esc(r.id)}" title="아래로 이동">▼</button>`:''}
             ${canEdit?`<button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>`:''}
+            ${canReq?`<button class="btn ghost sm" data-a="req" data-id="${esc(r.id)}" title="이 기록의 수정을 부서장/관리자에게 요청">${icon('stamp')||''}수정요청</button>`:''}
             ${canDel?`<button class="sv-del" data-id="${esc(r.id)}" data-day="${esc(r.day||r.date||'')}" data-who="${esc(r.who||'')}" title="삭제">${icon('trash')}</button>`:''}
           </span></td>`;
         }
@@ -220,6 +229,9 @@
         function wireRowActions(){
           $('#tbl').querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
           $('#tbl').querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
+          $('#tbl').querySelectorAll('[data-a=req]').forEach(b=>b.onclick=()=>{ const r=all.find(x=>String(x.id)===b.dataset.id); if(!r||typeof window.openReqComposer!=='function') return;
+            const pre={ cat:'datafix', refKey:cfg.key, refId:r.id, refLabel:refLabelOf(r) }; if((cfg.dept||'')==='cs') pre.type='cs-fix';
+            window.openReqComposer(pre); });
           $('#tbl').querySelectorAll('[data-a=save]').forEach(b=>b.onclick=async(e)=>{
             const tr=e.currentTarget.closest('tr'); const old=all.find(x=>x.id===editId); if(!old) return;
             const rec={...old}; tr.querySelectorAll('[data-k]').forEach(inp=>{ rec[inp.dataset.k]=inp.value; });

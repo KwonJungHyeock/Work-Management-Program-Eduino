@@ -36,6 +36,13 @@
         const me=(Auth.user&&Auth.user())||{};
         const canDel=isAdmin || me.role==='lead' || (cfg.memberDelete && me.dept===cfg.dept);   // 파트장급 · (보드가 허용 시)해당 부서원
         const canOpt=isAdmin || (me.role==='lead' && me.dept===cfg.dept);   // 선택 항목(속성값) 추가·삭제 = 관리자 또는 해당 부서 파트장
+        // 팀원(비처리자)은 특정 기록의 수정을 부서장/관리자에게 '요청'할 수 있음(문맥 요청)
+        const canReq = typeof window.openReqComposer==='function' && !!(window.Req && typeof window.Req.isHandler==='function' && !window.Req.isHandler(me));
+        function refLabelOf(r){ const vals=[]; const d=r[cfg.dateField]||r.date||r.day||''; if(d) vals.push(String(d));
+          const dateLike=s=>/^\d{1,4}[-/.]\d{1,2}([-/.]\d{1,2})?$/.test(s);
+          for(const f of (cfg.fields||[])){ if(vals.length>=3) break; if(f.k===cfg.dateField||f.type==='textarea') continue; const v=r[f.k];
+            if(v!=null && String(v).trim()){ const s=String(v).trim(); if(s.length<=24 && !dateLike(s) && !vals.includes(s)) vals.push(s); } }
+          return vals.join(' · ')||('기록 '+(r.id||'')); }
         // 담당자 목록 (사용자 편집 · 로컬 저장) — whoField 가 select/agent 인 경우
         const whoCfg = cfg.fields.find(f=>f.k===cfg.whoField);
         const agentsKey = 'eduino.md.board.'+cfg.sheet+'.agents';
@@ -293,6 +300,7 @@
         function actionCell(r){ return `<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
           <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
           ${cfg.rowCopy?`<button class="btn ghost sm" data-a="copy" data-id="${esc(r.id)}" title="이 행과 동일한 값으로 오늘 날짜 새 건 생성">${icon('copy')}복사</button>`:''}
+          ${canReq?`<button class="btn ghost sm" data-a="req" data-id="${esc(r.id)}" title="이 기록의 수정을 부서장/관리자에게 요청">${icon('stamp')||''}수정요청</button>`:''}
           ${canDel?`<button class="bd-del" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button>`:''}</span></td>`; }
         function editRow(r,hasAct){
           const cells=showCols.map(c=>{
@@ -315,6 +323,9 @@
               if(f.format==='amount') inp.style.textAlign='right'; if(f.format==='phone') inp.maxLength=13; } });
           $('#tbl').querySelectorAll('[data-a=edit]').forEach(b=>b.onclick=()=>{ editId=b.dataset.id; paint(); });
           $('#tbl').querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
+          $('#tbl').querySelectorAll('[data-a=req]').forEach(b=>b.onclick=()=>{ const r=all.find(x=>String(x.id)===b.dataset.id); if(!r||typeof window.openReqComposer!=='function') return;
+            const pre={ cat:'datafix', refKey:cfg.key, refId:r.id, refLabel:refLabelOf(r) }; if((cfg.dept||'')==='cs') pre.type='cs-fix';
+            window.openReqComposer(pre); });
           // 복사(opt-in) — 원본은 그대로 두고 동일 값의 새 건을 오늘 날짜로 생성(순수 추가 · 기존 데이터 불변)
           $('#tbl').querySelectorAll('[data-a=copy]').forEach(b=>b.onclick=async()=>{
             const src=all.find(x=>x.id===b.dataset.id); if(!src) return;
