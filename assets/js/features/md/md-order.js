@@ -115,9 +115,15 @@
       const vendorShip=n=>{ const v=vendorObj(n); return v?Number(v.ship)||0:0; };
       // A~E 로 시작하는 자체상품코드 = 자사 상품 → 입점사명 '자사'
       const isJasa=c=>/^[A-E]-/i.test(String(c||'').trim());
-      // 구매처명: 제품 자체 vendor > 이카운트 코드→이름표(구매처) > 자사
+      // 가격비교(엔티렉스) 취급상품 코드 집합 — 이카운트 구매처(custCode) 미지정 품목의 입점사 폴백 소스
+      //  엔티렉스 공급가표(ntrex-data.js)의 에듀이노코드 = 엔티렉스에서 소싱하는 상품이므로, 구매처가 안 잡혀도 입점사=엔티렉스로 연동
+      const NTREX_SELF=(()=>{ const s=new Set(); ((typeof window!=='undefined'&&window.NTREX_PRODUCTS)||[]).forEach(r=>{ const c=Array.isArray(r)?r[0]:(r&&r.ed); const k=normCode(c); if(k) s.add(k); }); return s; })();
+      const inNtrex=p=> !!(p && NTREX_SELF.has(normCode(p.selfCode||p.code)));
+      // 구매처명: 제품 자체 vendor > 이카운트 코드→이름표(구매처) > (엔티렉스 취급상품) 엔티렉스 > 자사
       const vendorName=p=>{ const v=(typeof catVendorName==='function'?catVendorName(p):((p&&p.vendor)||'')).trim();
-        return v||(isJasa(p&&p.selfCode)?'자사':''); };
+        if(v) return v;
+        if(inNtrex(p)) return '엔티렉스';                 // 이카운트 구매처 미지정이라도 가격비교 취급상품이면 엔티렉스로 연동
+        return isJasa(p&&p.selfCode)?'자사':''; };
       // 입점사 관리(인수인계 카드 · coll handover_md)의 '등급/정산' 분류를 정산구분 보조 소스로 사용.
       //  배송정보 마스터(mdVendors)에 정산구분이 비어 있어도, 입점사 관리에서 분류된 값으로 자동 연동.
       let cardSettle={};   // { normCo(입점사명): '월정산'|'선결제' }
