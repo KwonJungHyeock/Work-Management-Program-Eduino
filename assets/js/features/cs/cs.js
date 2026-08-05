@@ -90,7 +90,9 @@
     { cat:'접수', title:'교환/반품 접수 안내', body:'[에듀이노] 요청하신 교환/반품이 정상 접수되었습니다. 처리 결과는 확인 후 다시 안내드리겠습니다. 감사합니다.' },
     { cat:'입금', title:'입금 확인 안내', body:'[에듀이노] 입금이 확인되었습니다. 주문하신 상품을 순차 발송해 드리겠습니다. 감사합니다.' },
   ];
-  /* 합친 메뉴: 답변 · 메일 · 문자 템플릿을 서브탭으로 */
+  /* 합친 메뉴: 답변 · 메일 · 문자 템플릿을 서브탭으로
+     label = 활동 로그 구분명(기술상담 템플릿 기록과 섞이지 않도록 CS 전용 값으로 한정) */
+  const CS_AREAS = ['답변 템플릿','메일 템플릿','문자 템플릿','CS 템플릿'];
   const SUBS = {
     answer: { icon:'chat', storeKey:STORE.csTpl,     defaults:ANSWER_DEFAULTS, label:'답변 템플릿', hint:'자주 쓰는 CS 답변을 분류별로 저장하고 상담 메모에서 바로 불러옵니다.' },
     mail:   { icon:'mail', storeKey:STORE.csMailTpl, defaults:MAIL_DEFAULTS,   label:'메일 템플릿', hint:'고객 메일에 자주 쓰는 양식을 저장하고 한 번에 복사합니다.' },
@@ -158,7 +160,8 @@
         const AC={ '생성':'var(--ok)','수정':'#1a6dd6','삭제':'var(--danger)','복원':'#7c4dd6' };
         const fmt=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch{ return iso||''; } };
         async function load(){ let items=[]; try{ const r=await fetch('/api/store?type=coll&coll=activity'); const d=await r.json(); items=(d&&d.items)||[]; }catch(e){}
-          items=items.filter(x=>x&&x.at).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,300);
+          items=items.filter(x=>x&&x.at&&CS_AREAS.indexOf(String(x.area||''))>=0)
+            .sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,300);
           const t=host.querySelector('#actT'); if(!t) return;
           t.innerHTML=`<thead><tr><th style="width:118px">시각</th><th style="width:66px">작업</th><th>구분 / 대상</th><th style="width:104px">실행자</th></tr></thead><tbody>${
             items.length? items.map(e=>`<tr><td class="mono" style="white-space:nowrap">${esc(fmt(e.at))}</td>
