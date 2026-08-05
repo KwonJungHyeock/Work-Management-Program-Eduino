@@ -102,7 +102,7 @@
       Object.values(tabState||{}).sort((a,b)=>(a.order||999)-(b.order||999)).forEach(t=>{ if(t&&t.name) set.add(t.name); });
       return [...set]; };
     let mfrs=mfrsOf();
-    let mfr=mfrs[0]||'', cat='', view='stock', q='';
+    let mfr=mfrs[0]||'', cat='', view='stock', q='', sortBy='default', filterBy='all';
     let stockMap=null, stockAt='';   // 크론이 저장한 최신 재고맵(coll mouser_stock)
     const catsOf=m=> m===ALL ? [] : [...new Set(all.filter(p=>p.mfr===m).map(p=>p.category).filter(Boolean))];
     cat=catsOf(mfr)[0]||'';
@@ -123,7 +123,8 @@
         .mo-bar2 .mo-sub{flex:0 1 auto;min-width:0}
         .mo-bar2-r{flex:0 0 auto;margin-left:auto;display:flex;align-items:center;gap:8px}
         @media(max-width:900px){ .mo-bar1,.mo-bar2{flex-wrap:wrap} .mo-bar2-r{margin-left:0;width:100%} .mo-search{flex:1} }
-        .mo-search{height:34px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;font-size:12.5px;width:260px;background:var(--panel);color:var(--ink)}
+        .mo-search{height:34px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;font-size:12.5px;width:230px;background:var(--panel);color:var(--ink)}
+        .mo-sel{height:34px;border:1px solid var(--line-2);border-radius:9px;padding:0 8px;font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink);cursor:pointer}
         .mo-search:focus{outline:2px solid #0a3d6233;border-color:#0a3d62}
         .mo-mgr{width:100%;border-collapse:collapse;font-size:12.5px}
         .mo-mgr th{position:sticky;top:0;background:var(--panel-2);font-size:11px;font-weight:800;color:var(--muted);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);z-index:1}
@@ -194,7 +195,25 @@
       <div class="mo-bar2" id="moBar2">
         <span class="mo-sub" id="moCat"></span>
         <span class="mo-bar2-r">
+          <select id="moSort" class="mo-sel" title="정렬 기준">
+            <option value="default">정렬: 기본</option>
+            <option value="no">마우저번호 ↑</option>
+            <option value="no_d">마우저번호 ↓</option>
+            <option value="ed">자사코드 ↑</option>
+            <option value="name">상품명 ↑</option>
+            <option value="price">마우저 원가 ↑</option>
+            <option value="price_d">마우저 원가 ↓</option>
+            <option value="stock_d">재고 많은순</option>
+          </select>
+          <select id="moFilter" class="mo-sel" title="표시 조건">
+            <option value="all">필터: 전체</option>
+            <option value="ed">자사코드 보유</option>
+            <option value="noed">자사코드 미보유</option>
+            <option value="instock">재고 보유</option>
+            <option value="nostock">재고 없음·확인불가</option>
+          </select>
           <input id="moQ" class="mo-search" type="search" placeholder="상품 검색 — 마우저번호·상품명·자사코드" autocomplete="off">
+          <button class="btn sm" id="moExport" title="지금 보이는 목록을 엑셀(.xlsx)로 내려받기">${icon('download')}엑셀 내보내기</button>
           ${canEdit()?`<span id="moTools" style="display:flex;gap:6px">
             <button class="btn sm" id="moImport" title="마우저 [프로젝트 매니저] 엑셀(.xls/.xlsx)에서 품목 불러오기">${icon('upload')}엑셀 불러오기</button>
             <button class="btn sm" id="moManage" title="탭·품목·카테고리 관리">${icon('grid')}탭·품목 관리</button></span>`:''}
@@ -230,15 +249,41 @@
     // 상품 검색 — 마우저번호·상품명·제조사번호·자사코드·제조사·카테고리
     const qEl=root.querySelector('#moQ');
     if(qEl) qEl.oninput=()=>{ q=qEl.value.trim().toLowerCase(); paint(); };
+    const sortEl=root.querySelector('#moSort'), filEl=root.querySelector('#moFilter');
+    if(sortEl) sortEl.onchange=()=>{ sortBy=sortEl.value; paint(); };
+    if(filEl)  filEl.onchange =()=>{ filterBy=filEl.value; paint(); };
     function matchQ(p){ if(!q) return true;
       const ed=edOf(p.mouserNo)||'';
       return `${p.mouserNo} ${p.mfrNo||''} ${p.name||''} ${ed} ${p.mfr||''} ${p.category||''}`.toLowerCase().includes(q); }
 
+    // 재고 수량(크론 재고맵) — 정렬·필터용. 확인불가/미조사는 -1
+    const stockOf = p => { const d=stockMap&&stockMap[p.mouserNo]; return (d&&d.found)? (Number(d.inStock)||0) : -1; };
+    const kNum = s => String(s||'').replace(/\D/g,'');   // 마우저번호 숫자부(정렬 안정화)
     function rows(){
       const base = (mfr===ALL) ? all.slice()
         : all.filter(p=>p.mfr===mfr && (!catsOf(mfr).length || p.category===cat));
-      const list = base.filter(matchQ);
-      return (mfr===ALL) ? list.sort((a,b)=> String(a.mfr||'').localeCompare(String(b.mfr||'')) || String(a.category||'').localeCompare(String(b.category||''))) : list;
+      let list = base.filter(matchQ);
+      // 표시 조건
+      if(filterBy==='ed')      list=list.filter(p=>!!edOf(p.mouserNo));
+      else if(filterBy==='noed')    list=list.filter(p=>!edOf(p.mouserNo));
+      else if(filterBy==='instock') list=list.filter(p=>stockOf(p)>0);
+      else if(filterBy==='nostock') list=list.filter(p=>stockOf(p)<=0);
+      // 정렬 — 행 배선은 마우저번호 기준이라 순서를 바꿔도 자사코드 매칭은 그대로 유지됨
+      const byNo=(a,b)=> String(a.mouserNo).localeCompare(String(b.mouserNo),'en',{numeric:true});
+      const cmp={
+        no:  byNo,
+        no_d:(a,b)=>-byNo(a,b),
+        ed:  (a,b)=>{ const x=edOf(a.mouserNo)||'', y=edOf(b.mouserNo)||'';
+               if(!x&&!y) return byNo(a,b); if(!x) return 1; if(!y) return -1;   // 미보유는 뒤로
+               return x.localeCompare(y,'en',{numeric:true}) || byNo(a,b); },
+        name:(a,b)=> String(a.name||'').localeCompare(String(b.name||''),'ko') || byNo(a,b),
+        price:(a,b)=> (mouserBuyOf(a)-mouserBuyOf(b)) || byNo(a,b),
+        price_d:(a,b)=> (mouserBuyOf(b)-mouserBuyOf(a)) || byNo(a,b),
+        stock_d:(a,b)=> (stockOf(b)-stockOf(a)) || byNo(a,b),
+      }[sortBy];
+      if(cmp) list.sort(cmp);
+      else if(mfr===ALL) list.sort((a,b)=> String(a.mfr||'').localeCompare(String(b.mfr||'')) || String(a.category||'').localeCompare(String(b.category||'')) || byNo(a,b));
+      return list;
     }
     // 품목 변경(불러오기·카테고리 수정·삭제) 후 화면 재구성
     function refreshParts(){ all=PARTS(); mfrs=mfrsOf();
@@ -793,6 +838,34 @@
       };
     }
     const mgBtn=root.querySelector('#moManage'); if(mgBtn) mgBtn.onclick=openManage;
+
+    /* ── 엑셀 내보내기 — 지금 화면에 보이는 목록(탭·카테고리·검색·필터·정렬 그대로) ── */
+    async function exportXlsx(){
+      const list=rows();
+      if(!list.length){ toast('내보낼 항목이 없습니다'); return; }
+      const head=['마우저 번호','제조사 번호','탭(제조사)','카테고리','마우저 상품명','재고','입고예정',
+        '마우저 원가(KRW)','마우저 매입가(관·부가세18%)','자사코드','자사 상품명','자사 판매가','마진액','마진율(%)'];
+      const body=list.map(p=>{
+        const d=stockMap&&stockMap[p.mouserNo]; const ed=normEd(edOf(p.mouserNo));
+        const v=ed?catCache[ed]:null; const self=(v&&v!=='loading')?v:null;
+        const sell=self?(Number(self.outPrice)||0):0, buy=buyVatOf(p);
+        const eta=(d&&d.found&&Array.isArray(d.onOrder)&&d.onOrder.length)
+          ? d.onOrder.map(o=>[o.qty?o.qty+'개':'',o.date||''].filter(Boolean).join(' ')).filter(Boolean).join(' / ') : '';
+        return [ p.mouserNo, p.mfrNo||'', p.mfr||'', p.category||'', p.name||'',
+          (d&&d.found)?(Number(d.inStock)||0):'', eta,
+          mouserBuyOf(p)||'', buy||'', ed||'', self?(self.name||''):'', sell||'',
+          (sell&&buy)?(sell-buy):'', (sell&&buy)?Math.round((sell-buy)/sell*1000)/10:'' ];
+      });
+      const scope = mfr===ALL ? '전체' : (mfr + (cat?'_'+cat:''));
+      const fname = `마우저_${scope}_${todayStr()}.xlsx`.replace(/[\/\\:*?"<>|]/g,'_');
+      try{
+        if(!window.XlsxOut) throw new Error('엑셀 저장기를 불러오지 못했습니다');
+        await XlsxOut.save([head,...body], fname, ('마우저 '+scope).slice(0,31));
+        if(window.actLog) actLog('내보내기','마우저 품목',`${scope} · ${list.length}건`);
+        toast(`엑셀로 내보냈습니다 — ${list.length}건`);
+      }catch(e){ toast('내보내기 실패 — '+(e&&e.message||'')); }
+    }
+    const exBtn=root.querySelector('#moExport'); if(exBtn) exBtn.onclick=exportXlsx;
 
     renderCats(); applyViewChrome(); paint();
     // 팀 공유 탭 목록 + 품목 오버레이(추가·카테고리수정) → 최신 재고맵 + 자사코드 순으로 반영

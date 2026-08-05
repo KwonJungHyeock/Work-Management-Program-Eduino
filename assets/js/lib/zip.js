@@ -53,3 +53,61 @@ function downloadBlob(blob, filename){
   const a=el('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+
+/* ===========================================================================
+   XlsxOut — 표 데이터를 진짜 .xlsx 파일로 저장 (makeZip 재사용 · 라이브러리 없음)
+   · 문자열은 sharedStrings, 숫자는 숫자셀로 기록 → 엑셀에서 바로 정렬·필터 가능
+   · XlsxOut.blob(rows, sheetName) → Promise<Blob> / XlsxOut.save(rows, 파일명, 시트명)
+     rows = [[셀,셀,…], …] (첫 줄을 헤더로 쓰면 됨)
+   =========================================================================== */
+(function(){
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
+  const colName = n => { let s=''; n=Number(n)+1; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+  const isNum = v => typeof v==='number' ? isFinite(v)
+    : (typeof v==='string' && v.trim()!=='' && /^-?\d+(\.\d+)?$/.test(v.trim()));
+  const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const NS  = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const blobOf = t => new Blob([t],{type:'application/xml'});
+
+  async function blob(rows, sheetName){
+    rows = Array.isArray(rows) ? rows : [];
+    const name = String(sheetName||'Sheet1').replace(/[\[\]:*?\/\\]/g,' ').slice(0,31) || 'Sheet1';
+    const sst=[], sstIdx=new Map();
+    const strId = s => { if(sstIdx.has(s)) return sstIdx.get(s); const i=sst.length; sst.push(s); sstIdx.set(s,i); return i; };
+    let body='';
+    rows.forEach((row,r)=>{
+      const cells=(row||[]).map((v,c)=>{
+        if(v==null || v==='') return '';
+        const ref=colName(c)+(r+1);
+        if(isNum(v)) return `<c r="${ref}"><v>${Number(v)}</v></c>`;
+        return `<c r="${ref}" t="s"><v>${strId(String(v))}</v></c>`;
+      }).join('');
+      body += `<row r="${r+1}">${cells}</row>`;
+    });
+    const sheet = `${XML}<worksheet xmlns="${NS}"><sheetData>${body}</sheetData></worksheet>`;
+    const shared = `${XML}<sst xmlns="${NS}" count="${sst.length}" uniqueCount="${sst.length}">`
+      + sst.map(s=>`<si><t xml:space="preserve">${esc(s)}</t></si>`).join('') + '</sst>';
+    const files = [
+      { name:'[Content_Types].xml', blob: blobOf(`${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        + '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>') },
+      { name:'_rels/.rels', blob: blobOf(`${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>') },
+      { name:'xl/workbook.xml', blob: blobOf(`${XML}<workbook xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+        + `<sheets><sheet name="${esc(name)}" sheetId="1" r:id="rId1"/></sheets></workbook>`) },
+      { name:'xl/_rels/workbook.xml.rels', blob: blobOf(`${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>') },
+      { name:'xl/worksheets/sheet1.xml', blob: blobOf(sheet) },
+      { name:'xl/sharedStrings.xml', blob: blobOf(shared) },
+    ];
+    const z = await makeZip(files);
+    return new Blob([z], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  async function save(rows, filename, sheetName){ downloadBlob(await blob(rows, sheetName), filename||'export.xlsx'); }
+  if(typeof window!=='undefined') window.XlsxOut = { blob, save };
+})();
