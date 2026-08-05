@@ -27,6 +27,28 @@
     try{ fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({op:'collPush',coll:PARTS_COLL,item})}).catch(()=>{}); }catch(e){}
   }
+  /* ── 탭(제조사/프로젝트) 목록 (팀 공유 coll 'mouser_tabs') ───────────────────
+     품목에서 자동으로 생기는 탭 + 사용자가 직접 추가한 빈 탭을 합쳐서 보여줌.
+     (마우저 프로젝트 = 제조사_카테고리 → 프로젝트를 탭으로 시트화하는 용도) */
+  const TABS_COLL='mouser_tabs', TABS_KEY='eduino.mouser.tabs';
+  let tabState = store(TABS_KEY).get({}) || {};
+  async function loadTabs(){
+    try{ const r=await fetch('/api/store?type=coll&coll='+TABS_COLL); if(!r.ok) return false;
+      const d=await r.json(); const m={}; ((d&&d.items)||[]).forEach(it=>{ if(it&&it.id) m[String(it.id)]=it; });
+      tabState=m; store(TABS_KEY).set(m); return true; }catch(e){ return false; }
+  }
+  function putTab(name, order){ const id=String(name||'').trim(); if(!id) return;
+    const item={ id, name:id, order:order==null?999:order }; tabState[id]=item; store(TABS_KEY).set(tabState);
+    try{ fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({op:'collPush',coll:TABS_COLL,item})}).catch(()=>{}); }catch(e){}
+  }
+  function dropTab(name){ const id=String(name||'').trim(); if(!id) return; delete tabState[id]; store(TABS_KEY).set(tabState);
+    try{ fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({op:'collDel',coll:TABS_COLL,id})}).catch(()=>{}); }catch(e){}
+  }
+  // 탭 이름 매칭용 정규화 — "SEEEDSTUDIO" ↔ "Seeed Studio", "RASPBERRY PI" ↔ "Raspberry Pi"
+  const normTab = s => String(s||'').replace(/[\s_\-.]/g,'').toLowerCase();
+
   const SEED = ()=> (window.MOUSER_PARTS||[]).map(toObj);
   const PARTS = ()=>{
     const ov=povState||{}, out=[], seen=new Set();
@@ -74,7 +96,11 @@
   function drawMouser(root){
     let all=PARTS();
     const ALL='__all';                 // 전체 상품 리스트(제조사 구분 없이)
-    const mfrsOf=()=>[...new Set(all.map(p=>p.mfr).filter(Boolean))];
+    // 탭 = 품목에서 자동으로 생긴 것 + 직접 추가한 빈 탭 (추가 탭은 order 순으로 뒤에)
+    const mfrsOf=()=>{ const fromParts=[...new Set(all.map(p=>p.mfr).filter(Boolean))];
+      const set=new Set(fromParts);
+      Object.values(tabState||{}).sort((a,b)=>(a.order||999)-(b.order||999)).forEach(t=>{ if(t&&t.name) set.add(t.name); });
+      return [...set]; };
     let mfrs=mfrsOf();
     let mfr=mfrs[0]||'', cat='', view='stock', q='';
     let stockMap=null, stockAt='';   // 크론이 저장한 최신 재고맵(coll mouser_stock)
@@ -560,6 +586,14 @@
       const items=[].concat(...parsed.map(p=>p.items));
       const exist=new Set(all.map(p=>p.mouserNo));
       const add=items.filter(i=>!exist.has(i.mouserNo)), upd=items.filter(i=>exist.has(i.mouserNo));
+      // 어느 탭(제조사/프로젝트)에 시트화할지 기본값 — 프로젝트 접두("STM_보드"→STM) → 제조업체 → 기존 탭과 이름이 같으면 그 탭에 합침
+      const single = parsed.length===1;
+      const proj = single ? String(parsed[0].proj||'') : '';
+      const projPrefix = proj.includes('_') ? proj.slice(0, proj.lastIndexOf('_')).trim() : proj.trim();
+      const fileMfr = (items.find(i=>i.mfr)||{}).mfr || '';
+      const findTab = v => v ? mfrs.find(t=>normTab(t)===normTab(v)) : null;
+      const defTab = findTab(projPrefix) || findTab(fileMfr) || projPrefix || fileMfr || '기타';
+      const defCat = single ? (parsed[0].category||'기타') : '';
       const ov=document.createElement('div'); ov.className='modal-ov';
       ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
       ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:720px;width:97%;max-height:calc(100vh - 60px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
@@ -568,8 +602,16 @@
           <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(file.name)} · 프로젝트 <b>${parsed.map(p=>esc(p.proj||'-')).join(', ')}</b></div></div>
         <div style="padding:14px 20px;overflow:auto">
           <div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;font-size:12.5px;margin-bottom:12px">
-            신규 <b>${add.length}</b>건 · 기존 갱신 <b>${upd.length}</b>건 — 마우저번호·상품명·가격·제조사·카테고리를 채웁니다.
+            신규 <b>${add.length}</b>건 · 기존 갱신 <b>${upd.length}</b>건 — 마우저번호·상품명·가격을 채웁니다.
             <span class="muted">재고·입고예정·자사판매가·마진은 기존처럼 자동으로 채워집니다.</span></div>
+          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;padding:11px 13px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:10px">
+            <label class="fld" style="margin:0;min-width:190px">시트화할 탭 <span class="muted" style="font-weight:500;font-size:11px">· 기존 탭 이름과 같으면 그 탭에 합쳐집니다</span>
+              <input id="imTab" list="imTabs" value="${esc(defTab)}" placeholder="예: STM" style="height:34px">
+              <datalist id="imTabs">${mfrs.map(t=>`<option value="${esc(t)}">`).join('')}</datalist></label>
+            <label class="fld" style="margin:0;width:150px">카테고리
+              <input id="imCat" value="${esc(defCat)}" placeholder="${single?'예: 보드':'파일값 유지'}" style="height:34px" ${single?'':'disabled'}></label>
+            <span class="muted" style="font-size:11.5px;padding-bottom:8px">프로젝트 <b>${esc(proj||'여러 개')}</b> 기준</span>
+          </div>
           <div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:330px">
             <table class="mo-mgr"><thead><tr><th style="width:150px">마우저 번호</th><th>상품명</th><th style="width:96px">카테고리</th><th style="width:92px;text-align:right">가격</th><th style="width:52px">상태</th></tr></thead>
             <tbody>${items.slice(0,300).map(i=>`<tr><td class="mono">${esc(i.mouserNo)}</td>
@@ -584,12 +626,16 @@
       const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
       ov.querySelector('#imCancel').onclick=close;
       ov.querySelector('#imOk').onclick=()=>{
+        const tabName=(ov.querySelector('#imTab').value||'').trim() || defTab;
+        const catIn=ov.querySelector('#imCat'); const catName=(catIn&&!catIn.disabled?catIn.value.trim():'');
         items.forEach(i=>{ const cur=all.find(p=>p.mouserNo===i.mouserNo)||{};
-          putPart({ mouserNo:i.mouserNo, mfrNo:i.mfrNo||cur.mfrNo||'', mfr:i.mfr||cur.mfr||'',
-            category:i.category||cur.category||'기타', name:i.name||cur.name||'',
+          putPart({ mouserNo:i.mouserNo, mfrNo:i.mfrNo||cur.mfrNo||'', mfr:tabName,
+            category:catName || i.category || cur.category || '기타', name:i.name||cur.name||'',
             basePriceKRW:i.basePriceKRW||cur.basePriceKRW||0, edCode:i.edCode||cur.edCode||'' }); });
-        if(window.actLog) actLog('불러오기','마우저 품목',`${file.name} · 신규 ${add.length}·갱신 ${upd.length}`);
-        close(); refreshParts(); toast(`불러왔습니다 — 신규 ${add.length} · 갱신 ${upd.length}건`);
+        putTab(tabName);                                   // 탭 목록에도 등록(품목을 다 지워도 탭은 유지)
+        if(window.actLog) actLog('불러오기','마우저 품목',`${file.name} → [${tabName}] 신규 ${add.length}·갱신 ${upd.length}`);
+        close(); mfr=tabName; if(catName) cat=catName; refreshParts();
+        toast(`[${tabName}] 시트로 불러왔습니다 — 신규 ${add.length} · 갱신 ${upd.length}건`);
       };
     }
     const fileEl=root.querySelector('#moFile');
@@ -607,6 +653,12 @@
         <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
           <div style="font-size:16px;font-weight:800">${icon('grid')||''} 품목 · 카테고리 관리</div>
           <div class="muted" style="font-size:12.5px;margin-top:3px">${mfr===ALL?'전체':esc(mfr)} · <b>${scope.length}</b>품목 — 카테고리를 직접 고치거나 일괄 변경/삭제할 수 있습니다.</div></div>
+        <div style="padding:12px 20px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12.5px;font-weight:700;color:var(--muted)">탭(제조사·프로젝트)</span>
+          <span id="mgTabs" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+          <input id="mgNewTab" placeholder="새 탭 이름" style="height:30px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font:inherit;font-size:12.5px;width:130px">
+          <button class="btn sm" id="mgAddTab">＋ 탭 추가</button>
+          <span class="muted" style="font-size:11.5px;flex-basis:100%">※ 탭을 만든 뒤 <b>[엑셀 불러오기]</b>에서 그 탭을 고르면 기존 시드·라즈베리파이처럼 시트가 채워집니다</span></div>
         <div style="padding:12px 20px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span style="font-size:12.5px;font-weight:700;color:var(--muted)">카테고리 일괄 변경</span>
           <select id="mgFrom" style="height:32px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px;font:inherit;font-size:12.5px">
@@ -629,6 +681,44 @@
       document.body.appendChild(ov);
       const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
       ov.querySelector('#mgCancel').onclick=close;
+
+      /* 탭 추가 · 이름변경 · 삭제 (즉시 반영) */
+      function paintTabs(){
+        const box=ov.querySelector('#mgTabs'); if(!box) return;
+        box.innerHTML = mfrs.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:8px;padding:3px 6px 3px 10px;font-size:12px;font-weight:700">
+            ${esc(t)} <span class="muted" style="font-weight:600">${all.filter(p=>p.mfr===t).length}</span>
+            <button class="del" data-ren="${esc(t)}" title="이름 변경" style="font-size:12px">✎</button>
+            <button class="del" data-dtab="${esc(t)}" title="탭 삭제">✕</button></span>`).join('') || '<span class="muted" style="font-size:12px">탭이 없습니다</span>';
+        box.querySelectorAll('[data-ren]').forEach(b=>b.onclick=()=>{
+          const from=b.dataset.ren; const to=(prompt(`탭 이름 변경\n\n'${from}' → 새 이름을 입력하세요`, from)||'').trim();
+          if(!to || to===from) return;
+          all.filter(p=>p.mfr===from).forEach(p=>putPart({ ...p, mouserNo:p.mouserNo, mfr:to }));
+          if(tabState[from]) dropTab(from);
+          putTab(to);
+          if(window.actLog) actLog('수정','마우저 탭',`${from} → ${to}`);
+          if(mfr===from) mfr=to;
+          all=PARTS(); mfrs=mfrsOf(); paintTabs(); refreshParts(); toast(`탭 이름을 '${to}'로 변경했습니다`);
+        });
+        box.querySelectorAll('[data-dtab]').forEach(b=>b.onclick=()=>{
+          const t=b.dataset.dtab; const n=all.filter(p=>p.mfr===t).length;
+          if(!confirm(`'${t}' 탭을 삭제할까요?${n?`\n이 탭의 품목 ${n}건도 함께 삭제됩니다.`:''}`)) return;
+          all.filter(p=>p.mfr===t).forEach(p=>putPart({ ...p, mouserNo:p.mouserNo, del:true }));
+          dropTab(t);
+          if(window.actLog) actLog('삭제','마우저 탭',`${t}${n?` · 품목 ${n}건`:''}`);
+          all=PARTS(); mfrs=mfrsOf(); if(mfr===t) mfr=mfrs[0]||ALL;
+          paintTabs(); refreshParts(); toast(`'${t}' 탭을 삭제했습니다`);
+        });
+      }
+      paintTabs();
+      ov.querySelector('#mgAddTab').onclick=()=>{
+        const el2=ov.querySelector('#mgNewTab'); const name=(el2.value||'').trim();
+        if(!name){ toast('새 탭 이름을 입력하세요'); el2.focus(); return; }
+        if(mfrs.some(t=>normTab(t)===normTab(name))){ toast('이미 있는 탭입니다'); return; }
+        putTab(name, mfrs.length); el2.value='';
+        if(window.actLog) actLog('생성','마우저 탭',name);
+        mfrs=mfrsOf(); paintTabs(); refreshParts(); toast(`'${name}' 탭을 추가했습니다 · [엑셀 불러오기]에서 이 탭을 고르세요`);
+      };
+
       ov.querySelectorAll('[data-c]').forEach(inp=>inp.onchange=()=>{ draft[inp.dataset.c]=inp.value.trim(); });
       ov.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{ const no=b.dataset.x; const tr=b.closest('tr');
         gone[no]=!gone[no]; tr.classList.toggle('gone',!!gone[no]); b.textContent=gone[no]?'↺':'✕'; });
@@ -649,8 +739,8 @@
     const mgBtn=root.querySelector('#moManage'); if(mgBtn) mgBtn.onclick=openManage;
 
     renderCats(); applyViewChrome(); paint();
-    // 팀 공유 품목 오버레이(추가·카테고리수정) → 최신 재고맵 + 자사코드 순으로 반영
-    loadOverlay().then(ok=>{ if(ok && root.isConnected) refreshParts(); });
+    // 팀 공유 탭 목록 + 품목 오버레이(추가·카테고리수정) → 최신 재고맵 + 자사코드 순으로 반영
+    Promise.all([loadTabs(), loadOverlay()]).then(r=>{ if((r[0]||r[1]) && root.isConnected) refreshParts(); });
     loadStock().then(()=>{ if(root.isConnected && view==='stock') paint(); });
     loadEdShared().then(ch=>{ if(ch && root.isConnected && view==='stock') paint(); });
     refreshCart();
