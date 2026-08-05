@@ -88,6 +88,18 @@ function store(key){ return {
   set(v){ localStorage.setItem(key,JSON.stringify(v)); },
   del(){ localStorage.removeItem(key); },
 };}
+/* 활동 로그 — 누가·언제 무엇을 생성/수정/삭제/복원했는지 팀 공유 컬렉션 'activity'에 남김
+   (데이터 유실·오삭제 추적용 · 화면마다 window.actLog(작업, 구분, 대상) 한 줄로 호출) */
+function actLog(action, area, detail){
+  try{ const me=(typeof Auth!=='undefined'&&Auth.user&&Auth.user())||{};
+    const item={ id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      at:new Date().toISOString(), who:me.name||me.loginId||'?', dept:me.dept||'',
+      area:String(area||''), action:String(action||''), detail:String(detail||'').slice(0,120) };
+    fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({op:'collPush',coll:'activity',item})}).catch(()=>{});
+  }catch(e){}
+}
+if(typeof window!=='undefined') window.actLog=actLog;
 function toast(msg){ let t=document.querySelector('.toast'); if(!t){ t=el('div','toast'); document.body.appendChild(t);}
   t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1900); }
 function copyText(text){ const done=()=>toast('복사했습니다');

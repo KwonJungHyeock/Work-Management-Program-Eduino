@@ -9,8 +9,33 @@
 (function(){
   const MF = window.MOUSER_FIELDS || ['mouserNo','mfrNo','mfr','category','edCode','name','basePriceKRW'];
   const toObj = a => Array.isArray(a) ? MF.reduce((o,k,i)=>(o[k]=a[i],o),{}) : a;
-  const PARTS = ()=> (window.MOUSER_PARTS||[]).map(toObj);
   const won = n => Number(n||0).toLocaleString('ko-KR');
+
+  /* ── 품목 오버레이 (팀 공유 coll 'mouser_parts') ──────────────────────────
+     시드(mouser-data.js)는 그대로 두고, 추가·카테고리수정·삭제분만 오버레이로 저장.
+     · 엑셀(프로젝트 매니저) 불러오기로 추가한 품목도 여기에 쌓임
+     · 병합 규칙: 시드 → 오버레이 덮어쓰기 → 오버레이 전용 신규품목 추가 (del=삭제표시) */
+  const PARTS_COLL='mouser_parts', POV_KEY='eduino.mouser.parts';
+  let povState = store(POV_KEY).get({}) || {};
+  async function loadOverlay(){
+    try{ const r=await fetch('/api/store?type=coll&coll='+PARTS_COLL); if(!r.ok) return false;
+      const d=await r.json(); const m={}; ((d&&d.items)||[]).forEach(it=>{ if(it&&it.id) m[String(it.id)]=it; });
+      povState=m; store(POV_KEY).set(m); return true; }catch(e){ return false; }
+  }
+  function putPart(p){ const id=String(p.mouserNo||p.id||'').trim(); if(!id) return;
+    const item={ ...p, id }; povState[id]=item; store(POV_KEY).set(povState);
+    try{ fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({op:'collPush',coll:PARTS_COLL,item})}).catch(()=>{}); }catch(e){}
+  }
+  const SEED = ()=> (window.MOUSER_PARTS||[]).map(toObj);
+  const PARTS = ()=>{
+    const ov=povState||{}, out=[], seen=new Set();
+    SEED().forEach(p=>{ const o=ov[p.mouserNo]; seen.add(p.mouserNo);
+      if(o && o.del) return;                                   // 삭제 표시된 시드 품목은 제외
+      out.push(o ? { ...p, ...o, mouserNo:p.mouserNo } : p); });
+    Object.keys(ov).forEach(k=>{ const o=ov[k]; if(!o || o.del || seen.has(k)) return; out.push(toObj(o)); });
+    return out;
+  };
   // 자사(에듀이노) 상품 마스터 — 이카운트 카탈로그(/api/catalog)에서 자사코드로 조회.
   //  MD가 마우저 행에 자사코드(ed)를 입력하면 이카운트 상품명·판매가(출고단가/outPrice)를 우측에 노출하고 마진율을 계산.
   //  (가격비교 엔티렉스 공급가표가 아니라 이카운트 실판매가 기준 — eduino.kr 판매가와 일치)
@@ -47,11 +72,13 @@
   const prodUrl = no => `https://www.mouser.kr/ProductDetail/${encodeURIComponent(no)}`;
 
   function drawMouser(root){
-    const all=PARTS();
-    const mfrs=[...new Set(all.map(p=>p.mfr))];
-    let mfr=mfrs[0]||'', cat='', view='stock';
+    let all=PARTS();
+    const ALL='__all';                 // 전체 상품 리스트(제조사 구분 없이)
+    const mfrsOf=()=>[...new Set(all.map(p=>p.mfr).filter(Boolean))];
+    let mfrs=mfrsOf();
+    let mfr=mfrs[0]||'', cat='', view='stock', q='';
     let stockMap=null, stockAt='';   // 크론이 저장한 최신 재고맵(coll mouser_stock)
-    const catsOf=m=>[...new Set(all.filter(p=>p.mfr===m).map(p=>p.category).filter(Boolean))];
+    const catsOf=m=> m===ALL ? [] : [...new Set(all.filter(p=>p.mfr===m).map(p=>p.category).filter(Boolean))];
     cat=catsOf(mfr)[0]||'';
 
     root.innerHTML=`
@@ -62,6 +89,15 @@
         .mo-sub{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
         .mo-sub button{border:0;background:var(--panel);padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
         .mo-sub button:first-child{border-left:0} .mo-sub button.on{background:var(--active-bg);color:#0a3d62}
+        .mo-search{height:34px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;font-size:12.5px;min-width:250px;background:var(--panel);color:var(--ink)}
+        .mo-search:focus{outline:2px solid #0a3d6233;border-color:#0a3d62}
+        .mo-mgr{width:100%;border-collapse:collapse;font-size:12.5px}
+        .mo-mgr th{position:sticky;top:0;background:var(--panel-2);font-size:11px;font-weight:800;color:var(--muted);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);z-index:1}
+        .mo-mgr td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+        .mo-mgr input{width:100%;height:28px;border:1px solid var(--line-2);border-radius:6px;padding:0 7px;font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink)}
+        .mo-mgr .del{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;border-radius:6px;padding:2px 6px}
+        .mo-mgr .del:hover{background:#fdecea;color:#c0392b}
+        .mo-mgr tr.gone td{opacity:.42;text-decoration:line-through}
         .mo-view{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden;margin-left:auto}
         .mo-view button{border:0;background:var(--panel);padding:7px 13px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
         .mo-view button.on{background:#0a3d62;color:#fff}
@@ -115,28 +151,60 @@
         <span id="moCart" style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#0a3d62"></span>
         <div style="flex-basis:100%;font-size:11.5px;color:var(--muted);margin-top:2px">${icon('info')||''} <b>데이터 기준</b> — 마우저 재고·가격·입고예정은 <b>매일 아침 7시</b> 자동 조사한 값입니다(실시간 아님). 그날 아침 이후 변동은 다음날 반영돼요.</div>
       </div>
-      <div class="mo-tabs" id="moMfr">${mfrs.map(m=>`<div class="mo-tab${m===mfr?' on':''}" data-m="${esc(m)}">${esc(m)} <span class="muted" style="font-weight:600;font-size:11px">${all.filter(p=>p.mfr===m).length}</span></div>`).join('')}</div>
+      <div class="mo-tabs" id="moMfr"></div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
         <span class="mo-sub" id="moCat"></span>
+        <input id="moQ" class="mo-search" type="search" placeholder="상품 검색 — 마우저번호·상품명·제조사번호·자사코드" autocomplete="off">
         <span class="mo-view" id="moView"><button data-v="stock" class="on">재고·비교</button><button data-v="changes">변동 알림</button><button data-v="orders">주문내역</button></span>
+        ${canEdit()?`<span id="moTools" style="display:flex;gap:6px;margin-left:auto">
+          <button class="btn sm" id="moImport" title="마우저 [프로젝트 매니저] 엑셀(.xls/.xlsx)에서 품목 불러오기">${icon('upload')}엑셀 불러오기</button>
+          <button class="btn sm" id="moManage" title="품목 추가·카테고리 수정·삭제">${icon('grid')}품목·카테고리</button></span>`:''}
       </div>
+      <input type="file" id="moFile" accept=".xls,.xlsx,application/vnd.ms-excel" style="display:none">
       <div id="moBody"></div>`;
 
     const catBar=root.querySelector('#moCat'), moBody=root.querySelector('#moBody');
-    function renderCats(){ const cats=catsOf(mfr); if(!cats.includes(cat)) cat=cats[0]||'';
+    const mfrBarEl=root.querySelector('#moMfr');
+    // 제조사 탭 — 마지막에 [전체] 탭(제조사 구분 없이 등록 상품 전체)
+    function renderMfrs(){
+      mfrBarEl.innerHTML = mfrs.map(m=>`<div class="mo-tab${m===mfr?' on':''}" data-m="${esc(m)}">${esc(m)} <span class="muted" style="font-weight:600;font-size:11px">${all.filter(p=>p.mfr===m).length}</span></div>`).join('')
+        + `<div class="mo-tab${mfr===ALL?' on':''}" data-m="${ALL}" title="제조사 구분 없이 등록된 마우저 상품 전체">전체 <span class="muted" style="font-weight:600;font-size:11px">${all.length}</span></div>`;
+      mfrBarEl.querySelectorAll('.mo-tab').forEach(t=>t.onclick=()=>{ mfr=t.dataset.m;
+        mfrBarEl.querySelectorAll('.mo-tab').forEach(x=>x.classList.toggle('on',x.dataset.m===mfr)); renderCats(); paint(); });
+    }
+    function renderCats(){ const cats=catsOf(mfr);
+      if(mfr===ALL || !cats.length){ catBar.style.display='none'; catBar.innerHTML=''; return; }
+      catBar.style.display=''; if(!cats.includes(cat)) cat=cats[0]||'';
       catBar.innerHTML=cats.map(c=>`<button data-c="${esc(c)}" class="${c===cat?'on':''}">${esc(c)}</button>`).join('');
       catBar.querySelectorAll('button').forEach(b=>b.onclick=()=>{ cat=b.dataset.c;
         catBar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.c===cat)); paint(); }); }
-    root.querySelectorAll('#moMfr .mo-tab').forEach(t=>t.onclick=()=>{ mfr=t.dataset.m;
-      root.querySelectorAll('#moMfr .mo-tab').forEach(x=>x.classList.toggle('on',x.dataset.m===mfr)); renderCats(); paint(); });
+    renderMfrs();
     root.querySelectorAll('#moView button').forEach(b=>b.onclick=()=>{ view=b.dataset.v;
       root.querySelectorAll('#moView button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); applyViewChrome(); paint(); });
-    // 주문내역·변동알림은 제조사와 무관 → 제조사/카테고리 탭 숨김(재고·비교에서만 표시)
+    // 주문내역·변동알림은 제조사와 무관 → 제조사/카테고리/검색 숨김(재고·비교에서만 표시)
     function applyViewChrome(){ const per=(view==='stock');
-      const mfrBar=root.querySelector('#moMfr'); if(mfrBar) mfrBar.style.display=per?'':'none';
-      if(catBar) catBar.style.display=per?'':'none'; }
+      if(mfrBarEl) mfrBarEl.style.display=per?'':'none';
+      if(catBar) catBar.style.display=(per && mfr!==ALL && catsOf(mfr).length)?'':'none';
+      const qEl=root.querySelector('#moQ'); if(qEl) qEl.style.display=per?'':'none';
+      const tl=root.querySelector('#moTools'); if(tl) tl.style.display=per?'':'none'; }
 
-    function rows(){ return all.filter(p=>p.mfr===mfr && p.category===cat); }
+    // 상품 검색 — 마우저번호·상품명·제조사번호·자사코드·제조사·카테고리
+    const qEl=root.querySelector('#moQ');
+    if(qEl) qEl.oninput=()=>{ q=qEl.value.trim().toLowerCase(); paint(); };
+    function matchQ(p){ if(!q) return true;
+      const ed=edOf(p.mouserNo)||'';
+      return `${p.mouserNo} ${p.mfrNo||''} ${p.name||''} ${ed} ${p.mfr||''} ${p.category||''}`.toLowerCase().includes(q); }
+
+    function rows(){
+      const base = (mfr===ALL) ? all.slice()
+        : all.filter(p=>p.mfr===mfr && (!catsOf(mfr).length || p.category===cat));
+      const list = base.filter(matchQ);
+      return (mfr===ALL) ? list.sort((a,b)=> String(a.mfr||'').localeCompare(String(b.mfr||'')) || String(a.category||'').localeCompare(String(b.category||''))) : list;
+    }
+    // 품목 변경(불러오기·카테고리 수정·삭제) 후 화면 재구성
+    function refreshParts(){ all=PARTS(); mfrs=mfrsOf();
+      if(mfr!==ALL && !mfrs.includes(mfr)) mfr=mfrs[0]||ALL;
+      renderMfrs(); renderCats(); paint(); }
 
     // 마우저 원가(현지 판매가) — 크론 재고맵의 현재가 우선, 없으면 시드 기준가
     function mouserBuyOf(p){ const d=stockMap&&stockMap[p.mouserNo]; if(d&&d.found&&d.priceKRW>0) return d.priceKRW; return p.basePriceKRW||0; }
@@ -200,7 +268,7 @@
         <tbody>${list.length?list.map(p=>{
           const ed=em[p.mouserNo]!=null?em[p.mouserNo]:(p.edCode||''); const buy=buyVatOf(p);
           return `<tr data-no="${esc(p.mouserNo)}">
-            <td><a class="mo-code" href="${esc(prodUrl(p.mouserNo))}" target="_blank" rel="noopener">${esc(p.mouserNo)}</a><div class="muted" style="font-size:10.5px">${esc(p.mfrNo||'')}</div></td>
+            <td><a class="mo-code" href="${esc(prodUrl(p.mouserNo))}" target="_blank" rel="noopener">${esc(p.mouserNo)}</a><div class="muted" style="font-size:10.5px">${esc(p.mfrNo||'')}${mfr===ALL?` · ${esc(p.mfr||'')}${p.category?' / '+esc(p.category):''}`:''}</div></td>
             <td style="white-space:normal;word-break:break-word;line-height:1.35">${esc(p.name||'')}</td>
             <td class="num" data-stk><span class="mo-stk wait">–</span></td>
             <td class="num" data-price><span class="mo-price">${won(p.basePriceKRW)}</span><div class="mo-base">기준가</div></td>
@@ -450,8 +518,139 @@
     function wireManualOrders(){ const go=()=>{ const el2=moBody.querySelector('#moDhl'); const t=(el2&&el2.value||'').trim(); if(!t){ toast('추적번호를 입력하세요'); return; } window.open(dhlUrl(t),'_blank','noopener'); };
       const b=moBody.querySelector('#moDhlGo'); if(b) b.onclick=go; const i=moBody.querySelector('#moDhl'); if(i) i.onkeydown=e=>{ if(e.key==='Enter') go(); }; }
 
+    /* ── 마우저 [프로젝트 매니저] 엑셀 불러오기 ───────────────────────────────
+       양식(내보내기 그대로): 6행째 "프로젝트명"(제조사_카테고리) · 7행째 헤더 · 8행부터 데이터
+       가져오는 값: 마우저번호 · 제조업체번호 · 제조업체 · 설명(상품명) · 가격(KRW) · 고객부품번호(자사코드)
+       나머지(재고·입고예정·자사판매가·마진)는 기존처럼 크론/이카운트에서 자동으로 채워집니다. */
+    const numKR = v => { const s=String(v==null?'':v).replace(/[^\d.]/g,''); const n=Number(s); return isFinite(n)?Math.round(n):0; };
+    const HEAD = { no:['mouser 번호','mouser번호','마우저 번호'], mfrNo:['제조업체 번호','제조사 번호'], mfr:['제조업체','제조사'],
+      ed:['고객 부품 번호','고객부품번호'], name:['설명','상품명','제품명'], price:['가격'] };
+    function parseProjectSheet(sh){
+      const rows=(sh&&sh.rows)||[]; const norm=s=>String(s==null?'':s).replace(/\s+/g,'').toLowerCase();
+      let hr=-1; for(let i=0;i<Math.min(rows.length,20);i++){ if((rows[i]||[]).some(c=>/mouser\s*번호|마우저\s*번호/i.test(String(c||'')))){ hr=i; break; } }
+      if(hr<0) return null;
+      // 프로젝트명 = 헤더 바로 위쪽에서 값이 있는 첫 셀 (예: "RASPBERRY PI_AI HAT")
+      let proj=''; for(let i=hr-1;i>=0 && i>=hr-4;i--){ const v=String((rows[i]||[])[0]||'').trim(); if(v){ proj=v; break; } }
+      const catFromProj = proj.includes('_') ? proj.slice(proj.lastIndexOf('_')+1).trim() : proj.trim();
+      const h=(rows[hr]||[]).map(norm);
+      // 정확 일치를 먼저 찾고(‘제조업체’가 ‘제조업체 번호’에 걸리는 것 방지) 없을 때만 접두 일치
+      const idx=k=>{ for(const n of HEAD[k]){ const i=h.indexOf(norm(n)); if(i>=0) return i; }
+        for(const n of HEAD[k]){ const t=norm(n); const i=h.findIndex(x=>x.startsWith(t)); if(i>=0) return i; } return -1; };
+      const ci={ no:idx('no'), mfrNo:idx('mfrNo'), mfr:idx('mfr'), ed:idx('ed'), name:idx('name'), price:idx('price') };
+      if(ci.no<0) return null;
+      const out=[];
+      for(let i=hr+1;i<rows.length;i++){ const r=rows[i]||[]; const no=String(r[ci.no]==null?'':r[ci.no]).trim();
+        if(!no || /^mouser/i.test(no)) continue;
+        out.push({ mouserNo:no, mfrNo:String(r[ci.mfrNo]||'').trim(), mfr:String(r[ci.mfr]||'').trim(),
+          category:catFromProj||'기타', edCode:String(ci.ed>=0?(r[ci.ed]||''):'').trim(),
+          name:String(r[ci.name]||'').trim(), basePriceKRW:numKR(ci.price>=0?r[ci.price]:0) }); }
+      return { proj, category:catFromProj, items:out };
+    }
+    async function readWorkbook(file){
+      const xls=/\.xls$/i.test(file.name);
+      if(xls){ if(!window.XlsLite) throw new Error('xls 판독기를 불러오지 못했습니다'); return XlsLite.parseSheets(file); }
+      if(!window.XlsxLite) throw new Error('xlsx 판독기를 불러오지 못했습니다'); return XlsxLite.parseSheets(file);
+    }
+    async function onPickFile(file){
+      let parsed=[];
+      try{ const sheets=await readWorkbook(file);
+        sheets.forEach(sh=>{ const r=parseProjectSheet(sh); if(r && r.items.length) parsed.push(r); });
+      }catch(err){ toast('엑셀을 읽지 못했습니다 — '+(err&&err.message||'형식 확인')); return; }
+      if(!parsed.length){ toast('마우저 프로젝트 양식이 아닙니다 (‘Mouser 번호’ 헤더를 찾지 못함)'); return; }
+      const items=[].concat(...parsed.map(p=>p.items));
+      const exist=new Set(all.map(p=>p.mouserNo));
+      const add=items.filter(i=>!exist.has(i.mouserNo)), upd=items.filter(i=>exist.has(i.mouserNo));
+      const ov=document.createElement('div'); ov.className='modal-ov';
+      ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+      ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:720px;width:97%;max-height:calc(100vh - 60px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+        <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
+          <div style="font-size:16px;font-weight:800">${icon('upload')||''} 마우저 프로젝트 불러오기</div>
+          <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(file.name)} · 프로젝트 <b>${parsed.map(p=>esc(p.proj||'-')).join(', ')}</b></div></div>
+        <div style="padding:14px 20px;overflow:auto">
+          <div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;font-size:12.5px;margin-bottom:12px">
+            신규 <b>${add.length}</b>건 · 기존 갱신 <b>${upd.length}</b>건 — 마우저번호·상품명·가격·제조사·카테고리를 채웁니다.
+            <span class="muted">재고·입고예정·자사판매가·마진은 기존처럼 자동으로 채워집니다.</span></div>
+          <div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:330px">
+            <table class="mo-mgr"><thead><tr><th style="width:150px">마우저 번호</th><th>상품명</th><th style="width:96px">카테고리</th><th style="width:92px;text-align:right">가격</th><th style="width:52px">상태</th></tr></thead>
+            <tbody>${items.slice(0,300).map(i=>`<tr><td class="mono">${esc(i.mouserNo)}</td>
+              <td style="white-space:normal;line-height:1.35">${esc((i.name||'').slice(0,90))}</td>
+              <td>${esc(i.category)}</td><td style="text-align:right">${won(i.basePriceKRW)}</td>
+              <td>${exist.has(i.mouserNo)?'<span class="muted">갱신</span>':'<b style="color:#12886a">신규</b>'}</td></tr>`).join('')}</tbody></table></div>
+          ${items.length>300?`<div class="muted" style="font-size:11.5px;margin-top:6px">※ 미리보기는 300건까지 · 저장은 ${items.length}건 전체</div>`:''}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)">
+          <button class="btn ghost" id="imCancel">취소</button><button class="btn pri" id="imOk">${items.length}건 반영</button></div></div>`;
+      document.body.appendChild(ov);
+      const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+      ov.querySelector('#imCancel').onclick=close;
+      ov.querySelector('#imOk').onclick=()=>{
+        items.forEach(i=>{ const cur=all.find(p=>p.mouserNo===i.mouserNo)||{};
+          putPart({ mouserNo:i.mouserNo, mfrNo:i.mfrNo||cur.mfrNo||'', mfr:i.mfr||cur.mfr||'',
+            category:i.category||cur.category||'기타', name:i.name||cur.name||'',
+            basePriceKRW:i.basePriceKRW||cur.basePriceKRW||0, edCode:i.edCode||cur.edCode||'' }); });
+        if(window.actLog) actLog('불러오기','마우저 품목',`${file.name} · 신규 ${add.length}·갱신 ${upd.length}`);
+        close(); refreshParts(); toast(`불러왔습니다 — 신규 ${add.length} · 갱신 ${upd.length}건`);
+      };
+    }
+    const fileEl=root.querySelector('#moFile');
+    const impBtn=root.querySelector('#moImport'); if(impBtn) impBtn.onclick=()=>fileEl.click();
+    if(fileEl) fileEl.onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(f) onPickFile(f); };
+
+    /* ── 품목·카테고리 관리 (카테고리 이름 수정 · 일괄 변경 · 품목 삭제) ── */
+    function openManage(){
+      const scope = mfr===ALL ? all.slice() : all.filter(p=>p.mfr===mfr);
+      const cats=[...new Set(all.map(p=>p.category).filter(Boolean))];
+      const draft={}, gone={};
+      const ov=document.createElement('div'); ov.className='modal-ov';
+      ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+      ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:860px;width:98%;max-height:calc(100vh - 56px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+        <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
+          <div style="font-size:16px;font-weight:800">${icon('grid')||''} 품목 · 카테고리 관리</div>
+          <div class="muted" style="font-size:12.5px;margin-top:3px">${mfr===ALL?'전체':esc(mfr)} · <b>${scope.length}</b>품목 — 카테고리를 직접 고치거나 일괄 변경/삭제할 수 있습니다.</div></div>
+        <div style="padding:12px 20px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12.5px;font-weight:700;color:var(--muted)">카테고리 일괄 변경</span>
+          <select id="mgFrom" style="height:32px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px;font:inherit;font-size:12.5px">
+            <option value="">— 대상 —</option>${cats.map(c=>`<option>${esc(c)}</option>`).join('')}</select>
+          <span class="muted">→</span>
+          <input id="mgTo" placeholder="새 카테고리명" style="height:32px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font:inherit;font-size:12.5px;width:150px">
+          <button class="btn sm" id="mgApply">적용</button>
+          <span class="muted" style="font-size:11.5px">※ 이름을 바꾸면 그 카테고리의 품목 전체가 옮겨집니다</span></div>
+        <div style="padding:0;overflow:auto;flex:1">
+          <table class="mo-mgr"><thead><tr><th style="width:148px">마우저 번호</th><th>상품명</th><th style="width:130px">카테고리</th><th style="width:110px">제조사</th><th style="width:44px"></th></tr></thead>
+          <tbody id="mgBody">${scope.map(p=>`<tr data-no="${esc(p.mouserNo)}">
+            <td class="mono">${esc(p.mouserNo)}</td>
+            <td style="white-space:normal;line-height:1.35">${esc((p.name||'').slice(0,80))}</td>
+            <td><input data-c="${esc(p.mouserNo)}" value="${esc(p.category||'')}" list="mgCats"></td>
+            <td class="muted">${esc(p.mfr||'')}</td>
+            <td><button class="del" data-x="${esc(p.mouserNo)}" title="이 품목 삭제">✕</button></td></tr>`).join('')}</tbody></table>
+          <datalist id="mgCats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)">
+          <button class="btn ghost" id="mgCancel">취소</button><button class="btn pri" id="mgSave">${icon('save')||''}저장</button></div></div>`;
+      document.body.appendChild(ov);
+      const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
+      ov.querySelector('#mgCancel').onclick=close;
+      ov.querySelectorAll('[data-c]').forEach(inp=>inp.onchange=()=>{ draft[inp.dataset.c]=inp.value.trim(); });
+      ov.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{ const no=b.dataset.x; const tr=b.closest('tr');
+        gone[no]=!gone[no]; tr.classList.toggle('gone',!!gone[no]); b.textContent=gone[no]?'↺':'✕'; });
+      ov.querySelector('#mgApply').onclick=()=>{ const from=ov.querySelector('#mgFrom').value, to=ov.querySelector('#mgTo').value.trim();
+        if(!from||!to){ toast('대상 카테고리와 새 이름을 입력하세요'); return; }
+        ov.querySelectorAll('[data-c]').forEach(inp=>{ if(inp.value.trim()===from){ inp.value=to; draft[inp.dataset.c]=to; } });
+        toast(`‘${from}’ → ‘${to}’ 로 변경 준비됨 · [저장]을 누르세요`); };
+      ov.querySelector('#mgSave').onclick=()=>{
+        let nCat=0, nDel=0;
+        scope.forEach(p=>{ const no=p.mouserNo;
+          if(gone[no]){ putPart({ ...p, mouserNo:no, del:true }); nDel++; return; }
+          const c=draft[no]; if(c!=null && c!==(p.category||'')){ putPart({ ...p, mouserNo:no, category:c||'기타' }); nCat++; } });
+        if(!nCat && !nDel){ toast('변경된 내용이 없습니다'); close(); return; }
+        if(window.actLog) actLog(nDel?'수정·삭제':'수정','마우저 품목',`카테고리 ${nCat}건${nDel?` · 삭제 ${nDel}건`:''}`);
+        close(); refreshParts(); toast(`저장했습니다 — 카테고리 ${nCat}건${nDel?` · 삭제 ${nDel}건`:''}`);
+      };
+    }
+    const mgBtn=root.querySelector('#moManage'); if(mgBtn) mgBtn.onclick=openManage;
+
     renderCats(); applyViewChrome(); paint();
-    // 최신 재고맵(크론 저장) + 팀 공유 자사코드 로드 후 반영 + 장바구니 배지
+    // 팀 공유 품목 오버레이(추가·카테고리수정) → 최신 재고맵 + 자사코드 순으로 반영
+    loadOverlay().then(ok=>{ if(ok && root.isConnected) refreshParts(); });
     loadStock().then(()=>{ if(root.isConnected && view==='stock') paint(); });
     loadEdShared().then(ch=>{ if(ch && root.isConnected && view==='stock') paint(); });
     refreshCart();

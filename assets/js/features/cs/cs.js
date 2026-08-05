@@ -12,15 +12,8 @@
     { cat:'납품', title:'납품 일정 안내', body:'안녕하세요, 에듀이노입니다.\n\n주문하신 상품의 납품 일정을 안내드립니다. 변동 사항 발생 시 즉시 안내드리겠습니다.\n\n감사합니다.\n에듀이노 드림' },
   ];
 
-  /* 활동 로그 — 누가·언제 템플릿을 생성/수정/삭제/복원했는지 팀 공유 컬렉션 'activity'에 기록 */
-  function actPush(action, area, detail){
-    try{ const me=(Auth.user&&Auth.user())||{};
-      const it={ id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-        at:new Date().toISOString(), who:me.name||me.loginId||'?', dept:me.dept||'',
-        area:area||'', action:action||'', detail:String(detail||'').slice(0,120) };
-      fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'activity',item:it})});
-    }catch(e){}
-  }
+  /* 활동 로그 — 공용 헬퍼(app.js window.actLog)로 위임 */
+  const actPush = (action, area, detail)=>{ if(window.actLog) window.actLog(action, area, detail); };
 
   /* 라이브러리 한 벌(답변/메일)을 주어진 컨테이너에 렌더 — 헤더 없이 본문만(서브탭 내부용) */
   function renderLibrary(root, iconName, storeKey, defaults, hint, setLabel){
