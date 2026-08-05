@@ -308,9 +308,15 @@
         return;
       }
       root.innerHTML=`
-        <div class="mhead pad"><div class="tt">감사 로그</div>
-          <div class="ds">계정 발급·수정·삭제와 상담/발주 기록 삭제 이력을 최근 순으로 보여줍니다. 내부 통제용(최근 500건 보관).</div></div>
-        <div class="mbody"><div class="card">
+        <div class="mhead pad"><div class="tt">감사 로그 · 복구 포인트</div>
+          <div class="ds">계정·기록 변경 이력과 <b>일 단위 데이터 복구 지점</b>을 확인합니다. 내부 통제용(활동 최근 500건 보관).</div></div>
+        <div class="mbody">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-hd">${icon('save')||icon('clipboard')}<b>복구 포인트</b>
+            <span class="muted" style="margin-left:auto;font-size:12.5px" id="rpMeta"></span></div>
+          <div class="card-bd" id="rpBody"><div class="muted" style="font-size:13px">불러오는 중…</div></div>
+        </div>
+        <div class="card">
           <div class="card-hd">${icon('clipboard')}<b>최근 활동</b><span class="muted" id="auCnt" style="margin-left:auto;font-size:12.5px"></span>
             <button class="btn sm" id="auReload" style="margin-left:10px">${icon('refresh')}새로고침</button></div>
           <div class="card-bd" style="padding:0"><div style="overflow:auto"><table class="tbl" id="auTable"></table></div></div>
@@ -334,6 +340,27 @@
         }catch(err){ t.querySelector('tbody').innerHTML=`<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--danger)">${esc(err.message)}</td></tr>`; }
       }
       $('#auReload').onclick=load; load();
+
+      // 복구 포인트 — 매일 자동 저장되는 스냅샷(최근 N일) + 월간 스냅샷 현황
+      async function loadPoints(){
+        const box=$('#rpBody'), meta=$('#rpMeta'); if(!box) return;
+        let d=null; try{ const r=await fetch('/api/backup-snapshot?type=meta'); d=await r.json(); }catch(e){}
+        if(!d||!d.ok){ box.innerHTML='<div class="muted" style="font-size:13px">복구 포인트 정보를 불러오지 못했습니다. (KV 연결 확인)</div>'; return; }
+        const pts=d.points||[], months=d.months||[];
+        const kb=n=>!n?'-':(n<1024?n+' B':(n<1048576?(n/1024).toFixed(0)+' KB':(n/1048576).toFixed(1)+' MB'));
+        const fd=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch{ return ''; } };
+        if(meta) meta.innerHTML=`일 단위 <b>${pts.length}</b>개 · 월 단위 <b>${months.length}</b>개${d.lastDayAt?` · 최근 ${esc(fd(d.lastDayAt))}`:''}`;
+        box.innerHTML=`
+          <div class="note" style="font-size:12.5px;margin-bottom:12px">${icon('info')||''} 매일 자정 이후 <b>전체 데이터(상담·발주·공지·요청·템플릿 등)</b>를 하루치로 저장합니다.
+            최근 <b>${d.keepDays||14}일</b>은 일 단위, 그 이전은 <b>월 단위</b> 스냅샷으로 복구합니다. (압축 저장 · 기간 지나면 자동 삭제)</div>
+          ${pts.length? `<div style="display:flex;flex-wrap:wrap;gap:8px">${pts.map(p=>`
+            <span style="display:inline-flex;flex-direction:column;gap:2px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:9px;padding:7px 12px;min-width:118px">
+              <b style="font-size:12.5px">${esc(p.day)}</b>
+              <span class="muted" style="font-size:11px">${fmtNum(p.records)}건 · ${kb(p.bytes)}</span></span>`).join('')}</div>`
+            : `<div class="muted" style="font-size:13px">아직 저장된 일 단위 복구 포인트가 없습니다. <b>내일 0시 이후</b> 첫 스냅샷이 생성됩니다.</div>`}
+          ${months.length? `<div style="margin-top:12px;font-size:12px;color:var(--muted)">월 단위 스냅샷: ${months.slice(0,12).map(m=>esc(m)).join(' · ')}</div>`:''}`;
+      }
+      loadPoints();
     }
   };
 })();

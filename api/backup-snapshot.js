@@ -57,8 +57,10 @@ async function collAll(name) {
   if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) { try { out.push(JSON.parse(arr[i + 1])); } catch (e) {} }
   return out;
 }
+const COLL_NAMES = ['chinaorders', 'notice', 'memo', 'callbacks', 'calendar', 'ntrex', 'duties', 'handover_md', 'handover_cs',
+  'assignments', 'requests', 'cafe24_sales', 'ts_history', 'activity', 'mouser_parts', 'mouser_edmap', 'settlements', 'mouser_inbound', 'navcustom'];
 async function snapshotCollections() {
-  const names = ['chinaorders', 'notice', 'memo', 'callbacks', 'calendar', 'ntrex', 'duties', 'handover_md', 'handover_cs', 'assignments', 'requests', 'cafe24_sales', 'ts_history', 'activity', 'mouser_parts', 'mouser_edmap'];
+  const names = COLL_NAMES;
   const data = {}, counts = {};
   for (const n of names) { const items = await collAll(n); data[n] = items; counts[n] = items.length; }
   const at = new Date().toISOString();
@@ -80,13 +82,66 @@ async function snapshotSettings() {
   return counts;
 }
 
+/* ── 일 단위 복구 포인트 ────────────────────────────────────────────────────
+   매일(KST 00:20) 전체 데이터를 하루치 스냅샷으로 저장.
+   · 용량이 저장한도(256MB)를 먼저 잠식하지 않도록 gzip 압축 + 14일 자동만료(EXPIRE)
+   · 장기 보관은 기존 월간 스냅샷이 담당 → 최근 2주는 '일 단위', 그 이전은 '월 단위'로 복구
+   =========================================================================== */
+const zlib = require('zlib');
+const DAY_KEEP = 14;                       // 일 스냅샷 보관 일수
+const dayStr = (d) => { const k = new Date(d.getTime() + 9 * 3600 * 1000); return k.toISOString().slice(0, 10); };  // KST 기준 날짜
+const packGz = (obj) => zlib.gzipSync(Buffer.from(JSON.stringify(obj), 'utf8')).toString('base64');
+
+async function snapshotDay() {
+  const now = new Date(), day = dayStr(now), at = now.toISOString();
+  const cur = monthStr(now), prev = monthStr(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const sheets = {}, counts = {};
+  for (const m of [prev, cur]) {
+    for (const [dept, sheet] of MONTH_SHEETS) {
+      const rows = await getSheet(dept, sheet, m); const k = `${dept}/${sheet}@${m}`;
+      if (rows.length) { sheets[k] = rows; counts[k] = rows.length; }
+    }
+  }
+  const colls = {};
+  for (const n of COLL_NAMES) { const items = await collAll(n); if (items.length) { colls[n] = items; counts['coll:' + n] = items.length; } }
+  const settings = {};
+  for (const sc of ['all', 'cs', 'md']) {
+    const key = sc === 'all' ? 'eduino:settings' : 'eduino:settings:' + sc;
+    const arr = await redis(['HGETALL', key]); const o = {};
+    if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1];
+    if (Object.keys(o).length) { settings[sc] = o; counts['settings:' + sc] = Object.keys(o).length; }
+  }
+  const gz = packGz({ day, at, sheets, colls, settings });
+  const key = 'eduino:backup:day:' + day;
+  await redis(['SET', key, JSON.stringify({ day, at, v: 2, gz, counts, bytes: gz.length })]);
+  await redis(['EXPIRE', key, String(DAY_KEEP * 24 * 3600)]);           // 자동 만료 → 용량 무한증가 방지
+  await redis(['SADD', 'eduino:backup:days', day]);
+  await redis(['HSET', 'eduino:backup:meta', 'lastDayAt', at, 'lastDay', day]);
+  // 인덱스에서 만료된 날짜 정리(존재 확인)
+  try {
+    const days = (await redis(['SMEMBERS', 'eduino:backup:days'])) || [];
+    for (const d of days) { if (d === day) continue; const ex = await redis(['EXISTS', 'eduino:backup:day:' + d]); if (!Number(ex)) await redis(['SREM', 'eduino:backup:days', d]); }
+  } catch (e) {}
+  return { day, counts, bytes: gz.length };
+}
+
 module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET' && req.query && req.query.type === 'meta') {
       let meta = {}; try { const a = await redis(['HGETALL', 'eduino:backup:meta']); if (Array.isArray(a)) for (let i = 0; i < a.length; i += 2) meta[a[i]] = a[i + 1]; } catch (e) {}
       let months = []; try { months = (await redis(['SMEMBERS', 'eduino:backup:index'])) || []; } catch (e) {}
-      months.sort().reverse();
-      return res.status(200).json({ ok: true, lastAt: meta.lastAt || null, lastMonth: meta.lastMonth || null, months });
+      let days = []; try { days = (await redis(['SMEMBERS', 'eduino:backup:days'])) || []; } catch (e) {}
+      months.sort().reverse(); days.sort().reverse();
+      // 복구 포인트 요약(민감정보 없이 건수·용량만)
+      const points = [];
+      for (const d of days.slice(0, DAY_KEEP + 2)) {
+        try { const raw = await redis(['GET', 'eduino:backup:day:' + d]); if (!raw) continue;
+          const o = JSON.parse(raw); const c = o.counts || {};
+          points.push({ day: d, at: o.at || null, bytes: o.bytes || 0, records: Object.values(c).reduce((s, n) => s + (Number(n) || 0), 0) });
+        } catch (e) {}
+      }
+      return res.status(200).json({ ok: true, lastAt: meta.lastAt || null, lastMonth: meta.lastMonth || null, months,
+        lastDayAt: meta.lastDayAt || null, lastDay: meta.lastDay || null, days, keepDays: DAY_KEEP, points });
     }
     // 쓰기(스냅샷)는 CRON_SECRET 인증
     const secret = process.env.CRON_SECRET;
@@ -94,6 +149,11 @@ module.exports = async function handler(req, res) {
       const auth = req.headers['authorization'] || '';
       const key = (req.query && req.query.key) || '';
       if (auth !== `Bearer ${secret}` && key !== secret) return res.status(401).json({ ok: false, error: 'unauthorized' });
+    }
+    // 일 단위 복구 포인트(매일) — 월간 스냅샷과 별개로 최근 DAY_KEEP일 보관
+    if (req.query && (req.query.mode === 'daily' || req.query.type === 'daily')) {
+      try { const r = await snapshotDay(); return res.status(200).json({ ok: true, mode: 'daily', ...r }); }
+      catch (e) { return res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
     }
     const now = new Date();
     const cur = monthStr(now);
