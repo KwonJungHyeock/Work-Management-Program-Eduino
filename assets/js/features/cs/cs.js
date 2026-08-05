@@ -12,8 +12,18 @@
     { cat:'납품', title:'납품 일정 안내', body:'안녕하세요, 에듀이노입니다.\n\n주문하신 상품의 납품 일정을 안내드립니다. 변동 사항 발생 시 즉시 안내드리겠습니다.\n\n감사합니다.\n에듀이노 드림' },
   ];
 
+  /* 활동 로그 — 누가·언제 템플릿을 생성/수정/삭제/복원했는지 팀 공유 컬렉션 'activity'에 기록 */
+  function actPush(action, area, detail){
+    try{ const me=(Auth.user&&Auth.user())||{};
+      const it={ id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        at:new Date().toISOString(), who:me.name||me.loginId||'?', dept:me.dept||'',
+        area:area||'', action:action||'', detail:String(detail||'').slice(0,120) };
+      fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:'activity',item:it})});
+    }catch(e){}
+  }
+
   /* 라이브러리 한 벌(답변/메일)을 주어진 컨테이너에 렌더 — 헤더 없이 본문만(서브탭 내부용) */
-  function renderLibrary(root, iconName, storeKey, defaults, hint){
+  function renderLibrary(root, iconName, storeKey, defaults, hint, setLabel){
     const db = store(storeKey);
     let items = db.get(null);
     // 기본 템플릿은 '메모리'로만 시드 — 저장/팀공유는 사용자가 편집하거나 [저장]을 누를 때만
@@ -53,7 +63,7 @@
               border-radius:6px;padding:10px" class="sc">${esc(it.body)}</div>
             <button class="btn block" data-a="copy" style="margin-top:10px">${icon('copy')}복사</button></div>`;
         c.querySelector('[data-a=copy]').onclick=()=>copyText(it.body);
-        c.querySelector('[data-a=del]').onclick=()=>{ if(confirm('이 템플릿을 삭제할까요?')){ items.splice(idx,1); db.set(items); renderCats(); renderList(); } };
+        c.querySelector('[data-a=del]').onclick=()=>{ if(confirm('이 템플릿을 삭제할까요?')){ const t=it.title; items.splice(idx,1); db.set(items); actPush('삭제', setLabel, t); renderCats(); renderList(); } };
         c.querySelector('[data-a=edit]').onclick=()=>editForm(it,idx);
         list.appendChild(c); });
     }
@@ -72,6 +82,7 @@
       root.querySelector('#cSave').onclick=()=>{ const rec={cat:(root.querySelector('#fCat').value.trim()||'기타'),
         title:(root.querySelector('#fTitle').value.trim()||'제목 없음'), body:root.querySelector('#fBody').value};
         if(isNew) items.unshift(rec); else items[idx]=rec; db.set(items);
+        actPush(isNew?'생성':'수정', setLabel, rec.title);
         catBar.style.display='flex'; renderCats(); renderList(); toast(isNew?'추가했습니다':'수정했습니다'); };
     }
     root.querySelector('#add').onclick=()=>editForm(null);
@@ -100,18 +111,72 @@
         <div class="mhead">
           <div class="tt">답변·메일·문자 템플릿</div>
           <div class="ds">CS 답변·고객 메일·문자 양식을 한 곳에서 관리합니다. 상담 메모의 <b>답변</b>은 <b>답변 템플릿</b>에서 불러옵니다.</div>
-          <div class="mtabs">
-            <div class="t" data-t="answer">답변 템플릿</div>
-            <div class="t" data-t="mail">메일 템플릿</div>
-            <div class="t" data-t="sms">문자 템플릿</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <div class="mtabs" style="margin:0">
+              <div class="t" data-t="answer">답변 템플릿</div>
+              <div class="t" data-t="mail">메일 템플릿</div>
+              <div class="t" data-t="sms">문자 템플릿</div>
+              <div class="t" data-t="activity">활동 로그</div>
+            </div>
+            <span style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn sm" id="tplExport" title="현재 팀 템플릿을 내 PC에 백업 파일(.json)로 저장">${icon('download')}내보내기</button>
+              <button class="btn sm" id="tplImport" title="백업 파일(.json)에서 템플릿 복원">${icon('upload')}복원</button>
+            </span>
           </div>
         </div>
+        <input type="file" id="tplFile" accept="application/json,.json" style="display:none">
         <div class="mbody" id="tplBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#tplBody');
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
-      function draw(){ const s=SUBS[tab]; body.innerHTML=''; const c=el('div'); body.appendChild(c);
-        renderLibrary(c, s.icon, s.storeKey, s.defaults, s.hint); }
+      function draw(){ body.innerHTML=''; const c=el('div'); body.appendChild(c);
+        if(tab==='activity'){ renderActivity(c); return; }
+        const s=SUBS[tab]; renderLibrary(c, s.icon, s.storeKey, s.defaults, s.hint, s.label); }
+
+      // ── 로컬 PC 백업(내보내기) / 복원(불러오기) — 유실 대비 장치 ──
+      function doExport(){ const me=(Auth.user&&Auth.user())||{};
+        const data={ _type:'eduino.cs.templates.backup', exportedAt:new Date().toISOString(), by:me.name||me.loginId||'',
+          answer:store(STORE.csTpl).get(SUBS.answer.defaults), mail:store(STORE.csMailTpl).get(SUBS.mail.defaults), sms:store(STORE.csSmsTpl).get(SUBS.sms.defaults) };
+        try{ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a');
+          a.href=URL.createObjectURL(blob); a.download=`에듀이노_CS템플릿_백업_${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+          toast('백업 파일을 내려받았습니다'); }catch(e){ toast('내보내기 실패'); } }
+      function doImport(file){ const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
+        const n=['answer','mail','sms'].filter(k=>Array.isArray(d[k])).length;
+        if(!n){ toast('CS 템플릿 백업 파일이 아닙니다'); return; }
+        if(!confirm(`백업을 복원하면 현재 팀 템플릿을 덮어씁니다.\n내보낸 시각: ${d.exportedAt?new Date(d.exportedAt).toLocaleString('ko-KR'):'-'}${d.by?' · '+d.by:''}\n\n복원할까요?`)) return;
+        if(Array.isArray(d.answer)) store(STORE.csTpl).set(d.answer);
+        if(Array.isArray(d.mail)) store(STORE.csMailTpl).set(d.mail);
+        if(Array.isArray(d.sms)) store(STORE.csSmsTpl).set(d.sms);
+        if(window.SyncStore && SyncStore.configured()) SyncStore.pushSettings().catch(()=>{});
+        actPush('복원','CS 템플릿', `백업 파일 복원 (${n}종)`);
+        toast('복원했습니다 · 팀에 공유됨'); draw();
+      }catch(e){ toast('복원 실패 — 파일 형식을 확인하세요'); } }; rd.readAsText(file,'utf-8'); }
+      const fileEl=root.querySelector('#tplFile');
+      root.querySelector('#tplExport').onclick=doExport;
+      root.querySelector('#tplImport').onclick=()=>fileEl.click();
+      fileEl.onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(f) doImport(f); };
+
+      // ── 활동 로그 뷰 ──
+      function renderActivity(host){
+        host.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <div class="muted" style="font-size:12.5px">템플릿을 누가·언제 <b>생성/수정/삭제/복원</b>했는지 기록합니다 (최근순 · 팀 공유).</div>
+            <button class="btn sm" id="actReload" style="margin-left:auto">${icon('refresh')}새로고침</button></div>
+          <div style="border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100vh - 320px)"><table class="tbl" id="actT"><tbody><tr><td class="muted" style="padding:16px;text-align:center">불러오는 중…</td></tr></tbody></table></div>`;
+        const AC={ '생성':'var(--ok)','수정':'#1a6dd6','삭제':'var(--danger)','복원':'#7c4dd6' };
+        const fmt=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch{ return iso||''; } };
+        async function load(){ let items=[]; try{ const r=await fetch('/api/store?type=coll&coll=activity'); const d=await r.json(); items=(d&&d.items)||[]; }catch(e){}
+          items=items.filter(x=>x&&x.at).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,300);
+          const t=host.querySelector('#actT'); if(!t) return;
+          t.innerHTML=`<thead><tr><th style="width:118px">시각</th><th style="width:66px">작업</th><th>구분 / 대상</th><th style="width:104px">실행자</th></tr></thead><tbody>${
+            items.length? items.map(e=>`<tr><td class="mono" style="white-space:nowrap">${esc(fmt(e.at))}</td>
+              <td><b style="color:${AC[e.action]||'var(--muted)'}">${esc(e.action||'')}</b></td>
+              <td>${esc(e.area||'')}${e.detail?` · <b>${esc(e.detail)}</b>`:''}</td>
+              <td>${esc(e.who||'-')}</td></tr>`).join('')
+            : `<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">기록된 활동이 없습니다.</td></tr>`}</tbody>`;
+        }
+        const rb=host.querySelector('#actReload'); if(rb) rb.onclick=load; load();
+      }
+
       // 최신 팀 템플릿을 먼저 받아온 뒤 렌더 — 로컬이 비어 있어도 서버본으로 채워지므로 기본값이 공유본을 덮지 않음
       (async()=>{ if(window.SyncStore && SyncStore.configured()){ try{ await SyncStore.pullSettings(); }catch(e){} } if(root.isConnected) draw(); })();
     }

@@ -58,7 +58,7 @@ async function collAll(name) {
   return out;
 }
 async function snapshotCollections() {
-  const names = ['chinaorders', 'notice', 'memo', 'callbacks', 'calendar', 'ntrex', 'duties', 'handover_md', 'handover_cs', 'assignments', 'requests', 'cafe24_sales', 'ts_history'];
+  const names = ['chinaorders', 'notice', 'memo', 'callbacks', 'calendar', 'ntrex', 'duties', 'handover_md', 'handover_cs', 'assignments', 'requests', 'cafe24_sales', 'ts_history', 'activity'];
   const data = {}, counts = {};
   for (const n of names) { const items = await collAll(n); data[n] = items; counts[n] = items.length; }
   const at = new Date().toISOString();
