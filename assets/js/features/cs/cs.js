@@ -16,12 +16,21 @@
   function renderLibrary(root, iconName, storeKey, defaults, hint){
     const db = store(storeKey);
     let items = db.get(null);
-    if(items===null){ items = defaults.slice(); db.set(items); }
+    // 기본 템플릿은 '메모리'로만 시드 — 저장/팀공유는 사용자가 편집하거나 [저장]을 누를 때만
+    //  (빈 브라우저가 열기만 해도 기본값이 팀 공유본을 덮어쓰던 초기화 사고 방지)
+    if(items===null){ items = defaults.slice(); }
     let filter='전체';
+    // 명시적 저장(+팀 공유) — 업무 매뉴얼과 동일한 [저장] 동작
+    const saveShare=(msg)=>{ db.set(items);
+      if(window.SyncStore && SyncStore.configured()){
+        SyncStore.pushSettings().then(()=>toast((msg||'저장했습니다')+' · 팀에 공유됨')).catch(()=>toast('저장됨(로컬) · 공유는 잠시 후 자동 재시도'));
+      } else toast(msg||'저장했습니다'); };
     root.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
         <div class="muted" style="font-size:12.5px">${esc(hint)}</div>
-        <button class="btn pri" id="add" style="margin-left:auto">${icon('plus')}새 템플릿</button>
+        <span style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn" id="save">${icon('save')}저장</button>
+          <button class="btn pri" id="add">${icon('plus')}새 템플릿</button></span>
       </div>
       <div id="cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
       <div id="list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px"></div>`;
@@ -66,6 +75,7 @@
         catBar.style.display='flex'; renderCats(); renderList(); toast(isNew?'추가했습니다':'수정했습니다'); };
     }
     root.querySelector('#add').onclick=()=>editForm(null);
+    root.querySelector('#save').onclick=()=>saveShare('저장했습니다');
     renderCats(); renderList();
   }
 
@@ -96,13 +106,14 @@
             <div class="t" data-t="sms">문자 템플릿</div>
           </div>
         </div>
-        <div class="mbody" id="tplBody"></div>`;
+        <div class="mbody" id="tplBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
       const body=root.querySelector('#tplBody');
       root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
         t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
       function draw(){ const s=SUBS[tab]; body.innerHTML=''; const c=el('div'); body.appendChild(c);
         renderLibrary(c, s.icon, s.storeKey, s.defaults, s.hint); }
-      draw();
+      // 최신 팀 템플릿을 먼저 받아온 뒤 렌더 — 로컬이 비어 있어도 서버본으로 채워지므로 기본값이 공유본을 덮지 않음
+      (async()=>{ if(window.SyncStore && SyncStore.configured()){ try{ await SyncStore.pullSettings(); }catch(e){} } if(root.isConnected) draw(); })();
     }
   };
 })();

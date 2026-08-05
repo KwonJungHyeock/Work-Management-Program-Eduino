@@ -65,6 +65,20 @@ async function snapshotCollections() {
   await redis(['SET', 'eduino:backup:coll', JSON.stringify({ at, data, counts })]);
   return counts;
 }
+// 팀 공용 설정(답변·메일·문자 템플릿, 상담사 목록, 시트 URL, 옵션칩 등) 백업 —
+//  설정은 버전이 없어(HSET 덮어쓰기) 사고 시 복구 지점이 없었으므로 월간 스냅샷에 포함
+async function snapshotSettings() {
+  const scopes = ['all', 'cs', 'md'];
+  const data = {}, counts = {};
+  for (const sc of scopes) {
+    const key = sc === 'all' ? 'eduino:settings' : 'eduino:settings:' + sc;
+    const arr = await redis(['HGETALL', key]); const o = {};
+    if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1];
+    data[sc] = o; counts[sc] = Object.keys(o).length;
+  }
+  await redis(['SET', 'eduino:backup:settings', JSON.stringify({ at: new Date().toISOString(), data })]);
+  return counts;
+}
 
 module.exports = async function handler(req, res) {
   try {
@@ -87,7 +101,8 @@ module.exports = async function handler(req, res) {
     const done = [];
     for (const m of [prev, cur]) { try { done.push(await snapshotMonth(m)); } catch (e) { done.push({ month: m, error: String(e && e.message || e) }); } }
     let coll = null; try { coll = await snapshotCollections(); } catch (e) { coll = { error: String(e && e.message || e) }; }
-    return res.status(200).json({ ok: true, at: new Date().toISOString(), done, coll });
+    let settings = null; try { settings = await snapshotSettings(); } catch (e) { settings = { error: String(e && e.message || e) }; }
+    return res.status(200).json({ ok: true, at: new Date().toISOString(), done, coll, settings });
   } catch (err) {
     if (err && err.kv) return res.status(503).json({ ok: false, error: 'KV 미연결' });
     return res.status(500).json({ ok: false, error: String(err && err.message || err) });
