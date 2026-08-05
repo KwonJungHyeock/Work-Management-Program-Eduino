@@ -115,7 +115,15 @@
         .mo-sub{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden}
         .mo-sub button{border:0;background:var(--panel);padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
         .mo-sub button:first-child{border-left:0} .mo-sub button.on{background:var(--active-bg);color:#0a3d62}
-        .mo-search{height:34px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;font-size:12.5px;min-width:250px;background:var(--panel);color:var(--ink)}
+        /* 상단 바 — 좌측(탭·카테고리)은 가변, 우측(화면전환·검색·도구)은 항상 같은 자리 */
+        .mo-bar1{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+        .mo-bar1 .mo-tabs{flex:1 1 auto;min-width:0;margin-bottom:0}
+        .mo-bar1 .mo-view{flex:0 0 auto;margin-left:auto}
+        .mo-bar2{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:36px}
+        .mo-bar2 .mo-sub{flex:0 1 auto;min-width:0}
+        .mo-bar2-r{flex:0 0 auto;margin-left:auto;display:flex;align-items:center;gap:8px}
+        @media(max-width:900px){ .mo-bar1,.mo-bar2{flex-wrap:wrap} .mo-bar2-r{margin-left:0;width:100%} .mo-search{flex:1} }
+        .mo-search{height:34px;border:1px solid var(--line-2);border-radius:9px;padding:0 12px;font:inherit;font-size:12.5px;width:260px;background:var(--panel);color:var(--ink)}
         .mo-search:focus{outline:2px solid #0a3d6233;border-color:#0a3d62}
         .mo-mgr{width:100%;border-collapse:collapse;font-size:12.5px}
         .mo-mgr th{position:sticky;top:0;background:var(--panel-2);font-size:11px;font-weight:800;color:var(--muted);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line-2);z-index:1}
@@ -177,14 +185,20 @@
         <span id="moCart" style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#0a3d62"></span>
         <div style="flex-basis:100%;font-size:11.5px;color:var(--muted);margin-top:2px">${icon('info')||''} <b>데이터 기준</b> — 마우저 재고·가격·입고예정은 <b>매일 아침 7시</b> 자동 조사한 값입니다(실시간 아님). 그날 아침 이후 변동은 다음날 반영돼요.</div>
       </div>
-      <div class="mo-tabs" id="moMfr"></div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-        <span class="mo-sub" id="moCat"></span>
-        <input id="moQ" class="mo-search" type="search" placeholder="상품 검색 — 마우저번호·상품명·제조사번호·자사코드" autocomplete="off">
+      <!-- 1행: 제조사 탭(좌) · 화면 전환(우 고정) -->
+      <div class="mo-bar1">
+        <div class="mo-tabs" id="moMfr"></div>
         <span class="mo-view" id="moView"><button data-v="stock" class="on">재고·비교</button><button data-v="changes">변동 알림</button><button data-v="orders">주문내역</button></span>
-        ${canEdit()?`<span id="moTools" style="display:flex;gap:6px;margin-left:auto">
-          <button class="btn sm" id="moImport" title="마우저 [프로젝트 매니저] 엑셀(.xls/.xlsx)에서 품목 불러오기">${icon('upload')}엑셀 불러오기</button>
-          <button class="btn sm" id="moManage" title="품목 추가·카테고리 수정·삭제">${icon('grid')}품목·카테고리</button></span>`:''}
+      </div>
+      <!-- 2행: 카테고리(좌) · 검색+도구(우 고정) — 탭이 바뀌어도 우측 위치가 흔들리지 않게 -->
+      <div class="mo-bar2" id="moBar2">
+        <span class="mo-sub" id="moCat"></span>
+        <span class="mo-bar2-r">
+          <input id="moQ" class="mo-search" type="search" placeholder="상품 검색 — 마우저번호·상품명·자사코드" autocomplete="off">
+          ${canEdit()?`<span id="moTools" style="display:flex;gap:6px">
+            <button class="btn sm" id="moImport" title="마우저 [프로젝트 매니저] 엑셀(.xls/.xlsx)에서 품목 불러오기">${icon('upload')}엑셀 불러오기</button>
+            <button class="btn sm" id="moManage" title="탭·품목·카테고리 관리">${icon('grid')}탭·품목 관리</button></span>`:''}
+        </span>
       </div>
       <input type="file" id="moFile" accept=".xls,.xlsx,application/vnd.ms-excel" style="display:none">
       <div id="moBody"></div>`;
@@ -199,8 +213,8 @@
         mfrBarEl.querySelectorAll('.mo-tab').forEach(x=>x.classList.toggle('on',x.dataset.m===mfr)); renderCats(); paint(); });
     }
     function renderCats(){ const cats=catsOf(mfr);
-      if(mfr===ALL || !cats.length){ catBar.style.display='none'; catBar.innerHTML=''; return; }
-      catBar.style.display=''; if(!cats.includes(cat)) cat=cats[0]||'';
+      if(mfr===ALL || !cats.length){ catBar.style.visibility='hidden'; catBar.innerHTML=''; return; }
+      catBar.style.visibility=''; if(!cats.includes(cat)) cat=cats[0]||'';
       catBar.innerHTML=cats.map(c=>`<button data-c="${esc(c)}" class="${c===cat?'on':''}">${esc(c)}</button>`).join('');
       catBar.querySelectorAll('button').forEach(b=>b.onclick=()=>{ cat=b.dataset.c;
         catBar.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.c===cat)); paint(); }); }
@@ -209,10 +223,9 @@
       root.querySelectorAll('#moView button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); applyViewChrome(); paint(); });
     // 주문내역·변동알림은 제조사와 무관 → 제조사/카테고리/검색 숨김(재고·비교에서만 표시)
     function applyViewChrome(){ const per=(view==='stock');
-      if(mfrBarEl) mfrBarEl.style.display=per?'':'none';
-      if(catBar) catBar.style.display=(per && mfr!==ALL && catsOf(mfr).length)?'':'none';
-      const qEl=root.querySelector('#moQ'); if(qEl) qEl.style.display=per?'':'none';
-      const tl=root.querySelector('#moTools'); if(tl) tl.style.display=per?'':'none'; }
+      if(mfrBarEl) mfrBarEl.style.visibility=per?'':'hidden';   // 자리는 유지 → 화면전환 버튼 위치 고정
+      const bar2=root.querySelector('#moBar2'); if(bar2) bar2.style.display=per?'':'none';
+      if(catBar) catBar.style.visibility=(per && mfr!==ALL && catsOf(mfr).length)?'':'hidden'; }
 
     // 상품 검색 — 마우저번호·상품명·제조사번호·자사코드·제조사·카테고리
     const qEl=root.querySelector('#moQ');
@@ -604,13 +617,27 @@
           <div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;font-size:12.5px;margin-bottom:12px">
             신규 <b>${add.length}</b>건 · 기존 갱신 <b>${upd.length}</b>건 — 마우저번호·상품명·가격을 채웁니다.
             <span class="muted">재고·입고예정·자사판매가·마진은 기존처럼 자동으로 채워집니다.</span></div>
-          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;padding:11px 13px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:10px">
-            <label class="fld" style="margin:0;min-width:190px">시트화할 탭 <span class="muted" style="font-weight:500;font-size:11px">· 기존 탭 이름과 같으면 그 탭에 합쳐집니다</span>
-              <input id="imTab" list="imTabs" value="${esc(defTab)}" placeholder="예: STM" style="height:34px">
-              <datalist id="imTabs">${mfrs.map(t=>`<option value="${esc(t)}">`).join('')}</datalist></label>
-            <label class="fld" style="margin:0;width:150px">카테고리
-              <input id="imCat" value="${esc(defCat)}" placeholder="${single?'예: 보드':'파일값 유지'}" style="height:34px" ${single?'':'disabled'}></label>
-            <span class="muted" style="font-size:11.5px;padding-bottom:8px">프로젝트 <b>${esc(proj||'여러 개')}</b> 기준</span>
+          <div style="margin-bottom:12px;padding:12px 14px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:10px">
+            <div style="font-size:12.5px;font-weight:800;margin-bottom:9px">어디에 넣을까요? <span class="muted" style="font-weight:600">· 마우저 프로젝트 <b>${esc(proj||'여러 개')}</b></span></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+              <div style="min-width:210px">
+                <div class="muted" style="font-size:11px;font-weight:800;margin-bottom:4px">탭(시트)</div>
+                <select id="imTabSel" style="width:100%;height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px;font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink)">
+                  ${mfrs.map(t=>`<option value="${esc(t)}" ${t===defTab?'selected':''}>${esc(t)} — 기존 탭에 추가</option>`).join('')}
+                  <option value="__new" ${mfrs.includes(defTab)?'':'selected'}>＋ 새 탭 만들기…</option></select>
+                <input id="imTabNew" value="${esc(mfrs.includes(defTab)?'':defTab)}" placeholder="새 탭 이름 (예: STM)" style="width:100%;height:34px;margin-top:6px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink);display:${mfrs.includes(defTab)?'none':''}">
+              </div>
+              <div style="min-width:190px">
+                <div class="muted" style="font-size:11px;font-weight:800;margin-bottom:4px">카테고리</div>
+                <select id="imCatSel" style="width:100%;height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px;font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink)"></select>
+                <input id="imCatNew" value="${esc(defCat)}" placeholder="새 카테고리 (예: 보드)" style="width:100%;height:34px;margin-top:6px;border:1px solid var(--line-2);border-radius:8px;padding:0 9px;font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink)">
+              </div>
+              <div style="flex:1;min-width:180px">
+                <div class="muted" style="font-size:11px;font-weight:800;margin-bottom:4px">저장 경로</div>
+                <div id="imPath" style="height:34px;display:flex;align-items:center;font-size:13px;font-weight:800;color:#0a3d62;background:var(--panel);border:1px solid var(--line-2);border-radius:8px;padding:0 11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></div>
+                <div id="imPathNote" class="muted" style="font-size:11px;margin-top:5px"></div>
+              </div>
+            </div>
           </div>
           <div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:330px">
             <table class="mo-mgr"><thead><tr><th style="width:150px">마우저 번호</th><th>상품명</th><th style="width:96px">카테고리</th><th style="width:92px;text-align:right">가격</th><th style="width:52px">상태</th></tr></thead>
@@ -625,9 +652,38 @@
       document.body.appendChild(ov);
       const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); };
       ov.querySelector('#imCancel').onclick=close;
+
+      /* 저장 경로(탭 › 카테고리)를 명확히 고르게 — 기존 탭에 합칠지 새 탭을 만들지 선택 */
+      const $i=s=>ov.querySelector(s);
+      const chosenTab=()=>{ const v=$i('#imTabSel').value; return v==='__new' ? ($i('#imTabNew').value||'').trim() : v; };
+      const chosenCat=()=>{ const v=$i('#imCatSel').value; return v==='__new' ? ($i('#imCatNew').value||'').trim() : v; };
+      function syncCatOptions(){
+        const t=chosenTab(); const cats=[...new Set(all.filter(p=>p.mfr===t).map(p=>p.category).filter(Boolean))];
+        const prev=$i('#imCatSel').value;
+        const want = (prev && prev!=='__new' && cats.includes(prev)) ? prev : (cats.includes(defCat)? defCat : '__new');
+        $i('#imCatSel').innerHTML = cats.map(c=>`<option value="${esc(c)}" ${c===want?'selected':''}>${esc(c)} — 기존 카테고리</option>`).join('')
+          + `<option value="__new" ${want==='__new'?'selected':''}>＋ 새 카테고리…</option>`;
+        paintPath();
+      }
+      function paintPath(){
+        const t=chosenTab(), c=chosenCat();
+        const newTab=!mfrs.includes(t), newCat=!all.some(p=>p.mfr===t&&p.category===c);
+        $i('#imTabNew').style.display = $i('#imTabSel').value==='__new' ? '' : 'none';
+        $i('#imCatNew').style.display = $i('#imCatSel').value==='__new' ? '' : 'none';
+        $i('#imPath').textContent = (t||'?') + ' › ' + (c||'?');
+        $i('#imPathNote').innerHTML = (!t||!c) ? '<span style="color:#c0392b">탭과 카테고리를 지정하세요</span>'
+          : `${newTab?'<b>새 탭</b> 생성':'기존 탭에 추가'} · ${newCat?'<b>새 카테고리</b> 생성':'기존 카테고리에 추가'} · ${items.length}건`;
+        const ok=$i('#imOk'); if(ok) ok.disabled=!t||!c;
+      }
+      $i('#imTabSel').onchange=()=>{ $i('#imTabNew').style.display=$i('#imTabSel').value==='__new'?'':'none'; syncCatOptions(); };
+      $i('#imTabNew').oninput=()=>{ syncCatOptions(); };
+      $i('#imCatSel').onchange=paintPath;
+      $i('#imCatNew').oninput=paintPath;
+      syncCatOptions();
+
       ov.querySelector('#imOk').onclick=()=>{
-        const tabName=(ov.querySelector('#imTab').value||'').trim() || defTab;
-        const catIn=ov.querySelector('#imCat'); const catName=(catIn&&!catIn.disabled?catIn.value.trim():'');
+        const tabName=chosenTab(), catName=chosenCat();
+        if(!tabName||!catName){ toast('탭과 카테고리를 지정하세요'); return; }
         items.forEach(i=>{ const cur=all.find(p=>p.mouserNo===i.mouserNo)||{};
           putPart({ mouserNo:i.mouserNo, mfrNo:i.mfrNo||cur.mfrNo||'', mfr:tabName,
             category:catName || i.category || cur.category || '기타', name:i.name||cur.name||'',
