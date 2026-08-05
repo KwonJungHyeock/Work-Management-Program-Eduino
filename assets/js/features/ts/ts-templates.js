@@ -20,8 +20,7 @@
   const actPush = (action, area, detail)=>{ if(window.actLog) window.actLog(action, area, detail); };
 
   /* 라이브러리 한 벌을 컨테이너에 렌더 (CS 템플릿과 동일 UI · 서브탭 본문용) */
-  function renderLibrary(root, iconName, storeKey, defaults, hint, setLabel){
-    const db = store(storeKey);
+  function renderLibrary(root, iconName, db, defaults, hint, setLabel){
     let items = db.get(null);
     // 기본 템플릿은 '메모리'로만 시드 — 저장/팀공유는 사용자가 편집하거나 [저장]을 누를 때만
     //  (빈 브라우저가 열기만 해도 기본값이 팀 공유본을 덮어쓰던 초기화 사고 방지)
@@ -90,10 +89,22 @@
   /* 서브탭: 메일 템플릿 · 채팅 템플릿 */
   // area = 활동 로그에 남는 구분명(CS 템플릿 기록과 섞이지 않도록 '기술상담' 접두)
   const TS_AREAS = ['기술상담 메일 템플릿','기술상담 채팅 템플릿','기술상담 템플릿'];
-  const SUBS = {
-    mail: { icon:'mail', storeKey:STORE.tsMailTpl, defaults:MAIL_DEFAULTS, label:'기술상담 메일 템플릿', hint:'기술상담 메일 회신에 자주 쓰는 양식을 분류별로 저장하고 한 번에 복사합니다.' },
-    chat: { icon:'chat', storeKey:STORE.tsChatTpl, defaults:CHAT_DEFAULTS, label:'기술상담 채팅 템플릿', hint:'게시판·카톡·톡톡 등 채팅 응대에 자주 쓰는 짧은 답변을 저장하고 한 번에 복사합니다.' },
+  const BUILTIN = {
+    mail: { icon:'mail', storeKey:STORE.tsMailTpl, defaults:MAIL_DEFAULTS, label:'메일 템플릿', hint:'기술상담 메일 회신에 자주 쓰는 양식을 분류별로 저장하고 한 번에 복사합니다.' },
+    chat: { icon:'chat', storeKey:STORE.tsChatTpl, defaults:CHAT_DEFAULTS, label:'채팅 템플릿', hint:'게시판·카톡·톡톡 등 채팅 응대에 자주 쓰는 짧은 답변을 저장하고 한 번에 복사합니다.' },
   };
+  const DEFAULT_TABS = [{key:'mail',label:'메일 템플릿'},{key:'chat',label:'채팅 템플릿'}];
+  /* 탭 구성(작업자가 추가·삭제·이름변경) — 팀 공유 설정에 저장 */
+  const getTabs = ()=>{ const t=store(STORE.tsTplTabs).get(null); return (Array.isArray(t)&&t.length)? t : DEFAULT_TABS.slice(); };
+  const setTabs = v=> store(STORE.tsTplTabs).set(v);
+  const tabKeyOf = label=> 'c_'+String(label||'').trim().replace(/\s+/g,'_').toLowerCase();
+  function dbOf(key){
+    if(BUILTIN[key]) return store(BUILTIN[key].storeKey);
+    return { get(def){ const m=store(STORE.tsTplData).get({})||{}; return m[key]!=null? m[key] : def; },
+             set(v){ const m=store(STORE.tsTplData).get({})||{}; m[key]=v; store(STORE.tsTplData).set(m); } };
+  }
+  const metaOf = t=> BUILTIN[t.key] ? BUILTIN[t.key]
+    : { icon:'chat', defaults:[], label:t.label, hint:`‘${t.label}’ 응대에 자주 쓰는 문구를 저장하고 한 번에 복사합니다.` };
   MODULES['md.tstpl'] = {
     title:'기술상담 템플릿', icon:'chat',
     render(root){
@@ -103,12 +114,9 @@
           <div class="tt">기술상담 템플릿</div>
           <div class="ds">기술상담(TS) 응대에 자주 쓰는 <b>메일</b>·<b>채팅</b> 답변 양식을 저장하고 재사용합니다. (MD 팀 공유)</div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">
-            <div class="mtabs" style="margin:0">
-              <div class="t" data-t="mail">메일 템플릿</div>
-              <div class="t" data-t="chat">채팅 템플릿</div>
-              <div class="t" data-t="activity">활동 로그</div>
-            </div>
+            <div class="mtabs" style="margin:0" id="tplTabs"></div>
             <span style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn sm" id="tplTabMgr" title="탭 추가·이름변경·삭제">${icon('grid')}탭 관리</button>
               <button class="btn sm" id="tplExport" title="현재 팀 템플릿을 내 PC에 백업 파일(.json)로 저장">${icon('download')}내보내기</button>
               <button class="btn sm" id="tplImport" title="백업 파일(.json)에서 템플릿 복원">${icon('upload')}복원</button>
             </span>
@@ -116,29 +124,89 @@
         </div>
         <input type="file" id="tplFile" accept="application/json,.json" style="display:none">
         <div class="mbody" id="tplBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
-      const body=root.querySelector('#tplBody');
-      root.querySelectorAll('.mtabs .t').forEach(t=>{ t.classList.toggle('on',t.dataset.t===tab);
-        t.onclick=()=>{ tab=t.dataset.t; root.querySelectorAll('.mtabs .t').forEach(x=>x.classList.toggle('on',x.dataset.t===tab)); draw(); }; });
+      const body=root.querySelector('#tplBody'), tabBar=root.querySelector('#tplTabs');
+      const areaOf = label => '기술상담 '+label;   // 활동 로그 구분명(CS와 구분)
+      function renderTabs(){
+        const list=getTabs();
+        if(!list.some(t=>t.key===tab) && tab!=='activity') tab=(list[0]||{}).key||'activity';
+        tabBar.innerHTML=list.map(t=>`<div class="t${t.key===tab?' on':''}" data-t="${esc(t.key)}">${esc(t.label)}</div>`).join('')
+          +`<div class="t${tab==='activity'?' on':''}" data-t="activity">활동 로그</div>`;
+        tabBar.querySelectorAll('.t').forEach(t=>t.onclick=()=>{ tab=t.dataset.t; renderTabs(); draw(); });
+      }
       function draw(){ body.innerHTML=''; const c=el('div'); body.appendChild(c);
         if(tab==='activity'){ renderActivity(c); return; }
-        const s=SUBS[tab]; renderLibrary(c, s.icon, s.storeKey, s.defaults, s.hint, s.label); }
+        const t=getTabs().find(x=>x.key===tab); if(!t){ c.innerHTML='<div class="muted" style="padding:18px">탭이 없습니다. [탭 관리]에서 추가하세요.</div>'; return; }
+        const m=metaOf(t); renderLibrary(c, m.icon, dbOf(t.key), m.defaults, m.hint, areaOf(t.label)); }
+
+      /* ── 탭 관리 — 작업자가 직접 추가·이름변경·삭제 ── */
+      function openTabMgr(){
+        const draft=getTabs().slice();
+        const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+        function paint(){
+          ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:520px;width:97%;max-height:calc(100vh - 60px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)">
+            <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
+              <div style="font-size:16px;font-weight:800">${icon('grid')||''} 템플릿 탭 관리</div>
+              <div class="muted" style="font-size:12.5px;margin-top:3px">필요한 탭만 남기고 자유롭게 구성하세요. (예: 카카오 · 네이버톡톡)</div></div>
+            <div style="padding:12px 20px;overflow:auto;flex:1">
+              <div style="display:flex;flex-direction:column;gap:7px">
+                ${draft.map((t,i)=>`<div style="display:flex;gap:7px;align-items:center">
+                  <input data-i="${i}" value="${esc(t.label)}" style="flex:1;height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font:inherit;font-size:13px;background:var(--panel);color:var(--ink)">
+                  <button class="btn ghost sm" data-up="${i}" ${i===0?'disabled':''} title="위로">▲</button>
+                  <button class="btn ghost sm" data-dn="${i}" ${i===draft.length-1?'disabled':''} title="아래로">▼</button>
+                  <button class="btn ghost sm" data-del="${i}" title="이 탭 삭제">✕</button></div>`).join('')
+                 || '<div class="muted" style="font-size:13px;padding:8px 0">탭이 없습니다. 아래에서 추가하세요.</div>'}
+              </div>
+              <div style="display:flex;gap:7px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line-2)">
+                <input id="tmNew" placeholder="새 탭 이름 (예: 카카오)" style="flex:1;height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font:inherit;font-size:13px;background:var(--panel);color:var(--ink)">
+                <button class="btn sm" id="tmAdd">＋ 추가</button></div>
+              <div class="muted" style="font-size:11.5px;margin-top:10px">※ 탭을 지워도 그 안의 템플릿은 보관됩니다. 같은 이름으로 다시 추가하면 되살아납니다.</div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)">
+              <button class="btn ghost" id="tmCancel">취소</button><button class="btn pri" id="tmSave">${icon('save')||''}저장</button></div></div>`;
+          ov.querySelectorAll('[data-i]').forEach(inp=>inp.onchange=()=>{ draft[+inp.dataset.i].label=inp.value.trim()||draft[+inp.dataset.i].label; });
+          ov.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ draft.splice(+b.dataset.del,1); paint(); });
+          ov.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.up; [draft[i-1],draft[i]]=[draft[i],draft[i-1]]; paint(); });
+          ov.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.dn; [draft[i+1],draft[i]]=[draft[i],draft[i+1]]; paint(); });
+          ov.querySelector('#tmAdd').onclick=()=>{ const e2=ov.querySelector('#tmNew'); const nm=(e2.value||'').trim();
+            if(!nm){ toast('탭 이름을 입력하세요'); e2.focus(); return; }
+            const key=tabKeyOf(nm);
+            if(draft.some(t=>t.key===key||t.label===nm)){ toast('이미 있는 탭입니다'); return; }
+            draft.push({key,label:nm}); paint(); };
+          ov.querySelector('#tmCancel').onclick=()=>ov.remove();
+          ov.querySelector('#tmSave').onclick=()=>{
+            if(!draft.length){ toast('탭이 최소 1개는 있어야 합니다'); return; }
+            const before=getTabs().map(t=>t.label).join(','), after=draft.map(t=>t.label).join(',');
+            setTabs(draft);
+            if(window.SyncStore && SyncStore.configured()) SyncStore.pushSettings().catch(()=>{});
+            if(before!==after) actPush('수정', TS_AREAS[2], `탭 구성: ${after}`);
+            ov.remove(); renderTabs(); draw(); toast('탭 구성을 저장했습니다 · 팀에 공유됨');
+          };
+        }
+        document.body.appendChild(ov); ov.onclick=e=>{ if(e.target===ov) ov.remove(); }; paint();
+      }
+      root.querySelector('#tplTabMgr').onclick=openTabMgr;
 
       // ── 로컬 PC 백업(내보내기) / 복원(불러오기) — 유실 대비 장치 ──
       function doExport(){ const me=(Auth.user&&Auth.user())||{};
         const data={ _type:'eduino.ts.templates.backup', exportedAt:new Date().toISOString(), by:me.name||me.loginId||'',
-          mail:store(STORE.tsMailTpl).get(SUBS.mail.defaults), chat:store(STORE.tsChatTpl).get(SUBS.chat.defaults) };
+          tabs:getTabs(), sets:{}, custom:store(STORE.tsTplData).get({})||{},
+          mail:store(STORE.tsMailTpl).get(BUILTIN.mail.defaults), chat:store(STORE.tsChatTpl).get(BUILTIN.chat.defaults) };
+        getTabs().forEach(t=>{ data.sets[t.key]=dbOf(t.key).get(metaOf(t).defaults||[]); });
         try{ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a');
           a.href=URL.createObjectURL(blob); a.download=`에듀이노_기술상담템플릿_백업_${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
           toast('백업 파일을 내려받았습니다'); }catch(e){ toast('내보내기 실패'); } }
       function doImport(file){ const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
-        const n=['mail','chat'].filter(k=>Array.isArray(d[k])).length;
+        const n=['mail','chat'].filter(k=>Array.isArray(d[k])).length + (d.sets&&typeof d.sets==='object'?Object.keys(d.sets).length:0);
         if(!n){ toast('기술상담 템플릿 백업 파일이 아닙니다'); return; }
         if(!confirm(`백업을 복원하면 현재 팀 템플릿을 덮어씁니다.\n내보낸 시각: ${d.exportedAt?new Date(d.exportedAt).toLocaleString('ko-KR'):'-'}${d.by?' · '+d.by:''}\n\n복원할까요?`)) return;
         if(Array.isArray(d.mail)) store(STORE.tsMailTpl).set(d.mail);
         if(Array.isArray(d.chat)) store(STORE.tsChatTpl).set(d.chat);
+        if(d.custom && typeof d.custom==='object') store(STORE.tsTplData).set(d.custom);
+        if(d.sets && typeof d.sets==='object') Object.keys(d.sets).forEach(k=>{ if(Array.isArray(d.sets[k])) dbOf(k).set(d.sets[k]); });
+        if(Array.isArray(d.tabs) && d.tabs.length) setTabs(d.tabs);
         if(window.SyncStore && SyncStore.configured()) SyncStore.pushSettings().catch(()=>{});
         actPush('복원', TS_AREAS[2], `백업 파일 복원 (${n}종)`);
-        toast('복원했습니다 · 팀에 공유됨'); draw();
+        toast('복원했습니다 · 팀에 공유됨'); renderTabs(); draw();
       }catch(e){ toast('복원 실패 — 파일 형식을 확인하세요'); } }; rd.readAsText(file,'utf-8'); }
       const fileEl=root.querySelector('#tplFile');
       root.querySelector('#tplExport').onclick=doExport;
@@ -154,7 +222,7 @@
         const AC={ '생성':'var(--ok)','수정':'#1a6dd6','삭제':'var(--danger)','복원':'#7c4dd6' };
         const fmt=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch{ return iso||''; } };
         async function load(){ let items=[]; try{ const r=await fetch('/api/store?type=coll&coll=activity'); const d=await r.json(); items=(d&&d.items)||[]; }catch(e){}
-          items=items.filter(x=>x&&x.at&&TS_AREAS.indexOf(String(x.area||''))>=0)
+          items=items.filter(x=>x&&x.at&&/^기술상담/.test(String(x.area||'')))
             .sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,300);
           const t=host.querySelector('#actT'); if(!t) return;
           t.innerHTML=`<thead><tr><th style="width:118px">시각</th><th style="width:66px">작업</th><th>구분 / 대상</th><th style="width:104px">실행자</th></tr></thead><tbody>${
@@ -168,7 +236,7 @@
       }
 
       // 최신 팀 템플릿을 먼저 받아온 뒤 렌더 — 로컬이 비어 있어도 서버본으로 채워지므로 기본값이 공유본을 덮지 않음
-      (async()=>{ if(window.SyncStore && SyncStore.configured()){ try{ await SyncStore.pullSettings(); }catch(e){} } if(root.isConnected) draw(); })();
+      (async()=>{ if(window.SyncStore && SyncStore.configured()){ try{ await SyncStore.pullSettings(); }catch(e){} } if(root.isConnected){ renderTabs(); draw(); } })();
     }
   };
 })();

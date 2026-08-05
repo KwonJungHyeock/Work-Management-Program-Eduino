@@ -235,6 +235,10 @@ const STORE = {
   mdProducts:'eduino.md.products', // 상품 마스터
   mdVendors:'eduino.md.vendors',   // 입점사 배송비
   mdOrderCfg:'eduino.md.order.cfg', // 발주 구글시트 연동 설정
+  csTplTabs:'eduino.cs.tpltabs',      // CS 템플릿 탭 목록(작업자가 추가/삭제) — 팀 공유
+  csTplData:'eduino.cs.tpldata',      // CS 사용자 추가 탭의 템플릿 데이터 { 탭키:[…] }
+  tsTplTabs:'eduino.ts.tpltabs',      // 기술상담 템플릿 탭 목록 — 팀 공유
+  tsTplData:'eduino.ts.tpldata',      // 기술상담 사용자 추가 탭의 템플릿 데이터
   csTpl:    'eduino.cs.templates',
   csMailTpl:'eduino.cs.mailtpl',      // 메일 템플릿(고객 메일용)
   csSmsTpl: 'eduino.cs.smstpl',       // 문자 템플릿(고객 SMS용)
@@ -293,10 +297,10 @@ const SHARE_SCOPES = [
 const SHARE_DEFAULT = {
   [STORE.platforms]:'md', [STORE.mdPresets]:'md', [STORE.mdProducts]:'md',
   [STORE.mdVendors]:'md', [STORE.mdOrderCfg]:'md', [STORE.catMap]:'all',
-  [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csSmsTpl]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
+  [STORE.csTpl]:'cs', [STORE.csMailTpl]:'cs', [STORE.csSmsTpl]:'cs', [STORE.csTplTabs]:'cs', [STORE.csTplData]:'cs', [STORE.csNoteCfg]:'cs', [STORE.csAgents]:'cs',
   [STORE.csTypes]:'cs', [STORE.csSumTpl]:'cs',
   [STORE.tsNoteCfg]:'md', [STORE.tsAgents]:'md', [STORE.tsTypes]:'md', [STORE.tsSumTpl]:'md',
-  [STORE.tsMailTpl]:'md', [STORE.tsChatTpl]:'md',
+  [STORE.tsMailTpl]:'md', [STORE.tsChatTpl]:'md', [STORE.tsTplTabs]:'md', [STORE.tsTplData]:'md',
   'eduino.board.exchange.cfg':'cs', 'eduino.board.postpay.cfg':'cs',
   'eduino.board.vendorchg.cfg':'md', 'eduino.board.stockmgmt.cfg':'md', 'eduino.board.inspect.cfg':'md', 'eduino.board.prodmgmt.cfg':'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
@@ -328,7 +332,7 @@ function myShareScopes(){
 /* 공용(구글) 동기화 대상 = 팀 공통 설정만 (기기/세션/상담·발주 거래데이터 제외) */
 const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
-  STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csSmsTpl, STORE.csNoteCfg, STORE.csAgents,
+  STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csSmsTpl, STORE.csTplTabs, STORE.csTplData, STORE.tsTplTabs, STORE.tsTplData, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl, STORE.tsMailTpl, STORE.tsChatTpl,
   STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed', 'eduino.ntrex.reviewed',
   'eduino.manual.cs', 'eduino.manual.md', 'eduino.manual.logi',
@@ -343,6 +347,10 @@ const SHARED_LABELS = {
   [STORE.mdProducts]:'상품 마스터',
   [STORE.mdVendors]:'입점사 정보(배송비·정책)',
   [STORE.mdOrderCfg]:'발주 시트 연동 URL',
+  [STORE.csTplTabs]:'CS 템플릿 탭 구성',
+  [STORE.csTplData]:'CS 추가 탭 템플릿',
+  [STORE.tsTplTabs]:'기술상담 템플릿 탭 구성',
+  [STORE.tsTplData]:'기술상담 추가 탭 템플릿',
   [STORE.csTpl]:'CS 답변 템플릿',
   [STORE.csMailTpl]:'CS 메일 템플릿',
   [STORE.csSmsTpl]:'CS 문자 템플릿',
