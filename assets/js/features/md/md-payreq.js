@@ -18,6 +18,30 @@
   async function collGetAll(){ try{ const r=await fetch('/api/store?type=coll&coll='+COLL); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
   async function collPush(item){ try{ return await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:COLL,item})}).then(r=>r.json()); }catch(e){ return null; } }
   const won=n=>Number(n||0).toLocaleString();
+
+  /* ── 입점사 계좌 연동 ─────────────────────────────────────────────────────
+     결제요청 레코드의 account 는 '발주 시점 값'이라, 나중에 입점사 계좌를 등록해도
+     기존 건은 빈칸으로 남는다. → 화면에 그릴 때 비어 있으면 입점사 정보 DB에서
+     업체명으로 다시 찾아 채운다(저장값 우선 · 조회는 폴백).                        */
+  function venAll(){
+    try{
+      const ov = (typeof STORE!=='undefined' && STORE.mdVendors) ? store(STORE.mdVendors).get(null) : null;
+      if(Array.isArray(ov) && ov.length) return ov;
+      return (typeof DEFAULT_MD_VENDORS!=='undefined' && Array.isArray(DEFAULT_MD_VENDORS)) ? DEFAULT_MD_VENDORS : [];
+    }catch(e){ return []; }
+  }
+  /* 업체명 → 입점사 정보 항목 (정확일치 우선 → 회사명 정규화 매칭) */
+  function venFind(name, list){
+    const n=String(name||'').trim(); if(!n) return null;
+    const L=Array.isArray(list)?list:venAll();
+    const exact=L.find(v=>v && String(v.name||'').trim()===n); if(exact) return exact;
+    if(typeof normCoName!=='function') return null;
+    const k=normCoName(n); if(!k) return null;
+    return L.find(v=>v && normCoName(v.name)===k) || null;
+  }
+  const venAcct = (name, list)=>{ const v=venFind(name, list); return (v && v.account) ? String(v.account) : ''; };
+  /* 표시용 계좌 — 레코드에 저장된 값이 있으면 그대로, 없으면 입점사 정보에서 조회 */
+  const acctOf = r=>{ const a=(r && r.account!=null) ? String(r.account).trim() : ''; return a || venAcct(r && r.vendor); };
   const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
   const ym=d=>String(d||'').slice(0,7);
   const KIND=['택배운임','환불','기타'];
@@ -87,7 +111,10 @@
           <td class="wrap">${esc(r.content||'')}${(Number(r.ship)||0)>0?`<div class="muted" style="font-size:11px;margin-top:2px">상품 ${won(Number(r.prodAmount)||parseAmt(r.amount)-(Number(r.ship)||0))} + 배송비 ${won(Number(r.ship)||0)}</div>`:''}</td>
           <td class="num">${(r.qty!=null&&r.qty!=='')?esc(r.qty):''}</td>
           <td class="num">${won(parseAmt(r.amount))}원</td>
-          <td class="wrap" style="min-width:170px;font-size:12.5px">${esc(r.account||'')}</td>
+          <td class="wrap" style="min-width:170px;font-size:12.5px">${(()=>{ const saved=(r.account||'').trim(), shown=acctOf(r);
+            if(!shown) return '';
+            return saved ? esc(shown)
+              : `<span title="입점사 정보에서 자동 연동된 계좌입니다">${esc(shown)} <span class="muted" style="font-size:10.5px;font-weight:700">연동</span></span>`; })()}</td>
           ${editable?`<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
             <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
             <button class="btn ghost sm" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button></span></td>`:''}
@@ -102,7 +129,7 @@
           <td><input class="pq-in" data-k="content" value="${esc(r.content||'')}" style="min-width:150px"></td>
           <td><input class="pq-in" data-k="qty" value="${esc(r.qty!=null?r.qty:'')}" style="width:56px;text-align:right"></td>
           <td><input class="pq-in" data-k="amount" value="${esc(r.amount||'')}" style="width:100px;text-align:right"></td>
-          <td><input class="pq-in" data-k="account" value="${esc(r.account||'')}" style="min-width:150px"></td>
+          <td><input class="pq-in" data-k="account" value="${esc(acctOf(r))}" style="min-width:150px" title="비어 있으면 입점사 정보의 계좌가 자동으로 채워집니다"></td>
           <td style="white-space:nowrap"><span style="display:flex;gap:4px"><button class="btn pri sm" data-a="save" data-id="${esc(r.id)}">${icon('check')}</button><button class="btn ghost sm" data-a="cancel">취소</button></span></td>
         </tr>`;
       }
@@ -159,9 +186,9 @@
         const names=[]; const seen=new Set();
         all.forEach(r=>{ const n=String(r.vendor||'').trim(); if(n&&!seen.has(n)){ seen.add(n); names.push(n); } });
         if(!names.length){ toast('현재 결제요청에 업체가 없습니다'); return; }
-        const rowFor=n=>{ const v=byName[n]||{}; const ship=(v.ship!=null&&v.ship!=='')?v.ship:'';
+        const rowFor=n=>{ const v=byName[n]||venFind(n,list)||{}; const ship=(v.ship!=null&&v.ship!=='')?v.ship:'';
           const acct=(v.account!=null&&v.account!=='')?v.account : ((all.find(r=>String(r.vendor||'').trim()===n && r.account)||{}).account||'');
-          const inDb=!!byName[n];
+          const inDb=!!(byName[n]||venFind(n,list));
           return `<tr><td style="font-weight:600;white-space:nowrap">${esc(n)}${inDb?'':' <span class="muted" style="font-size:10.5px;font-weight:600">신규</span>'}</td>
             <td><input class="pq-in" data-vn="${esc(n)}" data-vk="ship" value="${esc(ship)}" inputmode="numeric" style="width:100px;text-align:right" placeholder="배송비"></td>
             <td><input class="pq-in" data-vn="${esc(n)}" data-vk="account" value="${esc(acct)}" style="min-width:240px" placeholder="은행 / 계좌번호 / 예금주"></td></tr>`; };
@@ -187,7 +214,8 @@
           const edits={}; ov.querySelectorAll('[data-vn]').forEach(inp=>{ const n=inp.dataset.vn; (edits[n]=edits[n]||{})[inp.dataset.vk]=inp.value; });
           const next=list.slice();
           Object.keys(edits).forEach(n=>{ const e=edits[n]; const ship=parseAmt(e.ship); const account=(e.account||'').trim();
-            let v=next.find(x=>String(x.name||'').trim()===n);
+            // 정확일치 → 회사명 정규화 매칭 순으로 찾아 갱신 (없을 때만 신규 추가 → 같은 업체 중복 생성 방지)
+            let v=next.find(x=>String(x.name||'').trim()===n) || venFind(n, next);
             if(v){ v.ship=ship; v.account=account; }
             else next.push({ name:n, settle:'', ship, policy:'', manager:'', contact:'', email:'', account, note:'' }); });
           if(vs) vs.set(next);
@@ -212,7 +240,7 @@
           if(cur && cur.status==='paid'){ apDoc=cur; if(msg) msg.textContent=''; toast('이미 대표 결제완료된 건입니다 — 재상신할 수 없습니다'); paint(); return; }
           const total=all.reduce((s,r)=>s+parseAmt(r.amount),0);
           const doc={ id:payDocId(date), type:'payreq', dept:'md', date, status:'submitted',
-            items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,qty:r.qty,amount:parseAmt(r.amount),account:r.account})),
+            items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,qty:r.qty,amount:parseAmt(r.amount),account:acctOf(r)})),
             count:all.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
           const r=await collPush(doc); if(r) apDoc=doc;   // 저장 성공 시에만 상태 반영(실패 시 이전 상태 유지)
           if(msg) msg.textContent=''; toast(r?'결제 상신 완료 — 대표 결재함으로 전송됐습니다':'상신 실패 — 서버 확인'); paint(); };

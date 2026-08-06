@@ -92,6 +92,18 @@
   const meU = ()=> (Auth.user&&Auth.user())||{};
   const canEdit = ()=> !!(Auth.isAdmin&&Auth.isAdmin()) || meU().dept==='md' || meU().role==='lead';
   const prodUrl = no => `https://www.mouser.kr/ProductDetail/${encodeURIComponent(no)}`;
+  /* 결제요청에 넣을 계좌 — 입점사 정보에 해당 업체(마우저)가 등록돼 있으면 자동 연동 */
+  function venAcctOf(name){
+    try{
+      const ov=(typeof STORE!=='undefined'&&STORE.mdVendors)?store(STORE.mdVendors).get(null):null;
+      const list=(Array.isArray(ov)&&ov.length)?ov:((typeof DEFAULT_MD_VENDORS!=='undefined'&&DEFAULT_MD_VENDORS)||[]);
+      const n=String(name||'').trim(); if(!n) return '';
+      const ex=list.find(v=>v&&String(v.name||'').trim()===n); if(ex&&ex.account) return String(ex.account);
+      if(typeof normCoName!=='function') return '';
+      const k=normCoName(n); const m=k?list.find(v=>v&&normCoName(v.name)===k):null;
+      return (m&&m.account)?String(m.account):'';
+    }catch(e){ return ''; }
+  }
 
   function drawMouser(root){
     let all=PARTS();
@@ -466,7 +478,7 @@
       // 1) 프로그램 결제요청 리스트에 추가
       const rec={ id:uuid(), day:today, date:today, kind:'발주', orderer:'', vendor:'Mouser',
         content:`[${p.mouserNo}${ed?' · '+ed:''}] ${p.name||''}`,
-        qty:String(qty), amount:unit*qty, account:'', prodAmount:unit*qty, ship:0,
+        qty:String(qty), amount:unit*qty, account:venAcctOf('Mouser'), prodAmount:unit*qty, ship:0,
         whoName:me.name||'', who:me.loginId||me.name||'', createdAt:nowISO(), source:'mouser', mouserNo:no };
       if(window.Records) Records.pushRaw('md','payreq',rec);
       // 2) 마우저 장바구니에 담기(Cart API) — 미설정/실패 시 상품페이지 열기로 대체

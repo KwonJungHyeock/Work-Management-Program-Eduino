@@ -88,6 +88,17 @@ function store(key){ return {
   set(v){ localStorage.setItem(key,JSON.stringify(v)); },
   del(){ localStorage.removeItem(key); },
 };}
+/* 회사명 정규화 — 괄호주석·㈜·(주)·주식회사·공백 제거 후 비교용 키 생성
+   (예: '(주)마르시스에듀' 와 '마르시스에듀(사이트)' 를 같은 업체로 인식)
+   ※ md-order.js 의 발주 매칭(normCo)과 동일 규칙 — 입점사 계좌·배송비 조회에 공용 사용 */
+function normCoName(s){
+  return String(s||'')
+    .replace(/[(（[][^)）\]]*[)）\]]/g,'')                 // (사이트)·(주)·(카톡 검색) 등 괄호 주석 제거
+    .replace(/㈜|주식회사|유한회사|재단법인/g,'')
+    .replace(/\s/g,'').toLowerCase();
+}
+if(typeof window!=='undefined') window.normCoName=normCoName;
+
 /* 활동 로그 — 누가·언제 무엇을 생성/수정/삭제/복원했는지 팀 공유 컬렉션 'activity'에 남김
    (데이터 유실·오삭제 추적용 · 화면마다 window.actLog(작업, 구분, 대상) 한 줄로 호출) */
 function actLog(action, area, detail){
