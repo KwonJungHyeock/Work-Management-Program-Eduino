@@ -59,6 +59,8 @@
       const full={ id, cat:rec.cat||'', type:rec.type||'', typeLabel:rec.typeLabel||'', title:rec.title||'',
         detail:rec.detail||'', refKey:rec.refKey||'', refTab:rec.refTab||'', refId:rec.refId||'', refLabel:rec.refLabel||'',
         targetKey:rec.targetKey||'', targetName:rec.targetName||'', permMode:rec.permMode||'',
+        // 처리 담당자 지정(선택) — 비우면 기존처럼 부서장 → 관리자 순으로 전달
+        toId:rec.toId||'', toName:rec.toName||'', toRole:rec.toRole||'',
         fromId:rec.fromId||'', fromName:rec.fromName||'', fromDept:rec.fromDept||'',
         status:'sent', createdAt:nowISO(), resolution:'', resolvedBy:'', resolvedName:'', resolvedAt:'',
         timeline:[{ at:nowISO(), by:rec.fromId||'', byName:rec.fromName||'', act:'sent', note:'' }] };
@@ -76,10 +78,15 @@
     async remove(id){ return rDel(id); },
     // 내가 보낸 요청
     fromMe(list, me){ const id=me.loginId, nm=me.name; return (list||[]).filter(a=>a.fromId===id || (nm&&a.fromName===nm)); },
-    // 내가 처리해야 하는 요청 — 관리자=전체 · 부서장(lead/manager)=자기 부서 요청
+    /* 내가 처리해야 하는 요청
+       · 담당자를 지정한 요청(toId) → 지정된 사람에게만 (관리자는 전체 감독을 위해 계속 열람)
+       · 지정하지 않은 요청 → 기존과 동일하게 부서장(자기 부서) → 관리자 */
     inbox(list, me){ if(!Req.isHandler(me)) return [];
       if(me.role==='admin') return (list||[]).slice();
-      return (list||[]).filter(a=> a.fromDept && a.fromDept===me.dept); },
+      return (list||[]).filter(a=> a.toId ? a.toId===me.loginId
+        : (a.fromDept && a.fromDept===me.dept)); },
+    /* 나에게 '지정'된 요청인지 — 처리함에서 강조 표시용 */
+    isAssignedTo(rec, me){ return !!(rec && rec.toId && me && rec.toId===me.loginId); },
   };
   if(typeof window!=='undefined') window.Req=Req;
 })();

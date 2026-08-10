@@ -12,6 +12,20 @@
   const stBadge=st=>{ const m={sent:['#b4530a','#fff4e6'],doing:['#0a63c2','#e8f1fc'],done:['#12886a','#e6f7f0'],rejected:['#8a8f98','#eef0f3']};
     const c=m[st]||m.sent; return `<span style="font-size:11px;font-weight:800;border-radius:7px;padding:2px 9px;color:${c[0]};background:${c[1]}">${esc(Req.STATUS[st]||st)}</span>`; };
   // NAV 기반 페이지 목록(권한 요청 대상 선택용)
+  /* 처리 담당자 후보 — 관리자(대표)·팀장·파트장 계정. 한 번 받아 캐시 */
+  const ROLE_LABEL={ admin:'대표/관리자', manager:'팀장', lead:'파트장' };
+  let _handlers=null;
+  async function handlerList(){
+    if(_handlers) return _handlers;
+    try{
+      const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'roster'})});
+      const d=await r.json(); const list=(d&&d.roster)||[];
+      const rank={admin:0,manager:1,lead:2};
+      _handlers=list.filter(u=>u&&ROLE_LABEL[u.role])
+        .sort((a,b)=>(rank[a.role]-rank[b.role])||String(a.name||'').localeCompare(String(b.name||'')));
+    }catch(e){ _handlers=[]; }
+    return _handlers;
+  }
   function featureList(){ const out=[]; (typeof NAV!=='undefined'?NAV:[]).forEach(g=>{ if(g.dept==='home'||g.dept==='admin') return;
     (g.items||[]).forEach(it=> out.push({ key:it.key, name:`[${g.name}] ${it.name}` })); }); return out; }
 
@@ -27,7 +41,7 @@
   /* ---------------- 요청 작성 모달 ---------------- */
   window.openReqComposer=function(prefill){
     prefill=prefill||{}; const me=meU();
-    let cat=prefill.cat||'', type=prefill.type||'';
+    let cat=prefill.cat||'', type=prefill.type||'', toId=prefill.toId||'', handlers=[];
     const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
     function typeList(){ const c=Req.catOf(cat); return c?c.types:[]; }
     function render(){
@@ -36,8 +50,12 @@
       ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:560px;width:97%;max-height:calc(100vh - 48px);overflow:auto;box-shadow:var(--sh-lg)">
         <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
           <div style="font-size:16px;font-weight:800">${icon('stamp')||''} 요청 보내기</div>
-          <div class="muted" style="font-size:12.5px;margin-top:3px">부서장(없으면 관리자)에게 전달됩니다. 처리 결과는 <b>요청하기 › 내 요청</b>에서 확인돼요.</div></div>
+          <div class="muted" style="font-size:12.5px;margin-top:3px">담당자를 지정하면 그 분에게만 전달됩니다. 처리 결과는 <b>요청하기 › 내 요청</b>에서 확인돼요.</div></div>
         <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+          <label class="fld">처리 담당자
+            <select id="rqTo"><option value="">자동 지정 — 우리 부서장 → 관리자</option>${
+              handlers.map(h=>`<option value="${esc(h.loginId)}" ${h.loginId===toId?'selected':''}>${esc(h.name)} · ${esc(ROLE_LABEL[h.role]||h.role)}${h.dept?' ('+esc(h.dept)+')':''}</option>`).join('')}</select>
+            <span class="muted" style="font-size:11.5px">${handlers.length?'결제·조치 담당자를 직접 고를 수 있습니다.':'담당자 목록을 불러오는 중…'}</span></label>
           <label class="fld">유형 분류
             <select id="rqCat"><option value="">— 분류 선택 —</option>${Req.CATS.map(x=>`<option value="${esc(x.key)}" ${x.key===cat?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>
           ${cat?`<label class="fld">세부 유형
@@ -53,6 +71,7 @@
           <button class="btn ghost" id="rqCancel">취소</button><button class="btn pri" id="rqSend">${icon('send')||''} 요청 보내기</button></div>
       </div>`;
       const $=s=>ov.querySelector(s);
+      const tosel=$('#rqTo'); if(tosel) tosel.onchange=e=>{ toId=e.target.value; };
       $('#rqCat').onchange=e=>{ cat=e.target.value; type=''; render(); };
       const tsel=$('#rqType'); if(tsel) tsel.onchange=e=>{ type=e.target.value; render(); };
       $('#rqCancel').onclick=close;
@@ -68,15 +87,25 @@
       if(c&&c.needTarget){ const ts=$('#rqTarget'); targetKey=ts?ts.value:''; targetName=ts&&ts.selectedOptions[0]?(ts.selectedOptions[0].dataset.nm||''):'';
         if(!targetKey){ toast('대상 페이지를 선택하세요'); return; } }
       const btn=$('#rqSend'); btn.disabled=true; btn.textContent='보내는 중…';
+      const to=toId?handlers.find(h=>h.loginId===toId):null;
       const rec={ cat, type, typeLabel:t?t.label:'', title, detail,
         refKey:prefill.refKey||(t?t.ref:'')||'', refTab:prefill.refTab||(t?t.tab:'')||'', refId:prefill.refId||'', refLabel:prefill.refLabel||'',
         targetKey, targetName, permMode:t?t.permMode:'',
+        toId:to?to.loginId:'', toName:to?to.name:'', toRole:to?to.role:'',
         fromId:me.loginId||'', fromName:me.name||me.loginId||'', fromDept:me.dept||'' };
       const saved=await Req.create(rec);
-      if(saved){ toast('요청을 보냈습니다 — 부서장/관리자에게 전달됨'); try{ window.dispatchEvent(new CustomEvent('req:changed')); }catch(e){} if(window.refreshNavBadges) window.refreshNavBadges(); close(); }
+      if(saved){ toast(to?`요청을 보냈습니다 — ${to.name}님에게 전달됨`:'요청을 보냈습니다 — 부서장/관리자에게 전달됨'); try{ window.dispatchEvent(new CustomEvent('req:changed')); }catch(e){} if(window.refreshNavBadges) window.refreshNavBadges(); close(); }
       else { toast('전송 실패 — 잠시 후 다시 시도하세요'); btn.disabled=false; btn.textContent='요청 보내기'; }
     }
     document.body.appendChild(ov); ov.onclick=e=>{ if(e.target===ov) close(); }; render();
+    // 담당자 목록은 비동기로 받아 셀렉트만 다시 그림(입력 중인 값은 유지)
+    handlerList().then(list=>{ if(!ov.isConnected) return; handlers=list||[];
+      const sel=ov.querySelector('#rqTo'); if(!sel) return;
+      sel.innerHTML=`<option value="">자동 지정 — 우리 부서장 → 관리자</option>`+
+        handlers.map(h=>`<option value="${esc(h.loginId)}" ${h.loginId===toId?'selected':''}>${esc(h.name)} · ${esc(ROLE_LABEL[h.role]||h.role)}${h.dept?' ('+esc(h.dept)+')':''}</option>`).join('');
+      const hint=sel.parentElement&&sel.parentElement.querySelector('.muted');
+      if(hint) hint.textContent = handlers.length?'결제·조치 담당자를 직접 고를 수 있습니다.':'지정 가능한 담당자가 없습니다 — 자동 전달됩니다.';
+    });
   };
 
   /* ---------------- 요청 페이지 ---------------- */
@@ -156,7 +185,7 @@
       function cardMine(r){
         return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}">
           <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} <span class="rq-ti">${esc(r.title)}</span></div>
-          <div class="rq-meta">${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''} · 보냄 ${esc(fmtDay(r.createdAt))}</div>
+          <div class="rq-meta">${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.toName?` · 담당 <b>${esc(r.toName)}</b>`:''} · 보냄 ${esc(fmtDay(r.createdAt))}</div>
           ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
           ${r.status==='done'?`<div class="rq-reso">${icon('check')||''} 완료 · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
           ${r.status==='rejected'?`<div class="rq-reso rej">반려 · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
@@ -174,7 +203,8 @@
         const adminTag=(adminOnly && me.role!=='admin')?`<span title="이 요청은 관리자만 최종 처리(권한 부여·매핑)할 수 있습니다" style="font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;color:#8a5200;background:#fff3dc;border:1px solid #f0d3a6">관리자 처리</span>`:'';
         return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}" data-id="${esc(r.id)}">
           <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} ${adminTag} <span class="rq-ti">${esc(r.title)}</span></div>
-          <div class="rq-meta">요청자 <b>${esc(r.fromName)}</b>${r.fromDept?` (${esc(r.fromDept)})`:''} · ${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.permMode?` · ${r.permMode==='edit'?'수정':'열람'}권한`:''} · ${esc(fmtDay(r.createdAt))}</div>
+          <div class="rq-meta">요청자 <b>${esc(r.fromName)}</b>${r.fromDept?` (${esc(r.fromDept)})`:''} · ${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.permMode?` · ${r.permMode==='edit'?'수정':'열람'}권한`:''}${
+            r.toName?` · 지정 담당 <b${Req.isAssignedTo(r,me)?' style="color:#b4530a"':''}>${esc(r.toName)}</b>${Req.isAssignedTo(r,me)?' (나)':''}`:''} · ${esc(fmtDay(r.createdAt))}</div>
           ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
           ${(r.status==='done'||r.status==='rejected')?`<div class="rq-reso ${r.status==='rejected'?'rej':''}">${r.status==='done'?'완료':'반려'} · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
           <div class="rq-acts">

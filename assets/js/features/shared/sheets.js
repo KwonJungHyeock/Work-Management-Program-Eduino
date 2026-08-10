@@ -14,6 +14,15 @@
   /* 담당자(상담사)별 고정 컬러 — 이름 해시로 팔레트에서 배정(일관됨) */
   const NAME_PALETTE=['#2f6fed','#0f9d8e','#e0743a','#7a5af0','#1a8f4a','#e0518f','#0d8bd9','#b26a00','#8e44ad','#d4327a'];
   function colorForName(n){ const s=String(n||''); let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return NAME_PALETTE[h%NAME_PALETTE.length]; }
+  /* 관리번호 — 레코드 id에서 항상 같은 값으로 생성(저장 불필요 · 기존 기록에도 그대로 적용).
+     삭제·수정 요청 시 "어떤 건인지" 지목할 수 있는 짧은 식별자. 예: MD-4K2P9X */
+  function mgmtNo(r, prefix){
+    const id=String((r&&r.id)||''); if(!id) return '';
+    let h=2166136261>>>0;                                   // FNV-1a
+    for(let i=0;i<id.length;i++){ h^=id.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+    return (prefix||'NO')+'-'+h.toString(36).toUpperCase().padStart(6,'0').slice(-6);
+  }
+  if(typeof window!=='undefined') window.mgmtNoOf=mgmtNo;
 
   function build(cfg){
     MODULES[cfg.key]={
@@ -105,7 +114,9 @@
         const canReq = typeof window.openReqComposer==='function' && !!(window.Req && typeof window.Req.isHandler==='function' && !window.Req.isHandler(_me));
         const hasActions=canDel||canEdit||canReq;
         // 요청 딥링크용 기록 요약 라벨(날짜 + 짧은 식별 컬럼 몇 개)
-        function refLabelOf(r){ const vals=[]; const d=r.day||r.date||r[cfg.dateField]||''; if(d) vals.push(String(d));
+        function refLabelOf(r){ const vals=[];
+          if(cfg.mgmtPrefix){ const no=mgmtNo(r,cfg.mgmtPrefix); if(no) vals.push(no); }   // 관리번호를 맨 앞에 → 어떤 건인지 즉시 특정
+          const d=r.day||r.date||r[cfg.dateField]||''; if(d) vals.push(String(d));
           const dateLike=s=>/^\d{1,4}[-/.]\d{1,2}([-/.]\d{1,2})?$/.test(s);
           for(const c of (cfg.cols||[])){ if(vals.length>=3) break; if(c.wrap) continue; const v=c.compute?c.compute(r):r[c.k];
             if(v!=null && String(v).trim()){ const s=String(v).trim(); if(s.length<=24 && !dateLike(s) && !vals.includes(s)) vals.push(s); } }
@@ -400,7 +411,9 @@
         try{ await Records.del('md','payreq',rec.id,String(rec.date||rec.day||'').slice(0,7)); }catch(e){}
       }
     },
-    cols:[ {k:'date',h:'일자',w:60,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(5,10):(String(r.day||'').slice(5,10)||d); }},  // 월-일만 표시(폭 절약)
+    mgmtPrefix:'MD',   // 관리번호 접두 — 삭제·수정 요청 시 건을 특정하는 식별자(MD-XXXXXX)
+    cols:[ {k:'__mno',h:'관리번호',w:70,compute:r=>mgmtNo(r,'MD')},
+      {k:'date',h:'일자',w:60,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(5,10):(String(r.day||'').slice(5,10)||d); }},  // 월-일만 표시(폭 절약)
       {k:'whoName',h:'담당자',w:52,color:true}, {k:'gubun',h:'구분',w:42,tag:true},
       {k:'route',h:'경로',w:42,wrap:true}, {k:'orderer',h:'주문자명',w:70,wrap:true}, {k:'vendor',h:'입점사명',w:72,wrap:true},
       {k:'settle',h:'정산',w:50,tag:true,options:['','월정산','선결제','후불','기타']},   // 자동채움 오류 시 담당자/파트장이 인라인 수정
