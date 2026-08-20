@@ -463,14 +463,46 @@
           .mt-detail{font-size:12.5px;color:var(--ink-2);margin:7px 0;line-height:1.55}
           .mt-fb{font-size:12px;background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:7px 10px;margin:6px 0}
           .mt-sechd{font-size:12.5px;font-weight:800;margin:16px 0 9px;display:flex;align-items:center;gap:7px}
+          .mt-who{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;background:var(--active-bg);color:var(--red)}
+          .mt-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:4px}
+          .mt-seg button{border:0;background:var(--panel);padding:8px 16px;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+          .mt-seg button:first-child{border-left:0} .mt-seg button.on{background:#0a3d62;color:#fff}
+          .mt-seg .cnt{font-size:11px;opacity:.85;margin-left:4px}
         </style>
-        <div class="mhead"><div class="tt">내 업무</div><div class="ds">내게 지시된 업무만 표시됩니다. 수락 → 진행 → 완료 순으로 처리하세요.</div>
+        <div class="mhead"><div class="tt">내 업무</div><div class="ds">내가 <b>받은 업무</b>와 <b>보낸 업무요청</b>의 진행·완료 상태를 확인합니다.</div>
           <div class="mhead-act"><button class="btn ghost sm" id="mtReload">${icon('refresh')||''}새로고침</button></div></div>
-        <div class="mbody wide" id="mtBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
+        <div class="mbody wide">
+          <div class="mt-seg" id="mtSeg">
+            <button data-v="in" class="on">받은 업무 <span class="cnt" id="mtCntIn"></span></button>
+            <button data-v="out">보낸 요청 <span class="cnt" id="mtCntOut"></span></button>
+          </div>
+          <div id="mtBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>
+        </div>`;
       const body=root.querySelector('#mtBody');
+      let view='in';
       root.querySelector('#mtReload').onclick=()=>load();
+      root.querySelectorAll('#mtSeg button').forEach(b=>b.onclick=()=>{ view=b.dataset.v;
+        root.querySelectorAll('#mtSeg button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); load(); });
       async function load(){ let list=[]; try{ list=await Assign.all()||[]; }catch(e){} if(!root.isConnected) return;
-        const mine=Assign.mine(list,u);
+        const mine=Assign.mine(list,u), sent=Assign.fromMe(list,u);
+        const cIn=root.querySelector('#mtCntIn'), cOut=root.querySelector('#mtCntOut');
+        if(cIn) cIn.textContent = mine.length? `(${mine.filter(a=>a.status!=='done').length}/${mine.length})` : '';
+        if(cOut) cOut.textContent = sent.length? `(${sent.filter(a=>a.status!=='done').length}/${sent.length})` : '';
+
+        if(view==='out'){   // 내가 보낸 업무요청 — 진행 상황·완료 여부 추적
+          const act2=sent.filter(a=>a.status!=='done').sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+          const fin=sent.filter(a=>a.status==='done').sort((a,b)=>String(b.doneAt).localeCompare(String(a.doneAt)));
+          if(!sent.length){ body.innerHTML=`<div class="muted" style="padding:40px;text-align:center">${icon('send')||icon('inbox')}<div style="margin-top:8px">보낸 업무요청이 없습니다.</div></div>`; return; }
+          const wait=act2.filter(a=>a.status==='submitted').length;
+          body.innerHTML=`
+            ${wait?`<div class="nx-note" style="border-left-color:#8b5cf6;background:#f3f0ff;font-size:12.5px;margin-bottom:12px">${icon('megaphone')||''} <b>완료 보고 ${wait}건</b>이 확인을 기다리고 있습니다. 내용을 확인하고 <b>완료 승인</b> 또는 <b>보완 요청</b>하세요.</div>`:''}
+            <div class="mt-sechd">${icon('clipboard')} 진행 중 · ${act2.length}건</div>
+            <div class="mt-col">${act2.map(sentCardHtml).join('')||'<div class="muted" style="font-size:12.5px">진행 중인 요청이 없습니다.</div>'}</div>
+            ${fin.length?`<div class="mt-sechd">${icon('check')} 완료 · ${fin.length}건</div><div class="mt-col">${fin.map(sentCardHtml).join('')}</div>`:''}`;
+          body.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>act(btn.dataset.act, btn.dataset.id));
+          return;
+        }
+
         const active=mine.filter(a=>a.status!=='done').sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
         const done=mine.filter(a=>a.status==='done').sort((a,b)=>String(b.doneAt).localeCompare(String(a.doneAt)));
         if(!mine.length){ body.innerHTML=`<div class="muted" style="padding:40px;text-align:center">${icon('inbox')}<div style="margin-top:8px">받은 업무 지시가 없습니다.</div></div>`; return; }
@@ -480,10 +512,30 @@
           ${done.length?`<div class="mt-sechd">${icon('check')} 완료 · ${done.length}건</div><div class="mt-col">${done.map(cardHtml).join('')}</div>`:''}`;
         body.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>act(btn.dataset.act, btn.dataset.id));
       }
+      /* 보낸 업무요청 카드 — 받는 사람·진행 상태·완료 여부 + 완료보고 확인(승인/보완) */
+      function sentCardHtml(a){
+        return `<div class="mt-card s-${a.status}">
+          <div style="display:flex;gap:8px;align-items:center"><div class="mt-t" style="flex:1">${esc2(a.title)}</div>${stPill(a.status)}</div>
+          <div class="mt-meta" style="margin-top:4px"><span class="mt-who">${icon('user')||''}받는 사람 ${esc2(a.toName||'?')}</span>
+            ${a.toDept?` <span class="muted">${esc2(DL[a.toDept]||a.toDept)}</span>`:''} · 보냄 ${fmtDate(a.createdAt)}${a.due?' · 마감 '+fmtDate(a.due):''}${a.priority==='urgent'?' · <b style="color:var(--danger)">급함</b>':''}</div>
+          ${a.detail?`<div class="mt-detail">${esc2(a.detail)}</div>`:''}
+          ${a.reportFormat?`<div class="mt-meta">보고 형태: ${esc2(a.reportFormat)}</div>`:''}
+          ${a.progressNote?`<div class="mt-fb" style="background:#f3f0ff;color:#6d3fd6">${icon('clipboard')} 담당자 보고: ${esc2(a.progressNote)}</div>`:''}
+          ${(a.progressLog||[]).length?`<div class="mt-meta" style="margin-top:6px">${icon('clipboard')} 과정 기록 ${a.progressLog.length}건</div>`:''}
+          <div class="mt-meta" style="margin-top:6px">${
+            a.status==='sent' ? '상태: 담당자 수락 대기'
+            : a.status==='accepted' ? '상태: 진행 중'+(a.acceptedAt?` · 수락 ${fmtDT(a.acceptedAt)}`:'')
+            : a.status==='submitted' ? `상태: <b style="color:#8b5cf6">완료 보고 도착</b>${a.submittedAt?` · ${fmtDT(a.submittedAt)}`:''}`
+            : `상태: <b style="color:var(--ok)">완료</b>${a.doneAt?` · ${fmtDT(a.doneAt)}`:''}` }</div>
+          <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+            ${a.status==='submitted'?`<button class="btn pri sm" data-act="approve" data-id="${esc2(a.id)}">${icon('check')}완료 승인</button><button class="btn ghost sm" data-act="feedback" data-id="${esc2(a.id)}">보완 요청</button>`:''}
+            ${(a.progressLog||[]).length?`<button class="btn ghost sm" data-act="process" data-id="${esc2(a.id)}">${icon('clipboard')}과정 기록 보기</button>`:''}
+          </div></div>`;
+      }
       function cardHtml(a){
         return `<div class="mt-card s-${a.status}">
           <div style="display:flex;gap:8px;align-items:center"><div class="mt-t" style="flex:1">${esc2(a.title)}</div>${stPill(a.status)}</div>
-          <div class="mt-meta">지시: ${esc2(a.fromName||'?')} · ${fmtDate(a.createdAt)}${a.due?' · 마감 '+fmtDate(a.due):''}${a.priority==='urgent'?' · <b style="color:var(--danger)">급함</b>':''}</div>
+          <div class="mt-meta" style="margin-top:4px"><span class="mt-who">${icon('user')||''}요청 ${esc2(a.fromName||'?')}</span> · 보낸날 ${fmtDate(a.createdAt)}${a.due?' · 마감 '+fmtDate(a.due):''}${a.priority==='urgent'?' · <b style="color:var(--danger)">급함</b>':''}</div>
           ${a.detail?`<div class="mt-detail">${esc2(a.detail)}</div>`:''}
           ${a.reportFormat?`<div class="mt-meta">보고 형태: ${esc2(a.reportFormat)}</div>`:''}
           ${a.feedback?`<div class="mt-fb">${icon('megaphone')} 피드백: ${esc2(a.feedback)}</div>`:''}
@@ -502,6 +554,9 @@
         if(action==='accept'){ await Assign.transition(rec,'accepted',by); toast('수락 · 진행 상태로 이동'); }
         else if(action==='reject'){ if(!confirm('반려할까요?')) return; await Assign.transition(rec,'feedback',{...by,note:'담당자 반려'}); toast('반려'); }
         else if(action==='submit'){ const n=prompt('완료 보고 내용(선택)', rec.progressNote||''); if(n==null) return; await Assign.transition(rec,'submitted',{...by,note:n}); toast('완료 보고 · 지시자에게 알림'); }
+        // 보낸 요청 — 지시자가 완료보고를 확인/승인하거나 보완을 요청
+        else if(action==='approve'){ await Assign.transition(rec,'done',by); toast('완료 승인'); }
+        else if(action==='feedback'){ const n=prompt('보완 요청 내용(담당자에게 표시됩니다)',''); if(n==null||!n.trim()) return; await Assign.transition(rec,'feedback',{...by,note:n.trim()}); toast('보완 요청 · 담당자에게 전달'); }
         document.dispatchEvent(new CustomEvent('assign:changed')); load();
       }
       load();
