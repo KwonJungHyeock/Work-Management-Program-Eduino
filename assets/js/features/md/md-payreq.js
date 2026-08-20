@@ -9,8 +9,11 @@
 (function(){
   const meU=()=>(Auth.user&&Auth.user())||{};
   const isAdmin=()=>!!(Auth.isAdmin&&Auth.isAdmin());
-  const canEdit=()=>{ const u=meU(); return isAdmin()||u.role==='lead'; };   // 파트장·관리자만 수정
-  const canSubmit=()=>canEdit();                                             // 결제 상신도 파트장급
+  // 작성·수정 = 파트장·관리자 + [팀 설정]에서 '결제요청 수정' 권한을 받은 담당자
+  const canEdit=()=>{ const u=meU(); return isAdmin() || u.role==='lead'
+    || (typeof canEditKey==='function' && canEditKey('md.payreq')); };
+  // 결제 상신(승인 요청)은 기존대로 파트장·관리자만 — 권한 부여로 넓히지 않음
+  const canSubmit=()=>{ const u=meU(); return isAdmin() || u.role==='lead'; };
   // 결재 문서(결제요청 상신) — 일일결산과 동일 컬렉션 재사용, id 로 구분
   const COLL='settlements';
   const payDocId=date=>`payreq:md:${date}`;
