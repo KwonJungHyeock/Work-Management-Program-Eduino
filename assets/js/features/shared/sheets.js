@@ -168,7 +168,8 @@
           const cls=(c.wrap?'wrap ':'')+(c.num?'num ':'')+(c.k==='whoName'?'who ':'');
           // wrap 칸(내용·답변·품명·비고)은 남는 폭을 흡수하도록 max 제거 → 표가 오른쪽까지 채워짐
           // 긴 내용은 2줄 클램프 + [더보기] 토글 → 행 높이가 균일하게 정렬됨
-          if(c.wrap) return `<td class="${cls.trim()}" style="min-width:${c.w||180}px"><div class="sv-clip">${esc(v)}</div><button type="button" class="sv-more" hidden>더보기</button></td>`;
+          // full:true 인 칸(송장번호·배송정보 등)은 접지 않고 항상 펼친 상태로 둔다([더보기] 없음)
+          if(c.wrap) return `<td class="${cls.trim()}" style="min-width:${c.w||180}px"><div class="sv-clip${c.full?' open':''}">${esc(v)}</div>${c.full?'':'<button type="button" class="sv-more" hidden>더보기</button>'}</td>`;
           return `<td class="${cls.trim()}" style="white-space:nowrap">${esc(v)}</td>`;
         }
         function editCell(r,c){
@@ -339,6 +340,8 @@
           const map={}; packs.forEach(p=>(p||[]).forEach(r=>{ if(r&&r.id) map[r.id]=r; }));
           all=Object.values(map);
           paintWho(); paintFilters(); paint();
+          // 화면에 없는 값(예: 예전 기록의 옵션명)을 뒤에서 채워 넣고, 채워졌으면 다시 그린다
+          if(cfg.enrich) cfg.enrich(all).then(ch=>{ if(ch && root.isConnected && $('#tbl')) paint(); }).catch(()=>{});
         }
         load();
       }
@@ -384,6 +387,24 @@
       {k:'customer',h:'고객정보',w:140,wrap:true}, {k:'content',h:'문의사항',w:240,wrap:true},
       {k:'answerSummary',h:'답변요약',w:200,wrap:true}, {k:'answer',h:'답변원본',w:240,wrap:true}, {k:'remark',h:'비고',w:120,wrap:true} ] });
 
+  /* 발주 기록 옵션명 보강 — 옵션은 발주 시점에 기록에 저장되지만(md-order.js),
+     그 전에 쌓인 기록에는 없다. 화면에 뜬 상품코드만 모아 카탈로그에서 한 번에 조회해 채운다.
+     (코드당 재조회 없음 · 결과는 화면 이동해도 남는 캐시) */
+  const OPT_CACHE={};
+  const codeKey=s=>String(s||'').trim().toUpperCase();
+  async function enrichOptions(rows){
+    const need=[...new Set((rows||[]).filter(r=>!r.option).map(r=>codeKey(r.selfCode||r.code)).filter(Boolean))]
+      .filter(c=>OPT_CACHE[c]===undefined).slice(0,400);
+    if(!need.length) return false;
+    need.forEach(c=>{ OPT_CACHE[c]=''; });   // 재조회 방지(실패해도 빈 값으로 고정)
+    try{
+      const r=await fetch('/api/catalog?codes='+encodeURIComponent(need.join(','))); if(!r.ok) return false;
+      const d=await r.json(); const map=(d&&d.map)||{}; let hit=false;
+      need.forEach(c=>{ const o=(map[c]&&map[c].option)||''; if(o){ OPT_CACHE[c]=o; hit=true; } });
+      return hit;
+    }catch(e){ return false; }
+  }
+
   build({ key:'md.records', dept:'md', sheet:'orders', title:'발주 기록', icon:'sheet',
     desc:'전 담당자의 발주 내역이 서버에 누적됩니다. 같은 주문서는 묶여서 입력순으로 표시되며, ▲▼로 순서를 바꿀 수 있습니다. 구글시트는 백업으로 병행됩니다.',
     editable:true, whoLabel:'담당자', reorderable:true, ordKey:'ord', groupKey:'orderGroup',
@@ -411,6 +432,7 @@
         try{ await Records.del('md','payreq',rec.id,String(rec.date||rec.day||'').slice(0,7)); }catch(e){}
       }
     },
+    enrich:enrichOptions,
     mgmtPrefix:'MD',   // 관리번호 접두 — 삭제·수정 요청 시 건을 특정하는 식별자(MD-XXXXXX)
     cols:[ {k:'__mno',h:'관리번호',w:70,compute:r=>mgmtNo(r,'MD')},
       {k:'date',h:'일자',w:60,compute:r=>{ const d=String(r.date||''); return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(5,10):(String(r.day||'').slice(5,10)||d); }},  // 월-일만 표시(폭 절약)
@@ -418,11 +440,13 @@
       {k:'route',h:'경로',w:42,wrap:true}, {k:'orderer',h:'주문자명',w:70,wrap:true}, {k:'vendor',h:'입점사명',w:72,wrap:true},
       {k:'settle',h:'정산',w:50,tag:true,options:['','월정산','선결제','후불','기타']},   // 자동채움 오류 시 담당자/파트장이 인라인 수정
       {k:'selfCode',h:'상품코드',w:56,wrap:true},
+      // 옵션명 — 같은 품명이 옵션만 다른 경우(P-BA13-1/2/3) 구분용. 저장값 우선, 없으면 카탈로그에서 보강
+      {k:'option',h:'옵션',w:60,wrap:true,compute:r=>r.option||OPT_CACHE[codeKey(r.selfCode||r.code)]||''},
       {k:'name',h:'품명',w:112,wrap:true}, {k:'qty',h:'수량',w:32,num:true},
       {k:'ship',h:'배송비',w:52,num:true,money:true},
       {k:'orderStatus',h:'발주여부',w:64,tag:true,options:['발주전','발주완료','입고완료','발주취소','반품','출고지연']},   // 입점사에 발주 넣었는지 · 출고지연 시 행 강조
-      {k:'invoice',h:'송장번호',w:70,wrap:true},                     // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
-      {k:'shipInfo',h:'배송정보/비고',w:106,wrap:true},
+      {k:'invoice',h:'송장번호',w:70,wrap:true,full:true},           // 발주 등록 시 비움 → 출고 후 담당자가 수기 입력
+      {k:'shipInfo',h:'배송정보/비고',w:106,wrap:true,full:true},     // 배송지·연락처는 접지 않고 전부 펼쳐 둔다
       // 처리(송장) — 발주취소·입고완료는 송장 대상이 아니므로 비움(송장필요 미표시) · 그 외 송장번호 있으면 송장완료
       {k:'__pstatus',h:'처리',w:56,compute:r=>{ const os=String(r.orderStatus||''); if(os==='발주취소'||os==='입고완료') return ''; return (r.invoice||'').toString().trim()?'송장완료':'송장필요'; },badge:true} ] });
 })();

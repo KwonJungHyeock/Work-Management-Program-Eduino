@@ -433,6 +433,7 @@
           const rec={ id:uuid(), date:$f('#fDate').value.trim()||form.date, gubun:$f('#fGubun').value.trim(),
             route:$f('#fRoute').value.trim(), orderer:$f('#fOrderer').value.trim(), handler:$f('#fHandler').value.trim(),
             vendor:p?vendorName(p):(isJasa(code)?'자사':'미지정'), settle:normSettle(form.settle||curSettle||(p&&resolveSettle(p))||''), selfCode:(p&&(p.selfCode||p.code))||normCode(code), code:(p&&p.code)||'', name:nameVal,
+            option:(p&&p.option)||'',   // 옵션 상품(P-BA13-1 = 1단계 기초)의 옵션명 — 발주 기록에서 어떤 옵션인지 구분
             qty:Number($f('#fQty').value)||1, amount:(Number(p&&p.inPrice)||0)*(Number($f('#fQty').value)||1),
             baseShip:p?baseShipFor(p):0,   // 무료조건 미충족 시 부과할 기본 배송비(주문서 재계산용)
             ship:p?shipInfoFor(p,(Number(p.inPrice)||0)*(Number($f('#fQty').value)||1),Number($f('#fQty').value)||1).ship:0, invoice:'', shipInfo:$f('#fShipInfo').value.trim(),

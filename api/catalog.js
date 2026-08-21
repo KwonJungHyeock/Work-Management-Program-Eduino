@@ -136,6 +136,20 @@ module.exports = async function handler(req, res) {
         items.sort((a, b) => rank(a) - rank(b) || String(a.selfCode).localeCompare(String(b.selfCode)));
         return res.status(200).json({ ok: true, items: items.slice(0, limit), total: items.length });
       }
+      // 여러 코드의 옵션명·품명 한 번에 조회 — GET /api/catalog?codes=P-BA13-1,P-BA13-2
+      //  발주 기록에서 예전 기록(옵션명 미저장)의 옵션을 채우는 용도.
+      //  HGETALL(전체 스캔) 대신 HMGET 한 번이라 호출 비용이 작다.
+      if (q.codes != null) {
+        const codes = [...new Set(String(q.codes).split(',').map(normCode).filter(Boolean))].slice(0, 400);
+        if (!codes.length) return res.status(200).json({ ok: true, map: {} });
+        const vals = await redis(['HMGET', CATALOG_KEY, ...codes]);
+        const map = {};
+        (Array.isArray(vals) ? vals : []).forEach((v, i) => {
+          if (!v) return;
+          try { const p = JSON.parse(v); map[codes[i]] = { option: String(p.option || ''), name: String(p.name || '') }; } catch (e) {}
+        });
+        return res.status(200).json({ ok: true, map });
+      }
       const code = normCode(q.code);
       if (!code) return res.status(400).json({ ok: false, error: 'code required' });
       const v = await redis(['HGET', CATALOG_KEY, code]);
