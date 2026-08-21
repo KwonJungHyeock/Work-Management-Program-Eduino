@@ -375,6 +375,8 @@ function bootShell(){
 
   function route(){
     let key = location.hash.replace('#','') || firstKey();
+    // '#키?조건' 형태 지원 — 조건은 모듈에 그대로 넘긴다(필터가 걸린 링크 공유용)
+    let qs=''; { const i=key.indexOf('?'); if(i>=0){ qs=key.slice(i+1); key=key.slice(0,i); } }
     if(key && !canAccess(key)){
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on', n.dataset.key===key));
       const main=$('main'); main.className='main sc';
@@ -394,7 +396,7 @@ function bootShell(){
     main.style.position = mod.flush?'relative':'';
     main.style.overflow = '';   // 모듈이 자체 스크롤을 쓰면 render 안에서 재설정
     main.innerHTML='';
-    mod.render(main, { me });
+    mod.render(main, { me, qs });
   }
   function setCrumb(key, mod){
     const [dept] = key.split('.');

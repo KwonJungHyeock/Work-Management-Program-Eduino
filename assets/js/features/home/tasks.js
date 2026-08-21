@@ -449,112 +449,267 @@
   }
   window.initTaskWidget = initTaskWidget;
 
-  /* ─────────────────────── 홈 · 내 업무(개인 업무 현황) ─────────────────────── */
+  /* ═══════════════ 홈 · 업무·요청 (업무지시 + 요청 통합 목록) ═══════════════
+     · 보기      : 시트(표) / 카드
+     · 거르기    : 검색 · 영역(부서) · 담당(나에게 온 것/내가 보낸 것/전체) · 상태 · 완료 포함
+     · 정렬·묶기 : 기한순·우선순위순·최신순 / 영역·상태·담당·기한
+     · 조건은 주소(#home.mytasks?...)에 남고, 이름 붙여 저장할 수 있다.
+     정규화·필터·정렬은 worklist.js(WorkList), 카드/처리 버튼은 기존 것을 그대로 재사용한다. */
+  const CAN_ASSIGN=()=>{ const u=me(); return u.role==='admin'||u.role==='manager'; };
+  const VIEWS_KEY='eduino.mytasks.views', LAST_KEY='eduino.mytasks.last';
+  const getViews=()=>{ try{ return store(VIEWS_KEY).get([])||[]; }catch(e){ return []; } };
+  const setViews=v=>{ try{ store(VIEWS_KEY).set(v); }catch(e){} };
+  const WL_CSS=`
+    .mt-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+    .mt-card{border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:11px;background:var(--panel);padding:13px 15px;box-shadow:var(--sh-sm)}
+    .mt-card.s-sent{border-left-color:var(--warn)} .mt-card.s-accepted{border-left-color:var(--info)}
+    .mt-card.s-submitted{border-left-color:#8b5cf6} .mt-card.s-done{border-left-color:var(--ok);opacity:.72}
+    .mt-t{font-weight:800;font-size:14px;margin-bottom:3px} .mt-meta{font-size:11.5px;color:var(--muted)}
+    .mt-detail{font-size:12.5px;color:var(--ink-2);margin:7px 0;line-height:1.55}
+    .mt-fb{font-size:12px;background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:7px 10px;margin:6px 0}
+    .mt-sechd{font-size:12.5px;font-weight:800;margin:16px 0 9px;display:flex;align-items:center;gap:7px}
+    .mt-who{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;background:var(--active-bg);color:var(--red)}
+    .mt-tag{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px;white-space:nowrap}
+    .mt-tag.t-as{color:#0a63c2;background:#e8f1fc} .mt-tag.t-rq{color:#7c4dd6;background:#f0ebfe}
+    /* 보기 탭 */
+    .wl-tabs{display:flex;align-items:center;gap:2px;border-bottom:1px solid var(--line);margin-bottom:12px}
+    .wl-tabs button{border:0;background:none;padding:9px 15px;font:inherit;font-size:13.5px;font-weight:800;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+    .wl-tabs button.on{color:var(--red);border-bottom-color:var(--red)}
+    .wl-soon{margin-left:auto;font-size:11px;color:var(--muted)}
+    /* 필터줄 */
+    .wl-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+    .wl-bar.b2{padding-bottom:10px;border-bottom:1px solid var(--line-2);margin-bottom:12px}
+    .wl-in{width:auto;height:34px;font:inherit;font-size:12.5px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;background:var(--panel);color:var(--ink)}
+    select.wl-in{min-width:126px;padding-right:26px;background-position:right .5em center}
+    input.wl-in{min-width:230px}
+    .wl-chips{display:flex;gap:5px;flex-wrap:wrap}
+    .wl-chip{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);border-radius:16px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+    .wl-chip .dot{width:7px;height:7px;border-radius:50%}
+    .wl-chip.on{border-color:var(--red);color:var(--red);background:var(--active-bg)}
+    .wl-ck{font-size:12.5px;color:var(--ink-2);display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+    .wl-cnt{margin-left:auto;font-size:12px;font-weight:700;color:var(--muted)}
+    .wl-saved{display:flex;gap:5px;flex-wrap:wrap}
+    .wl-sv{font-size:11.5px;font-weight:700;border:1px dashed var(--line-2);border-radius:14px;padding:4px 6px 4px 10px;background:var(--panel);color:var(--ink-2);display:inline-flex;align-items:center;gap:4px}
+    .wl-sv b{cursor:pointer} .wl-sv i{cursor:pointer;font-style:normal;color:var(--muted);padding:0 3px}
+    /* 빠른 입력 */
+    .wl-quick{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:2px 12px;margin-bottom:12px;background:var(--panel)}
+    .wl-quick span{color:var(--muted);font-size:15px;font-weight:800}
+    .wl-quick input{flex:1;width:auto;height:38px;border:0;outline:0;background:none;font:inherit;font-size:13px;padding:0;color:var(--ink);box-shadow:none}
+    .wl-quick input:focus{box-shadow:none}
+    /* 시트 */
+    .wl-wrap{border:1px solid var(--line);border-radius:11px;overflow:auto;background:var(--panel)}
+    .wl-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+    .wl-tbl th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel-2)}
+    .wl-tbl td{padding:9px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
+    .wl-r{cursor:pointer} .wl-r:hover{background:var(--hover)} .wl-r.on{background:var(--active-bg)}
+    .wl-r.late td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+    .wl-g td{background:var(--panel-2);font-weight:800;font-size:12px;padding:7px 10px}
+    .wl-g .muted{font-weight:600;font-size:11px;margin-left:6px}
+    .wl-ti b{font-size:13px} .wl-ti .muted{font-size:11.5px;margin-top:2px}
+    .wl-urg{font-size:10.5px;font-weight:800;color:var(--danger)}
+    .wl-late{color:var(--danger);font-weight:800}
+    .wl-st{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;white-space:nowrap}
+    .wl-st.s-wait{color:#b4530a;background:#fff4e6} .wl-st.s-doing{color:#0a63c2;background:#e8f1fc}
+    .wl-st.s-review{color:#6d3fd6;background:#f0ebfe} .wl-st.s-done{color:#12886a;background:#e6f7f0}
+    .wl-st.s-reject{color:#8a8f98;background:#eef0f3}
+    .wl-pw{height:6px;border-radius:4px;background:var(--line-2);overflow:hidden;min-width:54px}
+    .wl-pb{height:100%;background:var(--ok)}
+    .wl-empty{padding:46px 20px;text-align:center;color:var(--muted)}
+    .wl-empty .t{font-size:14.5px;font-weight:800;color:var(--ink);margin:10px 0 4px}
+    .wl-empty .d{font-size:12.5px;margin-bottom:14px}
+    .wl-empty .a{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}`;
+
   MODULES['home.mytasks']={
     title:'업무·요청', icon:'inbox',
-    render(root){
-      const u=me();
+    render(root, opt){
+      const u=me(), W=window.WorkList;
+      const today=(typeof todayStr==='function')?todayStr():new Date().toISOString().slice(0,10);
+      let qs0=(opt&&opt.qs)||''; if(!qs0){ try{ qs0=store(LAST_KEY).get('')||''; }catch(e){} }
+      let f=W.parseQS(qs0), assigns=[], reqs=[];
+
       root.innerHTML=`
-        <style>
-          .mt-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
-          .mt-card{border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:11px;background:var(--panel);padding:13px 15px;box-shadow:var(--sh-sm)}
-          .mt-card.s-sent{border-left-color:var(--warn)} .mt-card.s-accepted{border-left-color:var(--info)}
-          .mt-card.s-submitted{border-left-color:#8b5cf6} .mt-card.s-done{border-left-color:var(--ok);opacity:.72}
-          .mt-t{font-weight:800;font-size:14px;margin-bottom:3px} .mt-meta{font-size:11.5px;color:var(--muted)}
-          .mt-detail{font-size:12.5px;color:var(--ink-2);margin:7px 0;line-height:1.55}
-          .mt-fb{font-size:12px;background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:7px 10px;margin:6px 0}
-          .mt-sechd{font-size:12.5px;font-weight:800;margin:16px 0 9px;display:flex;align-items:center;gap:7px}
-          .mt-who{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;background:var(--active-bg);color:var(--red)}
-          .mt-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:4px}
-          .mt-seg button{border:0;background:var(--panel);padding:8px 16px;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
-          .mt-seg button:first-child{border-left:0} .mt-seg button.on{background:#0a3d62;color:#fff}
-          .mt-seg .cnt{font-size:11px;opacity:.85;margin-left:4px}
-          .mt-tag{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px}
-          .mt-tag.t-as{color:#0a63c2;background:#e8f1fc} .mt-tag.t-rq{color:#7c4dd6;background:#f0ebfe}
-          .mt-sub{font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 0 7px}
-        </style>
+        <style>${WL_CSS}</style>
         ${(window.ReqUI&&ReqUI.CSS)?`<style>${ReqUI.CSS}</style>`:''}
-        <div class="mhead"><div class="tt">업무·요청</div><div class="ds">내가 <b>보낸 업무요청</b>과 <b>받은 업무</b>를 한 곳에서 확인·처리합니다.</div>
+        <div class="mhead"><div class="tt">업무·요청</div><div class="ds" id="wlDs"></div>
           <div class="mhead-act">
-            <button class="btn pri sm" id="mtNewReq">${icon('plus')||''}새 요청</button>
-            <button class="btn ghost sm" id="mtReload">${icon('refresh')||''}새로고침</button></div></div>
+            ${CAN_ASSIGN()?`<button class="btn pri sm" id="wlNewTask">${icon('send')||''}새 업무 지시</button>`:''}
+            <button class="btn sm" id="wlNewReq">${icon('plus')||''}새 요청</button>
+            <button class="btn ghost sm" id="wlReload">${icon('refresh')||''}새로고침</button></div></div>
         <div class="mbody wide">
-          <div class="mt-seg" id="mtSeg">
-            <button data-v="out" class="on">업무요청 <span class="cnt" id="mtCntOut"></span></button>
-            <button data-v="in">받은 업무 <span class="cnt" id="mtCntIn"></span></button>
+          <div class="wl-tabs" id="wlTabs">
+            <button data-v="sheet">시트</button><button data-v="card">카드</button>
+            <span class="wl-soon">보드 · 캘린더 · 타임라인은 다음 단계</span>
           </div>
+          <div class="wl-bar">
+            <input id="wlQ" class="wl-in" placeholder="업무·내용·담당·요청자 검색">
+            <div class="wl-chips" id="wlAreas"></div>
+            <select id="wlWho" class="wl-in">
+              <option value="me">담당: 나에게 온 것</option>
+              <option value="sent">담당: 내가 보낸 것</option>
+              <option value="all">담당: 전체</option></select>
+          </div>
+          <div class="wl-bar b2">
+            <select id="wlSt" class="wl-in"><option value="">상태 전체</option>${W.ST_SEQ.map(k=>`<option value="${k}">${W.ST[k]}</option>`).join('')}</select>
+            <select id="wlSort" class="wl-in">${Object.keys(W.SORTS).map(k=>`<option value="${k}">${W.SORTS[k]}</option>`).join('')}</select>
+            <select id="wlGroup" class="wl-in">${Object.keys(W.GROUPS).map(k=>`<option value="${k}">${k?'묶기: '+W.GROUPS[k]:'묶지 않음'}</option>`).join('')}</select>
+            <label class="wl-ck"><input type="checkbox" id="wlDone"> 완료 포함</label>
+            <button class="btn ghost sm" id="wlSave">${icon('bookmark')||icon('check')||''}이 조건 저장</button>
+            <div class="wl-saved" id="wlSaved"></div>
+            <span class="wl-cnt" id="wlCnt"></span>
+          </div>
+          <div class="wl-quick"><span>＋</span><input id="wlQuick" placeholder="업무 제목을 쓰고 Enter — 내 할 일로 추가 · Ctrl+Enter 는 상세 입력"></div>
           <div id="mtBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>
         </div>`;
-      const body=root.querySelector('#mtBody');
-      let view='out', reqList=[];
-      root.querySelector('#mtReload').onclick=()=>load();
-      { const nb=root.querySelector('#mtNewReq'); if(nb) nb.onclick=()=>{ if(window.openReqComposer) openReqComposer({}); }; }
-      root.querySelectorAll('#mtSeg button').forEach(b=>b.onclick=()=>{ view=b.dataset.v;
-        root.querySelectorAll('#mtSeg button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); load(); });
-      // 요청 결과(완료·반려) 확인 표시 → 배지 해제
+
+      const $=s=>root.querySelector(s), body=$('#mtBody');
+      /* 요청 결과(완료·반려) 확인 표시 → 배지 해제 */
       try{ if(window.ReqUI&&ReqUI.markSeen) ReqUI.markSeen(); }catch(e){}
       if(window.refreshNavBadges) setTimeout(window.refreshNavBadges,50);
-      const hasReq=()=>!!(window.Req&&window.ReqUI);
-      const reqOpen=r=>!!(window.Req&&Req.OPEN(r.status));
-      const byNew=(a,b)=>String(b.createdAt).localeCompare(String(a.createdAt));
-      const emptyBox=(ic,msg)=>`<div class="muted" style="padding:40px;text-align:center">${icon(ic)||''}<div style="margin-top:8px">${msg}</div></div>`;
-      const noneLine=t=>`<div class="muted" style="font-size:12.5px;padding:2px 2px 4px">${t}</div>`;
 
-      /* 업무지시(Assign) + 요청(Req) 두 소스를 탭별로 함께 렌더 */
+      /* ── 조건 ↔ 화면 ↔ 주소 ── */
+      function syncUrl(){ const qs=W.toQS(f);
+        try{ store(LAST_KEY).set(qs); }catch(e){}
+        try{ history.replaceState(null,'','#home.mytasks'+(qs?'?'+qs:'')); }catch(e){} }
+      function apply(){ syncUrl(); draw(); }
+      function fillControls(){
+        $('#wlQ').value=f.q; $('#wlWho').value=f.who; $('#wlSt').value=f.st;
+        $('#wlSort').value=f.sort; $('#wlGroup').value=f.group; $('#wlDone').checked=!!f.done;
+        root.querySelectorAll('#wlTabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===f.view));
+        $('#wlAreas').innerHTML=`<button class="wl-chip${f.areas.length?'':' on'}" data-a="">전체 영역</button>`+
+          W.AREAS.map(a=>`<button class="wl-chip${f.areas.indexOf(a.k)>=0?' on':''}" data-a="${a.k}">${esc2(a.n)}</button>`).join('');
+        $('#wlAreas').querySelectorAll('.wl-chip').forEach(b=>b.onclick=()=>{ const k=b.dataset.a;
+          if(!k) f.areas=[]; else { const i=f.areas.indexOf(k); if(i>=0) f.areas.splice(i,1); else f.areas.push(k); }
+          fillControls(); apply(); });
+        drawSaved();
+      }
+      function drawSaved(){ const vs=getViews();
+        $('#wlSaved').innerHTML=vs.map((v,i)=>`<span class="wl-sv"><b data-sv="${i}">${esc2(v.name)}</b><i data-rm="${i}" title="삭제">✕</i></span>`).join('');
+        $('#wlSaved').querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>{ f=W.parseQS(vs[+b.dataset.sv].qs); fillControls(); apply(); });
+        $('#wlSaved').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ const l=getViews(); l.splice(+b.dataset.rm,1); setViews(l); drawSaved(); });
+      }
+
+      let qt=null;
+      $('#wlQ').oninput=()=>{ clearTimeout(qt); qt=setTimeout(()=>{ f.q=$('#wlQ').value; apply(); },260); };
+      $('#wlWho').onchange=e=>{ f.who=e.target.value; apply(); };
+      $('#wlSt').onchange=e=>{ f.st=e.target.value; apply(); };
+      $('#wlSort').onchange=e=>{ f.sort=e.target.value; apply(); };
+      $('#wlGroup').onchange=e=>{ f.group=e.target.value; apply(); };
+      $('#wlDone').onchange=e=>{ f.done=e.target.checked; apply(); };
+      root.querySelectorAll('#wlTabs button').forEach(b=>b.onclick=()=>{ f.view=b.dataset.v; fillControls(); apply(); });
+      $('#wlSave').onclick=()=>{ const n=prompt('이 조건에 붙일 이름 (예: 이번 주 마감)',''); if(n==null||!n.trim()) return;
+        const l=getViews(); l.push({ name:n.trim().slice(0,20), qs:W.toQS(f) }); setViews(l); drawSaved(); toast('조건을 저장했습니다'); };
+      $('#wlReload').onclick=()=>load();
+      $('#wlNewReq').onclick=()=>{ if(window.openReqComposer) openReqComposer({}); };
+      { const b=$('#wlNewTask'); if(b) b.onclick=()=>openAssignComposer({}); }
+
+      /* 빠른 입력 — Enter 는 '내 할 일'(나에게 지시) · Ctrl/⌘+Enter 는 상세 작성 */
+      const qi=$('#wlQuick');
+      qi.onkeydown=async e=>{
+        if(e.key!=='Enter') return; const t=(qi.value||'').trim(); if(!t) return;
+        if(e.metaKey||e.ctrlKey){ qi.value=''; openAssignComposer({ title:t }); return; }
+        qi.disabled=true;
+        const rec=await Assign.send({ title:t, fromId:u.loginId||'', fromName:u.name||u.loginId||'',
+          toId:u.loginId||'', toName:u.name||u.loginId||'', toDept:u.dept||'' });
+        if(rec) await Assign.transition(rec,'accepted',{ by:u.loginId||'', byName:u.name||u.loginId||'' });
+        qi.disabled=false; qi.value=''; qi.focus();
+        toast(rec?'내 할 일로 추가했습니다':'추가 실패 — 잠시 후 다시 시도하세요');
+        if(rec){ document.dispatchEvent(new CustomEvent('assign:changed')); load(); }
+      };
+
+      /* ── 조회 ── */
       async function load(){
-        let list=[]; try{ list=await Assign.all()||[]; }catch(e){}
-        let rl=[]; try{ rl=(hasReq()? await Req.all():[])||[]; }catch(e){ rl=[]; }
+        let l=[]; try{ l=await Assign.all()||[]; }catch(e){}
+        let r=[]; try{ r=(window.Req? await Req.all():[])||[]; }catch(e){ r=[]; }
         if(!root.isConnected) return;
-        reqList=rl;
-        const mine=Assign.mine(list,u), sent=Assign.fromMe(list,u);
-        const rMine =hasReq()? Req.fromMe(reqList,u):[];
-        const rInbox=(hasReq()&&Req.isHandler(u))? Req.inbox(reqList,u):[];
-        const cIn=root.querySelector('#mtCntIn'), cOut=root.querySelector('#mtCntOut');
-        if(cOut){ const t=sent.length+rMine.length, o=sent.filter(a=>a.status!=='done').length+rMine.filter(reqOpen).length; cOut.textContent=t?`(${o}/${t})`:''; }
-        if(cIn){ const t=mine.length+rInbox.length, o=mine.filter(a=>a.status!=='done').length+rInbox.filter(reqOpen).length; cIn.textContent=t?`(${o}/${t})`:''; }
-        if(view==='out') drawOut(sent, rMine); else drawIn(mine, rInbox);
+        assigns=l; reqs=r; draw();
       }
 
-      /* [업무요청] 내가 보낸 업무지시 + 내가 보낸 요청 */
-      function drawOut(sent, rMine){
-        if(!sent.length && !rMine.length){ body.innerHTML=emptyBox('send','보낸 업무요청이 없습니다. <b>＋ 새 요청</b>으로 시작하세요.'); return; }
-        const act2=sent.filter(a=>a.status!=='done').sort(byNew);
-        const fin =sent.filter(a=>a.status==='done').sort((a,b)=>String(b.doneAt).localeCompare(String(a.doneAt)));
-        const reqs=rMine.slice().sort((a,b)=>{ const ao=reqOpen(a)?0:1, bo=reqOpen(b)?0:1; return ao-bo || byNew(a,b); });
-        const wait=sent.filter(a=>a.status==='submitted').length;
-        body.innerHTML=`
-          ${wait?`<div class="nx-note" style="border-left-color:#8b5cf6;background:#f3f0ff;font-size:12.5px;margin-bottom:12px">${icon('megaphone')||''} <b>완료 보고 ${wait}건</b>이 확인을 기다리고 있습니다. 내용을 확인하고 <b>완료 승인</b> 또는 <b>보완 요청</b>하세요.</div>`:''}
-          <div class="mt-sechd">${icon('send')||icon('clipboard')} 내가 지시한 업무 <span class="mt-tag t-as">업무지시</span> <span class="muted" style="font-weight:600">${sent.length}건</span></div>
-          ${sent.length?`
-            ${act2.length?`<div class="mt-sub">진행 중 ${act2.length}건</div><div class="mt-col">${act2.map(sentCardHtml).join('')}</div>`:noneLine('진행 중인 업무지시가 없습니다.')}
-            ${fin.length?`<div class="mt-sub">완료 ${fin.length}건</div><div class="mt-col">${fin.map(sentCardHtml).join('')}</div>`:''}`
-            :noneLine('보낸 업무지시가 없습니다.')}
-          <div class="mt-sechd">${icon('stamp')||icon('clipboard')} 내가 보낸 요청 <span class="mt-tag t-rq">요청</span> <span class="muted" style="font-weight:600">${reqs.length}건</span></div>
-          ${reqs.length?`<div class="rq-list">${reqs.map(r=>ReqUI.cardMine(r)).join('')}</div>`
-            :noneLine('보낸 요청이 없습니다. 우측 상단 [＋ 새 요청]에서 데이터 수정·권한·마스터·기능 요청을 보낼 수 있습니다.')}`;
-        body.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>act(btn.dataset.act, btn.dataset.id));
+      function draw(){
+        const all=W.rows(assigns,reqs,u,f.who);
+        const shown=W.sort(W.apply(all,f), f.sort);
+        $('#wlDs').textContent = f.who==='me'
+          ? '담당이 나인 업무·요청만 보고 있습니다. 담당을 「전체」로 바꾸면 팀 전체를 조회합니다.'
+          : f.who==='sent' ? '내가 보낸 업무 지시와 요청을 보고 있습니다.'
+          : '팀 전체 업무 지시와, 내가 볼 수 있는 요청을 보고 있습니다.';
+        $('#wlCnt').textContent = `${shown.length}건${all.length>shown.length?` · ${all.length-shown.length}건 숨김`:''}`;
+        if(!shown.length){ drawEmpty(all); return; }
+        const gs=W.group(shown, f.group, today);
+        body.innerHTML = f.view==='sheet'? sheetHtml(gs) : cardsHtml(gs);
+        wire();
       }
 
-      /* [받은 업무] 나에게 온 업무지시 + 내가 처리할 요청 */
-      function drawIn(mine, rInbox){
-        if(!mine.length && !rInbox.length){ body.innerHTML=emptyBox('inbox','받은 업무·요청이 없습니다.'); return; }
-        const active=mine.filter(a=>a.status!=='done').sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
-        const done  =mine.filter(a=>a.status==='done').sort((a,b)=>String(b.doneAt).localeCompare(String(a.doneAt)));
-        const inbox =rInbox.slice().sort((a,b)=>{ const ao=reqOpen(a)?0:1, bo=reqOpen(b)?0:1; return ao-bo || byNew(a,b); });
-        const openN =inbox.filter(reqOpen).length;
-        body.innerHTML=`
-          <div class="mt-sechd">${icon('inbox')} 나에게 온 업무 <span class="mt-tag t-as">업무지시</span> <span class="muted" style="font-weight:600">${mine.length}건</span></div>
-          ${mine.length?`
-            ${active.length?`<div class="mt-sub">진행 중 ${active.length}건</div><div class="mt-col">${active.map(cardHtml).join('')}</div>`:noneLine('진행 중인 업무가 없습니다.')}
-            ${done.length?`<div class="mt-sub">완료 ${done.length}건</div><div class="mt-col">${done.map(cardHtml).join('')}</div>`:''}`
-            :noneLine('받은 업무지시가 없습니다.')}
-          ${(hasReq()&&Req.isHandler(u))?`
-            <div class="mt-sechd">${icon('stamp')||icon('clipboard')} 내가 처리할 요청 <span class="mt-tag t-rq">요청</span> <span class="muted" style="font-weight:600">${openN?`대기 ${openN}건 / `:''}${inbox.length}건</span></div>
-            ${inbox.length?`<div class="rq-list">${inbox.map(r=>ReqUI.cardInbox(r,u)).join('')}</div>`:noneLine('처리할 요청이 없습니다.')}`:''}`;
-        body.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>act(btn.dataset.act, btn.dataset.id));
-        if(hasReq()&&inbox.length) ReqUI.wireInbox(body, reqList, u, ()=>load());
+      function drawEmpty(all){
+        const box=(ic,t,d,a)=>`<div class="wl-empty">${icon(ic)||''}<div class="t">${t}</div><div class="d">${d}</div><div class="a">${a}</div></div>`;
+        if(!all.length && f.who==='me')
+          body.innerHTML=box('inbox','아직 나에게 배정된 업무가 없어요','담당이 나인 것만 보고 있어요.',
+            `<button class="btn sm" data-e="all">전체 담당으로 보기</button><button class="btn pri sm" data-e="quick">＋ 내 할 일 추가</button>`);
+        else if(!all.length)
+          body.innerHTML=box('clipboard','아직 업무가 없어요','첫 업무를 만들어 시작하세요.',
+            `<button class="btn pri sm" data-e="quick">＋ 첫 업무 만들기</button>${CAN_ASSIGN()?`<button class="btn sm" data-e="new">업무 지시하기</button>`:''}`);
+        else
+          body.innerHTML=box('search','조건에 맞는 업무가 없어요',`걸린 조건 — ${esc2(W.describe(f).join(' · ')||'없음')}`,
+            `<button class="btn sm" data-e="clear">조건 지우기</button>`);
+        body.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{ const a=b.dataset.e;
+          if(a==='all'){ f.who='all'; fillControls(); apply(); }
+          else if(a==='clear'){ f={ ...W.DEFAULTS, areas:[], who:f.who, view:f.view }; fillControls(); apply(); }
+          else if(a==='new') openAssignComposer({});
+          else qi.focus(); });
       }
-      /* 보낸 업무요청 카드 — 받는 사람·진행 상태·완료 여부 + 완료보고 확인(승인/보완) */
+
+      /* ── 시트 ── */
+      const kindTag=r=> r.kind==='assign'?`<span class="mt-tag t-as">업무지시</span>`:`<span class="mt-tag t-rq">요청</span>`;
+      const isLate=r=> !!(r.due && r.due<today && W.OPEN_ST[r.st]);
+      function sheetHtml(gs){
+        return `<div class="wl-wrap"><table class="wl-tbl">
+          <thead><tr><th style="width:60px">상태</th><th style="width:72px">구분</th><th>업무</th><th style="width:66px">영역</th>
+            <th style="width:84px">담당</th><th style="width:84px">요청자</th><th style="width:78px">기한</th><th style="width:92px">진행</th></tr></thead>
+          <tbody>${gs.map(g=>(g.name?`<tr class="wl-g"><td colspan="8">${esc2(g.name)}<span class="muted">${g.rows.length}건 · 진행 ${g.open} · 완료율 ${g.rate}%</span></td></tr>`:'')
+            +g.rows.map(rowHtml).join('')).join('')}</tbody></table></div>`;
+      }
+      function rowHtml(r){
+        const k=r.kind+':'+r.id, late=isLate(r);
+        return `<tr class="wl-r${late?' late':''}" data-k="${esc2(k)}">
+          <td><span class="wl-st s-${r.st}">${esc2(r.stLabel)}</span></td>
+          <td>${kindTag(r)}</td>
+          <td class="wl-ti"><b>${esc2(r.title)}</b>${r.pri?' <span class="wl-urg">급함</span>':''}${r.detail?`<div class="muted">${esc2(r.detail.slice(0,54))}${r.detail.length>54?'…':''}</div>`:''}</td>
+          <td>${esc2(W.DEPT[r.area]||'-')}</td>
+          <td>${esc2(r.owner||(r.kind==='req'?'부서장 자동':'-'))}</td>
+          <td>${esc2(r.from||'-')}</td>
+          <td>${r.due?`<span${late?' class="wl-late"':''}>${esc2(r.due.slice(5))}</span>`:'<span class="muted">-</span>'}</td>
+          <td><div class="wl-pw"><div class="wl-pb" style="width:${r.prog}%"></div></div></td></tr>
+        <tr class="wl-d" data-for="${esc2(k)}" style="display:none"><td colspan="8">${detailHtml(r)}</td></tr>`;
+      }
+      function cardsHtml(gs){
+        return gs.map(g=>(g.name?`<div class="mt-sechd">${esc2(g.name)} <span class="muted" style="font-weight:600">${g.rows.length}건 · 완료율 ${g.rate}%</span></div>`:'')
+          +`<div class="mt-col">${g.rows.map(detailHtml).join('')}</div>`).join('');
+      }
+      /* 상세 = 기존 카드 재사용 — 내 역할에 맞는 카드만 보여 처리 버튼이 어긋나지 않게 한다 */
+      function detailHtml(r){
+        if(r.kind==='assign'){ const a=r.raw;
+          if(a.toId===u.loginId || (u.name&&a.toName===u.name)) return cardHtml(a);
+          if(a.fromId===u.loginId || (u.name&&a.fromName===u.name)) return sentCardHtml(a);
+          return roCardHtml(a);
+        }
+        const q=r.raw, mineReq=(q.fromId===u.loginId || (u.name&&q.fromName===u.name));
+        if(!window.ReqUI) return '';
+        return (!mineReq && window.Req && Req.isHandler(u)) ? ReqUI.cardInbox(q,u) : ReqUI.cardMine(q);
+      }
+      function roCardHtml(a){
+        return `<div class="mt-card s-${a.status}">
+          <div style="display:flex;gap:8px;align-items:center"><div class="mt-t" style="flex:1">${esc2(a.title)}</div>${stPill(a.status)}</div>
+          <div class="mt-meta" style="margin-top:4px">지시 ${esc2(a.fromName||'?')} → 담당 ${esc2(a.toName||'?')} · 보냄 ${fmtDate(a.createdAt)}${a.due?' · 마감 '+fmtDate(a.due):''}</div>
+          ${a.detail?`<div class="mt-detail">${esc2(a.detail)}</div>`:''}
+          <div class="mt-meta" style="margin-top:6px">${esc2(S[a.status]||a.status)}${a.doneAt?' · '+fmtDT(a.doneAt):''}</div></div>`;
+      }
+      function wire(){
+        body.querySelectorAll('[data-act]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); act(b.dataset.act, b.dataset.id); });
+        if(window.ReqUI&&ReqUI.wireInbox) ReqUI.wireInbox(body, reqs, u, ()=>load());
+        body.querySelectorAll('.wl-r').forEach(tr=>tr.onclick=()=>{
+          const d=body.querySelector(`.wl-d[data-for="${CSS.escape(tr.dataset.k)}"]`); if(!d) return;
+          const open=d.style.display==='none'; d.style.display=open?'table-row':'none'; tr.classList.toggle('on',open); });
+      }
+
+      /* 보낸 업무지시 카드 — 받는 사람·진행 상태·완료 여부 + 완료보고 확인(승인/보완) */
       function sentCardHtml(a){
         return `<div class="mt-card s-${a.status}">
           <div style="display:flex;gap:8px;align-items:center"><div class="mt-t" style="flex:1">${esc2(a.title)}</div>${stPill(a.status)}</div>
@@ -596,12 +751,13 @@
         if(action==='accept'){ await Assign.transition(rec,'accepted',by); toast('수락 · 진행 상태로 이동'); }
         else if(action==='reject'){ if(!confirm('반려할까요?')) return; await Assign.transition(rec,'feedback',{...by,note:'담당자 반려'}); toast('반려'); }
         else if(action==='submit'){ const n=prompt('완료 보고 내용(선택)', rec.progressNote||''); if(n==null) return; await Assign.transition(rec,'submitted',{...by,note:n}); toast('완료 보고 · 지시자에게 알림'); }
-        // 보낸 요청 — 지시자가 완료보고를 확인/승인하거나 보완을 요청
+        // 지시자가 완료보고를 확인/승인하거나 보완을 요청
         else if(action==='approve'){ await Assign.transition(rec,'done',by); toast('완료 승인'); }
         else if(action==='feedback'){ const n=prompt('보완 요청 내용(담당자에게 표시됩니다)',''); if(n==null||!n.trim()) return; await Assign.transition(rec,'feedback',{...by,note:n.trim()}); toast('보완 요청 · 담당자에게 전달'); }
         document.dispatchEvent(new CustomEvent('assign:changed')); load();
       }
-      load();
+
+      fillControls(); syncUrl(); load();
     }
   };
 })();
