@@ -38,6 +38,85 @@
     location.hash=r.refKey;
   }
 
+  /* 요청 카드 공용 스타일 — [내 업무] 통합 화면에서도 그대로 사용 */
+  const RQ_CSS = `
+          .rq-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:16px}
+          .rq-seg button{border:0;background:var(--panel);padding:8px 16px;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
+          .rq-seg button:first-child{border-left:0}.rq-seg button.on{background:#0a3d62;color:#fff}
+          .rq-seg .cnt{font-size:11px;opacity:.85;margin-left:4px}
+          .rq-cats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} @media(max-width:820px){.rq-cats{grid-template-columns:1fr}}
+          .rq-cat{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
+          .rq-cat .h{display:flex;align-items:center;gap:9px;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:800;font-size:14px}
+          .rq-cat .h .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff}
+          .rq-cat .h .ic svg{width:15px;height:15px}
+          .rq-cat .d{font-size:11.5px;color:var(--muted);font-weight:600;margin-left:auto;text-align:right;max-width:180px;line-height:1.35}
+          .rq-cat .b{padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+          .rq-type{display:flex;align-items:center;gap:8px;text-align:left;border:1px solid var(--line-2);background:var(--panel);border-radius:9px;padding:9px 12px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+          .rq-type:hover{border-color:#0a3d62;background:var(--active-bg)}
+          .rq-type .go{margin-left:auto;color:var(--muted);font-weight:800}
+          .rq-list{display:flex;flex-direction:column;gap:10px}
+          .rq-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:13px 15px}
+          .rq-card.open{border-left:4px solid #b4530a}
+          .rq-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+          .rq-cat-chip{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px}
+          .rq-ti{font-weight:800;font-size:13.5px;color:var(--ink)}
+          .rq-meta{font-size:11.5px;color:var(--muted);margin-top:3px}
+          .rq-detail{font-size:12.5px;color:var(--ink-2);margin-top:7px;white-space:pre-wrap;line-height:1.5;background:var(--panel-2);border-radius:8px;padding:8px 11px}
+          .rq-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+          .rq-empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
+          .rq-reso{font-size:12px;margin-top:8px;border-left:3px solid #12886a;background:#eafaf3;border-radius:0 8px 8px 0;padding:7px 11px;color:var(--ink-2)}
+          .rq-reso.rej{border-left-color:#8a8f98;background:#eef0f3}`;
+
+  /* 요청 카드·처리 배선 공용 — [요청하기] 화면과 [내 업무] 통합 화면이 함께 사용 */
+  function catChip(catKey){ const c=Req.catOf(catKey); if(!c) return ''; return `<span class="rq-cat-chip" style="color:${c.color};background:${c.color}18">${esc(c.name)}</span>`; }
+  /* 내가 보낸 요청 카드 */
+  function cardMine(r){
+    return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}">
+      <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} <span class="rq-ti">${esc(r.title)}</span></div>
+      <div class="rq-meta">${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.toName?` · 담당 <b>${esc(r.toName)}</b>`:''} · 보냄 ${esc(fmtDay(r.createdAt))}</div>
+      ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
+      ${r.status==='done'?`<div class="rq-reso">${icon('check')||''} 완료 · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
+      ${r.status==='rejected'?`<div class="rq-reso rej">반려 · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
+    </div>`;
+  }
+  /* 받은(처리할) 요청 카드 */
+  function cardInbox(r, me){
+    const canGo=r.cat==='perm'||!!r.refKey;
+    // 권한/마스터 요청은 관리자만 실제 조치 가능 → 부서장에겐 안내 표식
+    const adminOnly=(r.cat==='perm'||r.cat==='master');
+    const adminTag=(adminOnly && me.role!=='admin')?`<span title="이 요청은 관리자만 최종 처리(권한 부여·매핑)할 수 있습니다" style="font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;color:#8a5200;background:#fff3dc;border:1px solid #f0d3a6">관리자 처리</span>`:'';
+    return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}" data-id="${esc(r.id)}">
+      <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} ${adminTag} <span class="rq-ti">${esc(r.title)}</span></div>
+      <div class="rq-meta">요청자 <b>${esc(r.fromName)}</b>${r.fromDept?` (${esc(r.fromDept)})`:''} · ${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.permMode?` · ${r.permMode==='edit'?'수정':'열람'}권한`:''}${
+        r.toName?` · 지정 담당 <b${Req.isAssignedTo(r,me)?' style="color:#b4530a"':''}>${esc(r.toName)}</b>${Req.isAssignedTo(r,me)?' (나)':''}`:''} · ${esc(fmtDay(r.createdAt))}</div>
+      ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
+      ${(r.status==='done'||r.status==='rejected')?`<div class="rq-reso ${r.status==='rejected'?'rej':''}">${r.status==='done'?'완료':'반려'} · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
+      <div class="rq-acts">
+        ${canGo?`<button class="btn sm" data-a="go" style="background:#0a3d62;color:#fff">↗ 바로가기${r.cat==='perm'?'(권한부여)':''}</button>`:''}
+        ${Req.OPEN(r.status)?`${r.status==='sent'?`<button class="btn ghost sm" data-a="doing">처리중</button>`:''}
+          <button class="btn ok sm" data-a="done">${icon('check')||''} 완료</button>
+          <button class="btn ghost sm" data-a="reject">반려</button>`:`<button class="btn ghost sm" data-a="reopen">다시 열기</button>`}
+      </div>
+    </div>`;
+  }
+  /* 받은 요청 카드의 버튼 배선 — list 는 갱신을 위해 참조로 전달, onChange 로 재렌더 */
+  function wireInbox(scope, list, me, onChange){
+    scope.querySelectorAll('.rq-card[data-id]').forEach(card=>{ const r=(list||[]).find(x=>x.id===card.dataset.id); if(!r) return;
+      const act=async(a,note)=>{ const nr=await Req.transition(r,a,{by:me.loginId,byName:me.name||me.loginId,note:note||''});
+        if(nr){ const i=list.findIndex(x=>x.id===r.id); if(i>=0) list[i]=nr;
+          try{ window.dispatchEvent(new CustomEvent('req:changed')); }catch(e){}
+          if(window.refreshNavBadges) window.refreshNavBadges(); if(onChange) onChange(); } else toast('저장 실패'); };
+      const g=card.querySelector('[data-a=go]'); if(g) g.onclick=()=>goRef(r);
+      const d=card.querySelector('[data-a=doing]'); if(d) d.onclick=()=>act('doing');
+      const dn=card.querySelector('[data-a=done]'); if(dn) dn.onclick=()=>{ const n=prompt('처리 내용(선택) — 요청자에게 함께 표시됩니다',''); if(n===null) return; act('done',n.trim()); };
+      const rj=card.querySelector('[data-a=reject]'); if(rj) rj.onclick=()=>{ const n=prompt('반려 사유(선택)',''); if(n===null) return; act('rejected',n.trim()); };
+      const ro=card.querySelector('[data-a=reopen]'); if(ro) ro.onclick=()=>act('reopen');
+    });
+  }
+  /* 요청 결과 확인 표시(요청자 배지 해제용) */
+  function markSeen(){ try{ store('eduino.req.seenAt').set(new Date().toISOString()); }catch(e){} }
+  if(typeof window!=='undefined') window.ReqUI={ CSS:RQ_CSS, catChip, cardMine, cardInbox, wireInbox, goRef, markSeen, stBadge, fmtDay };
+
   /* ---------------- 요청 작성 모달 ---------------- */
   window.openReqComposer=function(prefill){
     prefill=prefill||{}; const me=meU();
@@ -50,7 +129,7 @@
       ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:560px;width:97%;max-height:calc(100vh - 48px);overflow:auto;box-shadow:var(--sh-lg)">
         <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
           <div style="font-size:16px;font-weight:800">${icon('stamp')||''} 요청 보내기</div>
-          <div class="muted" style="font-size:12.5px;margin-top:3px">담당자를 지정하면 그 분에게만 전달됩니다. 처리 결과는 <b>요청하기 › 내 요청</b>에서 확인돼요.</div></div>
+          <div class="muted" style="font-size:12.5px;margin-top:3px">담당자를 지정하면 그 분에게만 전달됩니다. 처리 결과는 <b>업무·요청 › [업무요청]</b> 탭에서 확인돼요.</div></div>
         <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
           <label class="fld">처리 담당자
             <select id="rqTo"><option value="">자동 지정 — 우리 부서장 → 관리자</option>${
@@ -118,34 +197,7 @@
       if(window.refreshNavBadges) setTimeout(window.refreshNavBadges, 50);
 
       root.innerHTML=`
-        <style>
-          .rq-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:16px}
-          .rq-seg button{border:0;background:var(--panel);padding:8px 16px;font-size:13px;font-weight:800;color:var(--muted);cursor:pointer;border-left:1px solid var(--line-2)}
-          .rq-seg button:first-child{border-left:0}.rq-seg button.on{background:#0a3d62;color:#fff}
-          .rq-seg .cnt{font-size:11px;opacity:.85;margin-left:4px}
-          .rq-cats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} @media(max-width:820px){.rq-cats{grid-template-columns:1fr}}
-          .rq-cat{border:1px solid var(--line);border-radius:13px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
-          .rq-cat .h{display:flex;align-items:center;gap:9px;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:800;font-size:14px}
-          .rq-cat .h .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff}
-          .rq-cat .h .ic svg{width:15px;height:15px}
-          .rq-cat .d{font-size:11.5px;color:var(--muted);font-weight:600;margin-left:auto;text-align:right;max-width:180px;line-height:1.35}
-          .rq-cat .b{padding:8px 10px;display:flex;flex-direction:column;gap:5px}
-          .rq-type{display:flex;align-items:center;gap:8px;text-align:left;border:1px solid var(--line-2);background:var(--panel);border-radius:9px;padding:9px 12px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
-          .rq-type:hover{border-color:#0a3d62;background:var(--active-bg)}
-          .rq-type .go{margin-left:auto;color:var(--muted);font-weight:800}
-          .rq-list{display:flex;flex-direction:column;gap:10px}
-          .rq-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:13px 15px}
-          .rq-card.open{border-left:4px solid #b4530a}
-          .rq-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-          .rq-cat-chip{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px}
-          .rq-ti{font-weight:800;font-size:13.5px;color:var(--ink)}
-          .rq-meta{font-size:11.5px;color:var(--muted);margin-top:3px}
-          .rq-detail{font-size:12.5px;color:var(--ink-2);margin-top:7px;white-space:pre-wrap;line-height:1.5;background:var(--panel-2);border-radius:8px;padding:8px 11px}
-          .rq-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-          .rq-empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
-          .rq-reso{font-size:12px;margin-top:8px;border-left:3px solid #12886a;background:#eafaf3;border-radius:0 8px 8px 0;padding:7px 11px;color:var(--ink-2)}
-          .rq-reso.rej{border-left-color:#8a8f98;background:#eef0f3}
-        </style>
+        <style>${RQ_CSS}</style>
         <div class="mhead pad"><div class="mhead-row">
           <div><div class="tt">요청하기</div>
             <div class="ds">데이터 수정·권한·마스터·기능 요청을 <b>부서장/관리자</b>에게 보내고 처리 상태를 확인합니다.</div></div>
@@ -171,7 +223,6 @@
         const mc=root.querySelector('#rqMineCnt'); if(mc){ const open=mine.filter(r=>Req.OPEN(r.status)).length; mc.textContent=mine.length?`(${open}/${mine.length})`:''; }
         const ic=root.querySelector('#rqInboxCnt'); if(ic){ const open=inbox.filter(r=>Req.OPEN(r.status)).length; ic.innerHTML=open?`<b style="color:#ffd9a6">${open}</b>`:`${inbox.length}`; } }
 
-      function catChip(catKey){ const c=Req.catOf(catKey); if(!c) return ''; return `<span class="rq-cat-chip" style="color:${c.color};background:${c.color}18">${esc(c.name)}</span>`; }
 
       function drawNew(){
         body.innerHTML=`<div class="nx-note" style="border-left-color:#0a3d62;background:#eef4fb;margin-bottom:14px">${icon('info')||''} 아래는 <b>관리자/부서장이 조치해줄 수 있는 범위</b>입니다. 필요한 항목을 눌러 요청하세요.</div>
@@ -182,51 +233,15 @@
         body.querySelectorAll('.rq-type').forEach(b=>b.onclick=()=>openReqComposer({ cat:b.dataset.cat, type:b.dataset.type }));
       }
 
-      function cardMine(r){
-        return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}">
-          <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} <span class="rq-ti">${esc(r.title)}</span></div>
-          <div class="rq-meta">${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.toName?` · 담당 <b>${esc(r.toName)}</b>`:''} · 보냄 ${esc(fmtDay(r.createdAt))}</div>
-          ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
-          ${r.status==='done'?`<div class="rq-reso">${icon('check')||''} 완료 · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
-          ${r.status==='rejected'?`<div class="rq-reso rej">반려 · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
-        </div>`;
-      }
       function drawMine(){ const mine=Req.fromMe(list,me).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
         body.innerHTML= mine.length? `<div class="rq-list">${mine.map(cardMine).join('')}</div>`
           : `<div class="rq-empty">${icon('inbox')||''}<div>보낸 요청이 없습니다. <b>＋ 새 요청</b>에서 시작하세요.</div></div>`;
       }
 
-      function cardInbox(r){
-        const canGo=r.cat==='perm'||!!r.refKey;
-        // 권한/마스터 요청은 관리자만 실제 조치 가능(팀 설정·이카운트 매핑 등 관리자 전용) → 부서장에겐 안내 표식
-        const adminOnly=(r.cat==='perm'||r.cat==='master');
-        const adminTag=(adminOnly && me.role!=='admin')?`<span title="이 요청은 관리자만 최종 처리(권한 부여·매핑)할 수 있습니다" style="font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;color:#8a5200;background:#fff3dc;border:1px solid #f0d3a6">관리자 처리</span>`:'';
-        return `<div class="rq-card ${Req.OPEN(r.status)?'open':''}" data-id="${esc(r.id)}">
-          <div class="rq-top">${catChip(r.cat)} ${stBadge(r.status)} ${adminTag} <span class="rq-ti">${esc(r.title)}</span></div>
-          <div class="rq-meta">요청자 <b>${esc(r.fromName)}</b>${r.fromDept?` (${esc(r.fromDept)})`:''} · ${esc(r.typeLabel||'')}${r.targetName?` · 대상: ${esc(r.targetName)}`:''}${r.permMode?` · ${r.permMode==='edit'?'수정':'열람'}권한`:''}${
-            r.toName?` · 지정 담당 <b${Req.isAssignedTo(r,me)?' style="color:#b4530a"':''}>${esc(r.toName)}</b>${Req.isAssignedTo(r,me)?' (나)':''}`:''} · ${esc(fmtDay(r.createdAt))}</div>
-          ${r.detail?`<div class="rq-detail">${esc(r.detail)}</div>`:''}
-          ${(r.status==='done'||r.status==='rejected')?`<div class="rq-reso ${r.status==='rejected'?'rej':''}">${r.status==='done'?'완료':'반려'} · ${esc(r.resolvedName||'')} ${esc(fmtDay(r.resolvedAt))}${r.resolution?` — ${esc(r.resolution)}`:''}</div>`:''}
-          <div class="rq-acts">
-            ${canGo?`<button class="btn sm" data-a="go" style="background:#0a3d62;color:#fff">↗ 바로가기${r.cat==='perm'?'(권한부여)':''}</button>`:''}
-            ${Req.OPEN(r.status)?`${r.status==='sent'?`<button class="btn ghost sm" data-a="doing">처리중</button>`:''}
-              <button class="btn ok sm" data-a="done">${icon('check')||''} 완료</button>
-              <button class="btn ghost sm" data-a="reject">반려</button>`:`<button class="btn ghost sm" data-a="reopen">다시 열기</button>`}
-          </div>
-        </div>`;
-      }
       function drawInbox(){ const inbox=Req.inbox(list,me).sort((a,b)=>{ const ao=Req.OPEN(a.status)?0:1, bo=Req.OPEN(b.status)?0:1; return ao-bo || String(b.createdAt).localeCompare(String(a.createdAt)); });
-        body.innerHTML= inbox.length? `<div class="rq-list">${inbox.map(cardInbox).join('')}</div>`
+        body.innerHTML= inbox.length? `<div class="rq-list">${inbox.map(r=>cardInbox(r,me)).join('')}</div>`
           : `<div class="rq-empty">${icon('check2')||''}<div>처리할 요청이 없습니다.</div></div>`;
-        body.querySelectorAll('.rq-card[data-id]').forEach(card=>{ const r=list.find(x=>x.id===card.dataset.id); if(!r) return;
-          const act=async(a,note)=>{ const nr=await Req.transition(r,a,{by:me.loginId,byName:me.name||me.loginId,note:note||''});
-            if(nr){ const i=list.findIndex(x=>x.id===r.id); if(i>=0) list[i]=nr; updateCnts(); drawInbox(); try{ window.dispatchEvent(new CustomEvent('req:changed')); }catch(e){} if(window.refreshNavBadges) window.refreshNavBadges(); } else toast('저장 실패'); };
-          const g=card.querySelector('[data-a=go]'); if(g) g.onclick=()=>goRef(r);
-          const d=card.querySelector('[data-a=doing]'); if(d) d.onclick=()=>act('doing');
-          const dn=card.querySelector('[data-a=done]'); if(dn) dn.onclick=()=>{ const n=prompt('처리 내용(선택) — 요청자에게 함께 표시됩니다',''); if(n===null) return; act('done',n.trim()); };
-          const rj=card.querySelector('[data-a=reject]'); if(rj) rj.onclick=()=>{ const n=prompt('반려 사유(선택)',''); if(n===null) return; act('rejected',n.trim()); };
-          const ro=card.querySelector('[data-a=reopen]'); if(ro) ro.onclick=()=>act('reopen');
-        });
+        wireInbox(body, list, me, ()=>{ updateCnts(); drawInbox(); });
       }
 
       function draw(){ if(section==='new') drawNew(); else if(section==='mine') drawMine(); else drawInbox(); }

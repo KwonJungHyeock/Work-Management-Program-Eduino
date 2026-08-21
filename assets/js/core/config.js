@@ -168,8 +168,7 @@ const TS_SHEET_MAP = {
 const NAV = [
   { dept:'home', name:'홈', full:'공통', icon:'dashboard', common:true, items:[
       { key:'home.dash',   name:'홈 대시보드', icon:'dashboard' },
-      { key:'home.mytasks', name:'내 업무',     icon:'inbox' },
-      { key:'home.requests', name:'요청하기',   icon:'stamp' },
+      { key:'home.mytasks', name:'업무·요청',   icon:'inbox' },   // [업무요청]+[받은 업무] 통합(구 '요청하기' 흡수)
       { key:'home.alerts', name:'알림',        icon:'bell' },
       { key:'home.notice', name:'공지사항',   icon:'megaphone' },
       { key:'home.calendar', name:'일정·달력',  icon:'check2' },

@@ -183,6 +183,11 @@ function bootShell(){
   // 사이드바 알림 배지 — 미처리 콜백(CS·관리자) · 안 읽은 공지(전원)
   const setBadge=(key,n)=>{ const s=nav.querySelector(`.nav-item[data-key="${key}"] .nav-badge`); if(!s) return;
     s.textContent = n>99?'99+':(n||''); s.style.display = n?'':'none'; };
+  /* [내 업무] 배지 = 요청(미처리·결과 미확인) + 업무지시(수락 대기) 합산.
+     요청은 shell(updateBadges), 업무지시는 tasks.js 위젯이 각각 자기 몫만 갱신 */
+  window.__navBadgeParts = window.__navBadgeParts || { req:0, task:0 };
+  window.__setNavPart = (k,n)=>{ window.__navBadgeParts[k]=n||0;
+    const p=window.__navBadgeParts; setBadge('home.mytasks',(p.req||0)+(p.task||0)); };
   async function fetchColl(coll){ try{ const r=await fetch('/api/store?type=coll&coll='+coll); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
   const noticeVisible=(dept)=>{ dept=dept||'all'; return dept==='all'||dept===myDept||isAdmin; };
   let badgeAt=0, badgeBusy=false; const BADGE_TTL=20000;   // 최근 20초 내 재조회는 캐시로 대체(네비게이션 시 중복 호출 방지)
@@ -205,7 +210,7 @@ function bootShell(){
       if(reqs && window.Req){ const u=me.user;
         const inboxOpen = Req.isHandler(u)? Req.inbox(reqs,u).filter(r=>Req.OPEN(r.status)).length : 0;
         let mineNew=0; try{ const seen=store('eduino.req.seenAt').get('')||''; mineNew=Req.fromMe(reqs,u).filter(r=>(r.status==='done'||r.status==='rejected')&&String(r.resolvedAt||'')>seen).length; }catch(e){}
-        reqN=inboxOpen+mineNew; setBadge('home.requests', reqN); }
+        reqN=inboxOpen+mineNew; window.__setNavPart('req', reqN); }
       if(cbs){ cbOpen=cbs.filter(c=>!c.done).length; setBadge('cs.notes', cbOpen); }
       const mentMe=n=>(n.mentions||[]).some(m=>(m.t==='user'&&m.v===uid)||(m.t==='dept'&&m.v===myDept));
       if(nts){ unreadN=nts.filter(x=>(noticeVisible(x.dept)||mentMe(x)) && !((x.readBy||[]).includes(uid))).length; setBadge('home.notice', unreadN); }
