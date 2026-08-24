@@ -201,6 +201,11 @@
     .st-dtl tr:last-child td{border-bottom:none}
     .st-dtl .stnum{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
     .st-dtl .st-dt-wrap{min-width:180px;white-space:pre-wrap;word-break:break-word;line-height:1.45}
+    /* 같은 업체 2건 이상 묶음 — 같은 배경 + 좌측 띠로 한 덩어리임을 표시(바로 위 업체와 헷갈리지 않게) */
+    .st-dtl tr.pq-g{background:var(--panel-2)}
+    .st-dtl tr.pq-g td:first-child{box-shadow:inset 3px 0 0 var(--info)}
+    .st-dtl tr.pq-g-first td{border-top:2px solid var(--line-2)}
+    .st-dtl tr.pq-g-sum td{font-weight:800;color:var(--muted);border-bottom:2px solid var(--line-2)}
     .st-dt-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:var(--info-bg);color:var(--info);white-space:nowrap}
   </style>`;
 
@@ -353,15 +358,16 @@
       function payreqCard(doc, after){
         const paid=doc.status==='paid'; const items=doc.items||[]; const won=n=>Number(n||0).toLocaleString();
         // 결제요청과 동일하게 같은 업체(입점사)끼리 묶고 2건 이상이면 업체별 소계 표시(표시용 · 데이터 변경 없음)
-        const itemRow=r=>`<tr><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td style="font-weight:600">${esc(r.vendor||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td><td class="st-dt-wrap" style="min-width:150px;font-size:11.5px">${esc(r.account||'')}</td></tr>`;
+        const itemRow=(r,cls)=>`<tr${cls?` class="${cls}"`:''}><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td style="font-weight:600">${esc(r.vendor||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td><td class="st-dt-wrap" style="min-width:150px;font-size:11.5px">${esc(r.account||'')}</td></tr>`;
         const payItemsHtml=()=>{ if(!items.length) return `<tr><td colspan="6" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`;
           const s=items.slice().sort((a,b)=> String(a.vendor||'').localeCompare(String(b.vendor||'')) || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1)) );
           let html='', i=0;
           while(i<s.length){ const v=String(s[i].vendor||'').trim(); const g=[]; let j=i;
             while(j<s.length && String(s[j].vendor||'').trim()===v){ g.push(s[j]); j++; }
-            g.forEach(r=>{ html+=itemRow(r); });
-            if(g.length>1){ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
-              html+=`<tr style="background:var(--panel-2);font-weight:800"><td colspan="4" style="text-align:right;color:var(--muted)">${esc(v||'(미지정)')} · ${g.length}건 소계</td><td class="stnum">${won(gt)}원</td><td></td></tr>`; }
+            const many=g.length>1;
+            g.forEach((r,k)=>{ html+=itemRow(r, many?('pq-g'+(k===0?' pq-g-first':'')):''); });
+            if(many){ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
+              html+=`<tr class="pq-g pq-g-sum"><td colspan="4" style="text-align:right">${esc(v||'(미지정)')} · ${g.length}건 소계</td><td class="stnum">${won(gt)}원</td><td></td></tr>`; }
             i=j; }
           return html; };
         const card=el('div','st-card st-approve'+(paid?' done':''));
