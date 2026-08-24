@@ -201,11 +201,22 @@
     .st-dtl tr:last-child td{border-bottom:none}
     .st-dtl .stnum{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
     .st-dtl .st-dt-wrap{min-width:180px;white-space:pre-wrap;word-break:break-word;line-height:1.45}
-    /* 같은 업체 2건 이상 묶음 — 같은 배경 + 좌측 띠로 한 덩어리임을 표시(바로 위 업체와 헷갈리지 않게) */
-    .st-dtl tr.pq-g{background:var(--panel-2)}
-    .st-dtl tr.pq-g td:first-child{box-shadow:inset 3px 0 0 var(--info)}
-    .st-dtl tr.pq-g-first td{border-top:2px solid var(--line-2)}
-    .st-dtl tr.pq-g-sum td{font-weight:800;color:var(--muted);border-bottom:2px solid var(--line-2)}
+    /* 결제요청 = 입금 단위(업체)로 블록화 — 한 블록 = 한 번의 이체.
+       머리줄에 업체·계좌·입금액을 모아 두고, 그 아래에 무엇을 사는지 나열한다. */
+    .st-dtl tr.pq-hd td{background:var(--panel-2);border-top:12px solid var(--panel);padding:9px 12px}
+    .st-dtl tr.pq-hd:first-child td{border-top:0}
+    .pq-hdw{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .pq-vn{font-weight:800;font-size:13.5px;color:var(--ink)}
+    .pq-cnt{font-size:11px;font-weight:700;color:var(--muted);background:var(--panel);border:1px solid var(--line-2);border-radius:10px;padding:1px 8px}
+    .pq-acct{font-size:12.5px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums}
+    .pq-acct.none{color:var(--danger)}
+    .pq-copy{border:1px solid var(--line-2);background:var(--panel);border-radius:6px;font:inherit;font-size:11px;font-weight:700;color:var(--ink-2);padding:2px 8px;cursor:pointer}
+    .pq-copy:hover{border-color:var(--info);color:var(--info)}
+    .pq-amt{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap}
+    .pq-amt b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;margin-left:4px}
+    .st-dtl tr.pq-it td{border-bottom:1px solid var(--line-2)}
+    .st-dtl tr.pq-it td:first-child{padding-left:14px}
+    .st-dtl tr.pq-it:last-child td{border-bottom:1px solid var(--line)}
     .st-dt-badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:var(--info-bg);color:var(--info);white-space:nowrap}
   </style>`;
 
@@ -358,31 +369,38 @@
       function payreqCard(doc, after){
         const paid=doc.status==='paid'; const items=doc.items||[]; const won=n=>Number(n||0).toLocaleString();
         // 결제요청과 동일하게 같은 업체(입점사)끼리 묶고 2건 이상이면 업체별 소계 표시(표시용 · 데이터 변경 없음)
-        const itemRow=(r,cls)=>`<tr${cls?` class="${cls}"`:''}><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td style="font-weight:600">${esc(r.vendor||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td><td class="st-dt-wrap" style="min-width:150px;font-size:11.5px">${esc(r.account||'')}</td></tr>`;
-        const payItemsHtml=()=>{ if(!items.length) return `<tr><td colspan="6" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`;
+        const itemRow=r=>`<tr class="pq-it"><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td></tr>`;
+        // 업체 머리줄 = 이체 한 건 — 업체·계좌·입금액을 한 줄에 모아 대표님이 보고 바로 입금할 수 있게 한다
+        const blockHead=(v,g)=>{ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
+          const ac=(g.find(r=>String(r.account||'').trim())||{}).account||'';
+          return `<tr class="pq-hd"><td colspan="4"><div class="pq-hdw">
+            <span class="pq-vn">${esc(v||'(업체 미지정)')}</span><span class="pq-cnt">${g.length}건</span>
+            ${ac?`<span class="pq-acct">${esc(String(ac).trim())}</span><button type="button" class="pq-copy" data-acct="${esc(String(ac).trim())}">${icon('copy')||''}계좌 복사</button>`
+               :`<span class="pq-acct none">계좌 미등록 — 확인 필요</span>`}
+            <span class="pq-amt">입금액<b>${won(gt)}원</b></span></div></td></tr>`; };
+        const payItemsHtml=()=>{ if(!items.length) return `<tr><td colspan="4" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`;
           const s=items.slice().sort((a,b)=> String(a.vendor||'').localeCompare(String(b.vendor||'')) || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1)) );
           let html='', i=0;
           while(i<s.length){ const v=String(s[i].vendor||'').trim(); const g=[]; let j=i;
             while(j<s.length && String(s[j].vendor||'').trim()===v){ g.push(s[j]); j++; }
-            const many=g.length>1;
-            g.forEach((r,k)=>{ html+=itemRow(r, many?('pq-g'+(k===0?' pq-g-first':'')):''); });
-            if(many){ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
-              html+=`<tr class="pq-g pq-g-sum"><td colspan="4" style="text-align:right">${esc(v||'(미지정)')} · ${g.length}건 소계</td><td class="stnum">${won(gt)}원</td><td></td></tr>`; }
+            html+=blockHead(v,g); g.forEach(r=>{ html+=itemRow(r); });
             i=j; }
           return html; };
+        const vendorCount=()=> new Set(items.map(r=>String(r.vendor||'').trim())).size;
         const card=el('div','st-card st-approve'+(paid?' done':''));
         card.innerHTML=`
           <div class="st-hd"><div class="st-t">${icon('stamp')} 결제요청(선결제) · ${esc(doc.date)}</div>
             <span class="st-badge" style="color:${paid?'var(--ok)':'var(--info)'};background:${paid?'var(--ok-bg)':'var(--info-bg)'}">${paid?'결제 완료':'결제 대기'}</span></div>
-          <div class="st-sec-cap">선결제 결제요청 · ${items.length}건 · 합계 <b style="color:var(--ink)">${won(doc.total||0)}원</b></div>
-          <div style="overflow-x:auto"><table class="st-dtl"><thead><tr><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th>금액</th><th>계좌정보</th></tr></thead><tbody>
+          <div class="st-sec-cap">선결제 결제요청 · ${items.length}건 · 입금처 ${vendorCount()}곳 · 합계 <b style="color:var(--ink)">${won(doc.total||0)}원</b></div>
+          <div style="overflow-x:auto"><table class="st-dtl"><thead><tr><th style="width:54px">구분</th><th style="width:104px">주문자명</th><th>내용</th><th style="width:104px">금액</th></tr></thead><tbody>
             ${payItemsHtml()}
-          </tbody><tfoot><tr style="border-top:2px solid var(--line-2);font-weight:800"><td colspan="4" style="text-align:right">합계</td><td class="stnum">${won(doc.total||0)}원</td><td></td></tr></tfoot></table></div>
+          </tbody><tfoot><tr style="border-top:2px solid var(--line-2);font-weight:800"><td colspan="3" style="text-align:right">총 합계</td><td class="stnum">${won(doc.total||0)}원</td></tr></tfoot></table></div>
           <div class="st-cr" style="margin-top:10px"><div class="at" style="margin:0">상신 ${esc(doc.submittedByName||'')} · ${esc((doc.submittedAt||'').slice(0,16).replace('T',' '))}</div></div>
           <div class="st-actions">
             ${paid?`<span class="st-meta" style="color:var(--ok);font-weight:700">✓ ${esc(doc.paidByName||'')} 결제완료 · ${esc((doc.paidAt||'').slice(0,16).replace('T',' '))}</span>`
                   :`<button class="btn ok" data-a="pay">${icon('check')}결제완료 처리</button>`}
             <span class="st-meta" data-msg></span></div>`;
+        card.querySelectorAll('.pq-copy').forEach(b=>b.onclick=()=>copyText(b.dataset.acct||''));
         const msg=card.querySelector('[data-msg]');
         const pb=card.querySelector('[data-a=pay]'); if(pb) pb.onclick=async()=>{ pb.disabled=true; msg.textContent='처리 중…';
           const u=meU(); const cur={ ...doc, status:'paid', paidBy:u.loginId||u.name, paidByName:u.name||'관리자', paidAt:nowISO() };
