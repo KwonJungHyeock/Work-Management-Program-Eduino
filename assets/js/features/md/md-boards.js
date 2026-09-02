@@ -46,8 +46,31 @@
         // 담당자 목록 (사용자 편집 · 로컬 저장) — whoField 가 select/agent 인 경우
         const whoCfg = cfg.fields.find(f=>f.k===cfg.whoField);
         const agentsKey = 'eduino.md.board.'+cfg.sheet+'.agents';
-        const getAgents=()=> store(agentsKey).get((whoCfg&&whoCfg.options)?whoCfg.options.slice():[]);
+        /* 담당자 목록 = 저장된 목록 ∪ 이 부서 계정(로스터).
+           새 팀원은 계정만 만들어 주면 자동으로 뜬다 — 화면마다 이름을 따로 추가할 필요 없음.
+           (예전에는 수동 추가분이 추가한 사람 브라우저에만 남아, 다른 팀원 화면엔 안 보였음) */
+        let ROSTER=[];
+        const bdDept = cfg.dept||'md';   // 저장 경로와 동일한 기본값 — 보드 부서의 계정만 담당자 후보로
+        const rosterNames=()=> ROSTER.filter(p=>p && p.name && p.dept===bdDept)
+          .map(p=>String(p.name).trim()).filter(Boolean);
+        const getAgents=()=>{
+          const base=(store(agentsKey).get((whoCfg&&whoCfg.options)?whoCfg.options.slice():[])||[]).slice();
+          rosterNames().forEach(n=>{ if(base.indexOf(n)<0) base.push(n); });
+          return base;
+        };
         const setAgents=(v)=> store(agentsKey).set(v);
+        /* 로스터는 비동기 — 도착하면 이미 그려진 담당자 드롭다운만 다시 채운다(선택값 유지) */
+        function refreshAgentSels(){
+          root.querySelectorAll('select[data-agent]').forEach(sel=>{
+            const cur=sel.value, add=sel.querySelector('option[value="__add"]');
+            sel.innerHTML=`<option value="">(담당자 선택)</option>`+
+              getAgents().map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')+
+              (add?`<option value="__add">＋ 담당자 추가…</option>`:'');
+            sel.value=cur;
+          });
+        }
+        if(window.Records && Records.roster) Records.roster()
+          .then(list=>{ if(!root.isConnected) return; ROSTER=list||[]; refreshAgentSels(); }).catch(()=>{});
 
         // ── 구글 시트 2차 백업 연동 (모듈별 탭) ──
         const syncCfgKey='eduino.board.'+cfg.sheet+'.cfg';

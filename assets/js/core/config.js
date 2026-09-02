@@ -302,6 +302,9 @@ const SHARE_DEFAULT = {
   [STORE.tsMailTpl]:'md', [STORE.tsChatTpl]:'md', [STORE.tsTplTabs]:'md', [STORE.tsTplData]:'md',
   'eduino.board.exchange.cfg':'cs', 'eduino.board.postpay.cfg':'cs',
   'eduino.board.vendorchg.cfg':'md', 'eduino.board.stockmgmt.cfg':'md', 'eduino.board.inspect.cfg':'md', 'eduino.board.prodmgmt.cfg':'md',
+  'eduino.md.board.postpay.agents':'cs', 'eduino.md.board.exchange.agents':'cs',
+  'eduino.md.board.vendorchg.agents':'md', 'eduino.md.board.stockmgmt.agents':'md',
+  'eduino.md.board.inspect.agents':'md', 'eduino.md.board.prodmgmt.agents':'md',
   [STORE.shareMap]:'all',            // 범위 표 자체는 전사 공유(모두 같은 규칙을 봄)
   [STORE.optSets]:'all',             // 옵션칩 오버라이드 = 전사 공유(모두 같은 버튼을 봄)
   [STORE.settleCfg]:'all',           // 일일결산 시트 URL = 전사 공유
@@ -338,6 +341,10 @@ const SHARED_SETTING_KEYS = [
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
   'eduino.board.vendorchg.cfg', 'eduino.board.stockmgmt.cfg', 'eduino.board.inspect.cfg', 'eduino.board.prodmgmt.cfg',
+  // 현황판 담당자 목록 — 계정(로스터)에 없는 사람을 직접 추가한 경우가 팀 전체에 반영되도록 공유
+  'eduino.md.board.postpay.agents', 'eduino.md.board.exchange.agents',
+  'eduino.md.board.vendorchg.agents', 'eduino.md.board.stockmgmt.agents',
+  'eduino.md.board.inspect.agents', 'eduino.md.board.prodmgmt.agents',
 ];
 /* 동기화 항목의 사람이 읽는 이름 (무엇이 올라가는지 화면 표시용) */
 const SHARED_LABELS = {
@@ -363,6 +370,12 @@ const SHARED_LABELS = {
   [STORE.tsSumTpl]:'TS 결산 저장 양식',
   [STORE.tsMailTpl]:'TS 메일 템플릿',
   [STORE.tsChatTpl]:'TS 채팅 템플릿',
+  'eduino.md.board.postpay.agents':'견적/발주/후불 담당자 목록',
+  'eduino.md.board.exchange.agents':'교환/반품 담당자 목록',
+  'eduino.md.board.vendorchg.agents':'입점사 신규/변동 담당자 목록',
+  'eduino.md.board.stockmgmt.agents':'재고관리 담당자 목록',
+  'eduino.md.board.inspect.agents':'제품검수 담당자 목록',
+  'eduino.md.board.prodmgmt.agents':'상품관리 담당자 목록',
   'eduino.board.exchange.cfg':'교환/반품 시트 연동 URL',
   'eduino.board.postpay.cfg':'후불/발주 시트 연동 URL',
   'eduino.board.vendorchg.cfg':'입점사 신규/변동 시트 연동 URL',
