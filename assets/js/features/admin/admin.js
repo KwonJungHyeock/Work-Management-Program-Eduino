@@ -16,10 +16,14 @@
   const DEPTS=[['hq','에듀이노 총괄'],['cs','CS · 고객 상담'],['md','MD · 상품 기획'],['logi','물류 · 물류 관리']];
   const deptLabel=d=>({hq:'에듀이노 총괄',cs:'CS',md:'MD',logi:'물류',acct:'경리',hr:'HR',admin:'대표'}[d]||d||'-');
   // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD·물류 기능에서 생성)
-  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi'||g.dept==='hr')
+  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi'||g.dept==='hr'||g.dept==='hracct')
     .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
   // 사이드바 NAV엔 없지만 수정 권한 부여가 필요한 내장 기록판(발주 기록·상담 기록 등)
-  [{dept:'cs',extra:[{key:'cs.records',name:'CS상담 기록'}]},
+  [{dept:'hr',extra:[{key:'hr.fbwrite',name:'팀장 피드백 등록(팀장용·본인 작성분만)'},
+                     {key:'hr.legalme',name:'법정의무교육 — 본인 이수현황만'},
+                     {key:'hr.docme',name:'서류 발급 — 본인 신청분만'},
+                     {key:'hr.supplyme',name:'소모품 — 본인 요청분만'}]},
+   {dept:'cs',extra:[{key:'cs.records',name:'CS상담 기록'}]},
    {dept:'md',extra:[{key:'md.records',name:'발주 기록'},{key:'md.tsrecords',name:'TS상담 기록'},{key:'md.vendors',name:'입점사 정보 수정'}]}]
     .forEach(x=>{ const g=FEATURES.find(f=>f.dept===x.dept); if(g) x.extra.forEach(e=>{ if(!g.items.some(i=>i.key===e.key)) g.items.push(e); }); });
   const deptDefault=dept=>{ const g=FEATURES.find(x=>x.dept===dept); return g?g.items.map(it=>it.key):[]; };

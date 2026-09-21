@@ -55,26 +55,52 @@
   };
 
   async function draw(host, s){
-    host.innerHTML=HR.headBar(s)+`<div class="muted" style="padding:16px">불러오는 중…</div>`;
-    HR.wireHead(host, s);
-    const r=await HR.api('list',{ name:'staff' });
-    if(!host.isConnected) return;
-    if(r.relock){ s.relock(); return; }
-    if(!r.ok){ host.innerHTML=HR.headBar(s)+`<div class="hr-empty">${icon('alert')||''}<div style="margin-top:8px">${esc(r.error||'불러오지 못했습니다')}</div></div>`; HR.wireHead(host,s); return; }
-    let staff=(r.items||[]).slice().sort((a,b)=>
+    HR.loading(host, s);
+    const d=await HR.loadMany(['staff','apply','legal'], s);
+    if(!d||!host.isConnected) return;
+    let staff=d.staff.slice().sort((a,b)=>
       (TEAMS.findIndex(t=>t.k===a.team)-TEAMS.findIndex(t=>t.k===b.team)) ||
       String(a.name||'').localeCompare(String(b.name||''),'ko'));
-    const canWrite=!!r.canWrite;
+    const canWrite=!!d.can_staff;
+    /* 이수율·소진율 — 권한이 없어 못 읽은 항목은 '-' 로 둔다 */
+    const year=String(new Date().getFullYear());
+    const courses=d.legal.filter(x=>x.kind==='course');
+    const recs=d.legal.filter(x=>x.kind==='record'&&x.year===year);
+    const needN=staff.length*courses.length;
+    const doneN=recs.filter(x=>x.status==='이수').length;
+    const legalRate=needN?Math.round(doneN/needN*100):null;
+    const applyY=d.apply.filter(a=>String(a.appliedAt||'').slice(0,4)===year);
+    const usedAmt=applyY.reduce((t,a)=>t+(Number(a.price)||0),0);
+    const totalAmt=staff.length*BUDGET;
+    const useRate=totalAmt?Math.round(usedAmt/totalAmt*100):0;
+    const q=Math.floor(new Date().getMonth()/3)+1;
+    const qStart=new Date(new Date().getFullYear(),(q-1)*3,1).toISOString().slice(0,10);
+    const qRows=applyY.filter(a=>String(a.appliedAt||'').slice(0,10)>=qStart)
+      .sort((a,b)=>String(b.appliedAt).localeCompare(String(a.appliedAt)));
 
     const byTeam={}; staff.forEach(p=>{ byTeam[p.team]=(byTeam[p.team]||0)+1; });
     host.innerHTML=HR.headBar(s)+`
       <div class="hr-kpi">
         <div class="hr-k"><div class="v">${staff.length}<small>명</small></div><div class="l">등록 인원</div></div>
         <div class="hr-k"><div class="v">${Object.keys(byTeam).length}<small>팀</small></div><div class="l">사업팀</div></div>
-        <div class="hr-k"><div class="v">${fmtNum(staff.length*BUDGET)}<small>원</small></div><div class="l">연간 교육비 한도 총액 (1인 ${fmtNum(BUDGET)}원)</div></div>
-        <div class="hr-k"><div class="v">-</div><div class="l">법정의무교육 이수율 · 다음 단계에서 연결</div></div>
+        <div class="hr-k"><div class="v">${legalRate==null?'-':legalRate}<small>${legalRate==null?'':'%'}</small></div>
+          <div class="l">법정의무교육 이수율${needN?` · ${doneN}/${needN}건`:' · 과정 미등록'}</div></div>
+        <div class="hr-k"><div class="v">${useRate}<small>%</small></div>
+          <div class="l">교육비 소진율 · ${fmtNum(usedAmt)} / ${fmtNum(totalAmt)}원</div></div>
       </div>
       ${TEAMS.map(t=>`<span class="hr-tag" style="background:var(--panel-2);color:var(--ink-2);margin-right:6px">${esc(t.n)} ${byTeam[t.k]||0}명</span>`).join('')}
+      <div class="hr-sec">${icon('clipboard')||''} 이번 분기 진행 현황 <span class="muted">${esc(year)}년 ${q}분기 · ${qRows.length}건</span></div>
+      ${qRows.length?`<div class="hr-wrap" style="margin-bottom:6px"><table class="hr-tbl">
+        <thead><tr><th style="width:86px">직원명</th><th style="width:120px">추천 카테고리</th><th>강의</th>
+          <th style="width:100px">상태</th><th style="width:116px;text-align:right">예산 사용액</th></tr></thead>
+        <tbody>${qRows.map(a=>`<tr>
+          <td><b>${esc(a.staffName||'')}</b></td>
+          <td>${a.category?`<span class="hr-tag" style="background:var(--panel-2);color:var(--ink-2)">${esc(a.category)}</span>`:'<span class="muted">-</span>'}</td>
+          <td>${esc(a.title||'')}</td>
+          <td>${esc(a.status||'')}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtNum(a.price||0)}원</td>
+        </tr>`).join('')}</tbody></table></div>`
+      :`<div class="muted" style="font-size:12.5px;padding:2px 2px 8px">이번 분기 진행 중인 교육이 없습니다.</div>`}
       <div class="hr-sec">${icon('users')||''} 직원 마스터 <span class="muted">교육 한도·복리비·피드백의 기준이 되는 명단</span>
         ${canWrite?`<button class="btn pri sm" id="hrAdd">${icon('plus')||''}직원 추가</button>`:''}</div>
       ${canWrite?`<div class="hr-f" id="hrForm" hidden>
@@ -89,7 +115,7 @@
       </div>`:''}
       <div class="hr-wrap">
         <table class="hr-tbl"><thead><tr>
-          <th style="width:88px">이름</th><th style="width:150px">소속팀</th><th>직무</th>
+          <th style="width:88px">이름</th><th style="width:170px">소속팀</th><th>직무</th>
           <th style="width:70px">역할</th><th style="width:96px">입사일</th><th>부족 역량</th>
           ${canWrite?'<th style="width:96px"></th>':''}</tr></thead>
         <tbody id="hrRows"></tbody></table>
@@ -104,7 +130,7 @@
     const rows=host.querySelector('#hrRows');
     rows.innerHTML=staff.map(p=>`<tr data-id="${esc(p.id)}">
       <td><b>${esc(p.name||'')}</b></td>
-      <td>${esc(teamName(p.team))}</td>
+      <td style="white-space:nowrap">${esc(teamName(p.team))}</td>
       <td>${esc(p.job||'')||'<span class="muted">-</span>'}</td>
       <td>${p.role&&p.role!=='member'?`<span class="hr-tag" style="background:var(--active-bg);color:var(--red)">${esc(roleName(p.role))}</span>`:'팀원'}</td>
       <td>${esc(p.joinedAt||'')||'<span class="muted">-</span>'}</td>

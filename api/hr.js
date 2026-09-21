@@ -33,11 +33,13 @@ const DATA = {
   apply:    { need: 'hr.apply',    label: '교육 신청·예산', selfNeed: 'hr.mypage' },
   review:   { need: 'hr.review',   label: '교육 후기' },
   match:    { need: 'hr.match',    label: '맞춤 추천' },
-  feedback: { need: 'hr.feedback', label: '팀장 피드백' },     // 인사담당자·대표만
-  legal:    { need: 'hr.legal',    label: '법정의무교육' },
-  docreq:   { need: 'hr.docreq',   label: '서류 발급 신청' },
+  // 팀장 피드백: 전체 열람은 인사담당자·대표(hr.feedback)만.
+  // 팀장은 등록 권한(hr.fbwrite)만 받아 '자기가 쓴 것'만 보고 고칠 수 있다.
+  feedback: { need: 'hr.feedback', label: '팀장 피드백', selfNeed: 'hr.fbwrite' },
+  legal:    { need: 'hr.legal',    label: '법정의무교육', selfNeed: 'hr.legalme' },
+  docreq:   { need: 'hr.docreq',   label: '서류 발급 신청', selfNeed: 'hr.docme' },
   welfare:  { need: 'hr.welfare',  label: '팀 복리비' },
-  supply:   { need: 'hr.supply',   label: '소모품 관리' },
+  supply:   { need: 'hr.supply',   label: '소모품 관리', selfNeed: 'hr.supplyme' },
 };
 const HR_KEYS = [...new Set(Object.keys(DATA).reduce((a, k) => a.concat([DATA[k].need, DATA[k].selfNeed]), []).filter(Boolean))];
 /* 이 행이 '본인 것'인가 — 본인 행만 열람할 때 쓰는 판정(계정 아이디 기준) */
@@ -45,6 +47,9 @@ function ownedBy(item, loginId) {
   if (!item || !loginId) return false;
   return item.staffLogin === loginId || item.byId === loginId || item.loginId === loginId;
 }
+/* 개인 소유가 아닌 '공용 정의' 행(법정의무교육 과정, 자주 쓰는 소모품 등).
+   본인 행만 보는 사람도 이건 봐야 화면이 성립한다. 쓰기는 여전히 전체 권한자만 가능. */
+function isShared(item) { return !!(item && item.shared === true); }
 
 function kvCreds() {
   const env = process.env;
@@ -184,13 +189,13 @@ module.exports = async function handler(req, res) {
     if (op === 'list') {
       const map = arrToObj(await redis(['HGETALL', dataKey(name)]));
       let items = Object.keys(map).map(k => { try { const o = JSON.parse(map[k]); o.id = k; return o; } catch (e) { return null; } }).filter(Boolean);
-      if (selfRead) items = items.filter(x => ownedBy(x, t.u));           // 본인 것만
+      if (selfRead) items = items.filter(x => isShared(x) || ownedBy(x, t.u));   // 본인 것 + 공용 정의
       return res.status(200).json({ ok: true, items, canWrite: canWrite || selfWrite, self: selfRead });
     }
     if (op === 'get') {
       const v = await redis(['HGET', dataKey(name), String(body.id || '')]);
       let item = null; if (v) { try { item = JSON.parse(v); } catch (e) {} }
-      if (item && selfRead && !ownedBy(item, t.u)) item = null;           // 남의 행은 없는 것으로
+      if (item && selfRead && !isShared(item) && !ownedBy(item, t.u)) item = null;   // 남의 행은 없는 것으로
       return res.status(200).json({ ok: true, item, canWrite: canWrite || selfWrite });
     }
     if (op === 'put') {

@@ -212,6 +212,14 @@ const NAV = [
       { key:'hr.apply',   name:'신청 현황',         icon:'clipboard' },
       { key:'hr.mypage',  name:'나의 교육·잔여한도', icon:'user' },
       { key:'hr.review',  name:'교육 후기',         icon:'stamp' },
+      { key:'hr.feedback',name:'팀장 피드백',        icon:'lock' },
+  ]},
+  /* 경리(사내 지원) — 같은 hr.* 권한 키를 쓰되 메뉴만 분리(명세서 대분류 기준) */
+  { dept:'hracct', name:'경리', full:'사내 지원', icon:'stamp', restricted:true, items:[
+      { key:'hr.legal',   name:'법정의무교육',   icon:'shield' },
+      { key:'hr.docreq',  name:'서류 발급 신청', icon:'clipboard' },
+      { key:'hr.welfare', name:'팀 복리비',      icon:'users' },
+      { key:'hr.supply',  name:'소모품 관리',    icon:'box' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.approvals', name:'결재함', icon:'inbox' },
@@ -228,6 +236,14 @@ const NAV = [
 const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'cs.partners', 'cs.manual', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
   'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.tstpl', 'md.settle', 'md.manual',
   'logi.mouserin', 'logi.manual'];
+
+/* 화면 접근 별칭 — '전체 권한'은 없지만 '본인 것만' 권한이 있으면 그 화면에 들어갈 수 있다.
+   (예: 팀장은 hr.fbwrite 로 팀장 피드백 화면에 들어가 자기가 쓴 것만 본다 · 서버가 행 단위로 다시 거른다) */
+const PERM_ALIAS = {
+  'hr.feedback': ['hr.fbwrite'],
+  'hr.docreq'  : ['hr.docme'],
+  'hr.supply'  : ['hr.supplyme'],
+};
 
 /* 게시판별 '수정 권한' — 관리자이거나, 계정에 editPerms로 명시 부여된 경우 true.
    (부서원의 자기 부서 기본 수정 권한과 별개로 그 위에 더해지는 교차 부여 · 관리자가 계정 화면에서 페이지별로 부여) */

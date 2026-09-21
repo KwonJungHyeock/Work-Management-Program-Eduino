@@ -18,47 +18,6 @@
   const stBadge=v=>{ const c=ST_COLOR[v]||['#5b6675','#eef1f6'];
     return `<span class="he-st" style="color:${c[0]};background:${c[1]}">${esc(v||'')}</span>`; };
 
-  const CSS=`
-    .he-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-    .he-bar select,.he-bar input{width:auto;height:34px;font:inherit;font-size:12.5px}
-    .he-bar input.q{min-width:200px}
-    .he-cnt{margin-left:auto;font-size:12px;font-weight:700;color:var(--muted)}
-    .he-chip{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);border-radius:16px;padding:5px 12px;cursor:pointer}
-    .he-chip.on{border-color:var(--red);color:var(--red);background:var(--active-bg)}
-    .he-wrap{border:1px solid var(--line);border-radius:11px;overflow:auto;background:var(--panel)}
-    .he-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
-    .he-tbl th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel-2);white-space:nowrap}
-    .he-tbl td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle}
-    .he-tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
-    .he-st{font-size:11px;font-weight:800;border-radius:6px;padding:2px 9px;white-space:nowrap}
-    .he-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;background:var(--panel-2);color:var(--ink-2);margin-right:4px}
-    .he-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end;border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--panel);margin-bottom:12px}
-    .he-f[hidden]{display:none}
-    .he-f label{display:block;font-size:11px;font-weight:800;color:var(--muted);margin-bottom:4px}
-    .he-f input,.he-f select,.he-f textarea{width:100%;font:inherit;font-size:12.5px}
-    .he-f input,.he-f select{height:34px} .he-f textarea{height:auto;min-height:58px;padding:7px 9px}
-    .he-f .wide{grid-column:1/-1} .he-f .a{display:flex;gap:6px}
-    .he-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:11px}
-    .he-card{border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:11px;background:var(--panel);padding:12px 14px;box-shadow:var(--sh-sm)}
-    .he-card.book{border-left-color:#0a63c2} .he-card.course{border-left-color:#7c4dd6}
-    .he-card .t{font-weight:800;font-size:13.5px;margin:4px 0 3px}
-    .he-card .m{font-size:11.5px;color:var(--muted)}
-    .he-card .c{font-size:12.5px;color:var(--ink-2);margin-top:7px;line-height:1.55;white-space:pre-wrap}
-    .he-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:11px;margin-bottom:14px}
-    .he-k{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 15px;box-shadow:var(--sh-sm)}
-    .he-k .v{font-size:22px;font-weight:800;line-height:1.1} .he-k .v small{font-size:12px;color:var(--muted);margin-left:2px}
-    .he-k .l{font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:600}
-    .he-bw{height:8px;border-radius:5px;background:var(--line-2);overflow:hidden;margin-top:8px}
-    .he-bb{height:100%;background:var(--ok)} .he-bb.warn{background:var(--warn)} .he-bb.over{background:var(--danger)}
-    .he-sec{font-size:13px;font-weight:800;margin:18px 0 9px;display:flex;align-items:center;gap:8px}
-    .he-sec .muted{font-weight:600;font-size:11.5px} .he-sec .btn{margin-left:auto}
-    .he-empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
-    .he-star{color:#e8a33d;letter-spacing:1px}
-    .he-pick{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .he-pick .n{font-weight:800;font-size:14px}
-    .he-rec{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 14px;margin-bottom:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .he-rec .r{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
-    .he-rec .g{flex:1;min-width:180px} .he-rec .g b{font-size:13.5px} .he-rec .g div{font-size:11.5px;color:var(--muted);margin-top:2px}`;
 
   /* 여러 데이터 묶음을 한 번에 읽는다. 권한 밖이면 빈 배열로 두고 화면은 계속 그린다. */
   async function loadMany(names, s){
@@ -71,7 +30,7 @@
     return out;
   }
   const page=(key,title,desc,draw)=>{ MODULES[key]={ title, icon:'clipboard', render(root){
-    root.innerHTML=`<style>${(window.HR&&HR.CSS)||''}${CSS}</style>
+    root.innerHTML=`<style>${(window.HR&&HR.CSS)||''}</style>
       <div class="mhead"><div class="tt">${esc(title)}</div><div class="ds">${desc}</div></div>
       <div class="mbody wide" id="heBody"></div>`;
     HR.guard(root.querySelector('#heBody'), key, draw); } }; };
@@ -312,7 +271,7 @@
             <th style="width:100px">카테고리</th><th style="width:90px">금액</th><th style="width:116px">상태</th>
             <th style="width:96px">신청일</th>${d.can_apply?'<th style="width:52px"></th>':''}</tr></thead>
           <tbody>${list.map(a=>`<tr data-id="${esc(a.id)}">
-            <td><b>${esc(a.staffName||'')}</b></td><td>${esc(TEAMS[a.team]||'')}</td>
+            <td><b>${esc(a.staffName||'')}</b></td><td style="white-space:nowrap">${esc(TEAMS[a.team]||'')}</td>
             <td>${esc(a.title||'')}${a.platform?`<div class="muted" style="font-size:11px">${esc(a.platform)}</div>`:''}</td>
             <td>${a.category?`<span class="he-tag">${esc(a.category)}</span>`:'<span class="muted">-</span>'}</td>
             <td class="num">${fmtNum(a.price||0)}원</td>
@@ -348,7 +307,7 @@
   page('hr.mypage','나의 교육·잔여한도','본인의 교육 신청 내역과 남은 교육비입니다.',
   async function(host, s){
     loading(host,s);
-    const d=await loadMany(['apply'],s); if(!d||!host.isConnected) return;
+    const d=await loadMany(['apply','legal'],s); if(!d||!host.isConnected) return;
     const me=s.me||{};
     /* 서버가 본인 행만 내려주는 경우(일반 직원)와 전체를 보는 경우(담당자) 모두 대응 */
     const mine=d.apply.filter(a=>!a.staffLogin || a.staffLogin===me.loginId || a.staffName===me.name);
@@ -356,6 +315,32 @@
     const inYear=mine.filter(a=>yearOf(a.appliedAt)===year);
     const used=inYear.reduce((t,a)=>t+(Number(a.price)||0),0);
     const left=Math.max(0,BUDGET-used), rate=Math.round(used/BUDGET*100);
+
+    /* 나의 법정의무교육 — 영상 시청 후 [이수 요청] → 인사담당자 승인 시 '이수'로 바뀐다 */
+    const L_ST={ '미이수':['#8a8f98','#eef0f3'], '요청':['#b4530a','#fff4e6'], '이수':['#12886a','#e6f7f0'] };
+    const courses=d.legal.filter(x=>x.kind==='course');
+    const myRec=c=>d.legal.find(x=>x.kind==='record'&&x.courseId===c.id&&x.year===year
+      &&(x.staffLogin===me.loginId||x.staffName===me.name));
+    const legalHtml=()=>{
+      if(!courses.length) return '';
+      const doneN=courses.filter(c=>{ const r=myRec(c); return r&&r.status==='이수'; }).length;
+      return `<div class="he-sec">${icon('shield')||icon('check')||''} 나의 법정의무교육
+          <span class="muted">${esc(year)}년 · ${doneN}/${courses.length}건 이수</span></div>
+        <div class="he-wrap" style="margin-bottom:6px"><table class="he-tbl">
+          <thead><tr><th>교육명</th><th style="width:130px">주기</th><th style="width:90px" class="mid">영상</th>
+            <th style="width:96px" class="mid">상태</th><th style="width:116px" class="act"></th></tr></thead>
+          <tbody>${courses.map(c=>{ const r=myRec(c), st=(r&&r.status)||'미이수', col=L_ST[st]||L_ST['미이수'];
+            return `<tr>
+              <td><b>${esc(c.name||'')}</b></td><td>${esc(c.cycle||'')||'<span class="muted">-</span>'}</td>
+              <td class="mid">${c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">시청 ↗</a>`:'<span class="muted">-</span>'}</td>
+              <td class="mid"><span class="he-st" style="color:${col[0]};background:${col[1]}">${esc(st)}</span></td>
+              <td class="act">${st==='미이수'
+                ?`<button class="btn sm" data-lreq="${esc(c.id)}">${icon('check')||''}이수 요청</button>`
+                :st==='요청'?'<span class="muted" style="font-size:11.5px">승인 대기 중</span>':''}</td>
+            </tr>`; }).join('')}</tbody></table></div>`;
+    };
+
+    const paint=()=>{
     shell(host,s,`
       <div class="he-kpi">
         <div class="he-k"><div class="v">${fmtNum(BUDGET)}<small>원</small></div><div class="l">${esc(year)}년 연간 한도</div></div>
@@ -364,6 +349,7 @@
           <div class="he-bw"><div class="he-bb ${rate>100?'over':rate>80?'warn':''}" style="width:${Math.min(100,rate)}%"></div></div></div>
         <div class="he-k"><div class="v">${inYear.filter(a=>a.status==='수강완료').length}<small>건</small></div><div class="l">이수 완료 · 신청 ${inYear.length}건</div></div>
       </div>
+      ${legalHtml()}
       <div class="he-sec">${icon('clipboard')||''} 나의 신청 내역 <span class="muted">${mine.length}건</span></div>
       ${mine.length?`<div class="he-wrap"><table class="he-tbl">
         <thead><tr><th>강의</th><th style="width:110px">카테고리</th><th style="width:90px">금액</th>
@@ -375,6 +361,24 @@
           <td>${esc(String(a.appliedAt||'').slice(0,10))}</td></tr>`).join('')}</tbody></table></div>`
       :`<div class="he-empty">${icon('inbox')||''}<div style="margin-top:8px">아직 신청한 교육이 없습니다.</div>
         <div style="font-size:12px;margin-top:4px">인사담당자가 [맞춤 추천]으로 등록하거나, 필요한 교육을 요청하세요.</div></div>`}`);
+
+    /* 이수 요청 — 본인 행만 쓸 수 있도록 staffLogin 을 함께 저장(서버가 검사) */
+    host.querySelectorAll('[data-lreq]').forEach(b=>b.onclick=async()=>{
+      const c=courses.find(x=>x.id===b.dataset.lreq); if(!c) return;
+      if(!confirm(`'${c.name}' 영상을 모두 시청하셨나요? 이수를 요청합니다.`)) return;
+      const cur=myRec(c);
+      const item={ id:(cur&&cur.id)||uuid(), kind:'record', year, courseId:c.id,
+        staffId:(cur&&cur.staffId)||'', staffName:me.name||'', staffLogin:me.loginId||'',
+        status:'요청', reqAt:nowISO(), doneAt:'' };
+      b.disabled=true; const r=await HR.api('put',{ name:'legal', item });
+      if(r.relock){ s.relock(); return; }
+      if(!r.ok){ b.disabled=false; toast(r.error||'요청 실패'); return; }
+      toast('이수를 요청했습니다 · 인사담당자 승인 후 처리됩니다');
+      d.legal=cur?d.legal.map(x=>x.id===item.id?item:x):d.legal.concat([item]);
+      paint();
+    });
+    };
+    paint();
   });
 
   /* ───────────────────── 4-7 교육 후기 ───────────────────── */

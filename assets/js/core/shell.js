@@ -85,7 +85,9 @@ function bootShell(){
   const commonDepts = new Set(NAV.filter(g=>g.common).map(g=>g.dept));
   // 제한 영역(HR 등) — 명시적으로 권한을 받은 사람과 관리자에게만 존재 자체를 노출
   const RESTRICTED_DEPTS = new Set(NAV.filter(g=>g.restricted).map(g=>g.dept));
-  const groupVisible = (g)=> !g.restricted || isAdmin || (g.items||[]).some(it=>Array.isArray(perms)&&perms.includes(it.key));
+  const ALIAS = (typeof PERM_ALIAS!=='undefined')?PERM_ALIAS:{};
+  const hasKeyOrAlias = (key)=> !!(Array.isArray(perms) && (perms.includes(key) || (ALIAS[key]||[]).some(a=>perms.includes(a))));
+  const groupVisible = (g)=> !g.restricted || isAdmin || (g.items||[]).some(it=>hasKeyOrAlias(it.key));
   const deptOpen = new Set(typeof DEPT_OPEN_KEYS!=='undefined'?DEPT_OPEN_KEYS:[]);
   const hasPerm = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
@@ -93,7 +95,7 @@ function bootShell(){
     if(isLead && key==='admin.insights') return true;  // 파트장 → 자기 파트 업무 현황
     if(deptOpen.has(key) && d===myDept) return true;   // 누적 시트 등 직무 기본 열람
     if(key==='md.order' && perms && perms.includes('md.vendors')) return true;   // 입점사 정보 수정 권한자 → 발주 페이지 접근
-    if(perms) return perms.includes(key);
+    if(perms) return hasKeyOrAlias(key);
     if(RESTRICTED_DEPTS.has(d)) return false;          // HR 등 제한 영역은 부서 폴백으로 열리지 않음
     return d===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
@@ -102,7 +104,7 @@ function bootShell(){
     return hasPerm(key); };
 
   // 내비게이션 — 공통(홈)은 항상, CS·MD는 표시하되 권한 없는 기능은 잠금
-  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', logi:'#20b088', hr:'#7c4dd6', admin:'#f0a020' };
+  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', logi:'#20b088', hr:'#7c4dd6', hracct:'#0e8a9c', admin:'#f0a020' };
   const nav = $('nav');
   // 메뉴 커스터마이즈 — 관리자가 드래그로 순서변경 · 더블클릭으로 이름변경. 전 직원 공유(공용 coll 'navcustom').
   //  로컬 캐시로 즉시 적용 후 서버 최신본 반영. navCfg = { order:{dept:[key…]}, names:{key:label} }

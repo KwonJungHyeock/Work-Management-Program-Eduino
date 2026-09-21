@@ -39,9 +39,11 @@
     function run(){
       const s=session();
       if(!s){ lockScreen(); return; }
-      if((s.scope&&s.scope.r||[]).indexOf(pageKey)<0){ denyScreen(s); return; }
+      const keys=Array.isArray(pageKey)?pageKey:[pageKey];
+      const R=(s.scope&&s.scope.r)||[], W=(s.scope&&s.scope.w)||[];
+      if(!keys.some(k=>R.indexOf(k)>=0)){ denyScreen(s); return; }
       host.innerHTML='';
-      draw(host, { ...s, canWrite:(s.scope&&s.scope.w||[]).indexOf(pageKey)>=0, relock:()=>{ clear(); run(); } });
+      draw(host, { ...s, keys, has:k=>R.indexOf(k)>=0, canWrite:keys.some(k=>W.indexOf(k)>=0), relock:()=>{ clear(); run(); } });
     }
     function denyScreen(s){
       host.innerHTML=`<div class="hr-lock"><div class="hr-lock-box">${icon('lock')||''}
@@ -102,7 +104,72 @@
     .hr-msg{font-size:12.5px;color:var(--muted);margin-top:10px;min-height:18px}
     .hr-msg .bad{color:var(--danger);font-weight:700}
     .hr-who{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:7px 12px;margin-bottom:14px}
-    .hr-who .btn{margin-left:auto}`;
+    .hr-who .btn{margin-left:auto}
+    .he-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .he-bar select,.he-bar input{width:auto;height:34px;font:inherit;font-size:12.5px}
+    .he-bar input.q{min-width:200px}
+    .he-cnt{margin-left:auto;font-size:12px;font-weight:700;color:var(--muted)}
+    .he-chip{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);border-radius:16px;padding:5px 12px;cursor:pointer}
+    .he-chip.on{border-color:var(--red);color:var(--red);background:var(--active-bg)}
+    .he-wrap{border:1px solid var(--line);border-radius:11px;overflow:auto;background:var(--panel)}
+    .he-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+    .he-tbl th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel-2);white-space:nowrap}
+    .he-tbl td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+    .he-tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+    .he-st{font-size:11px;font-weight:800;border-radius:6px;padding:2px 9px;white-space:nowrap}
+    .he-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;background:var(--panel-2);color:var(--ink-2);margin-right:4px}
+    .he-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end;border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--panel);margin-bottom:12px}
+    .he-f[hidden]{display:none}
+    .he-f label{display:block;font-size:11px;font-weight:800;color:var(--muted);margin-bottom:4px}
+    .he-f input,.he-f select,.he-f textarea{width:100%;font:inherit;font-size:12.5px}
+    .he-f input,.he-f select{height:34px} .he-f textarea{height:auto;min-height:58px;padding:7px 9px}
+    .he-f .wide{grid-column:1/-1} .he-f .a{display:flex;gap:6px}
+    .he-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:11px}
+    .he-card{border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:11px;background:var(--panel);padding:12px 14px;box-shadow:var(--sh-sm)}
+    .he-card.book{border-left-color:#0a63c2} .he-card.course{border-left-color:#7c4dd6}
+    .he-card .t{font-weight:800;font-size:13.5px;margin:4px 0 3px}
+    .he-card .m{font-size:11.5px;color:var(--muted)}
+    .he-card .c{font-size:12.5px;color:var(--ink-2);margin-top:7px;line-height:1.55;white-space:pre-wrap}
+    .he-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:11px;margin-bottom:14px}
+    .he-k{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 15px;box-shadow:var(--sh-sm)}
+    .he-k .v{font-size:22px;font-weight:800;line-height:1.1} .he-k .v small{font-size:12px;color:var(--muted);margin-left:2px}
+    .he-k .l{font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:600}
+    .he-bw{height:8px;border-radius:5px;background:var(--line-2);overflow:hidden;margin-top:8px}
+    .he-bb{height:100%;background:var(--ok)} .he-bb.warn{background:var(--warn)} .he-bb.over{background:var(--danger)}
+    .he-sec{font-size:13px;font-weight:800;margin:18px 0 9px;display:flex;align-items:center;gap:8px}
+    .he-sec .muted{font-weight:600;font-size:11.5px} .he-sec .btn{margin-left:auto}
+    .he-empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
+    .he-star{color:#e8a33d;letter-spacing:1px}
+    .he-pick{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .he-pick .n{font-weight:800;font-size:14px}
+    .he-rec{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 14px;margin-bottom:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .he-rec .r{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+    .he-rec .g{flex:1;min-width:180px} .he-rec .g b{font-size:13.5px} .he-rec .g div{font-size:11.5px;color:var(--muted);margin-top:2px}
+    /* 공통 정렬 규칙 — 도구줄의 건수는 항상 오른쪽 끝, 표의 액션칸은 줄바꿈 없음 */
+    .he-bar>.right,.he-cnt{margin-left:auto}
+    .he-tbl td.act{white-space:nowrap;text-align:right}
+    .he-tbl th.act{text-align:right}
+    .he-tbl td.mid{text-align:center} .he-tbl th.mid{text-align:center}`;
 
-  window.HR={ session, clear, api, unlock, guard, headBar, wireHead, CSS };
+  /* 화면 공통 골격 — 모든 HR 화면이 같은 머리말·여백·정렬을 쓰도록 한 곳에서 만든다 */
+  function page(key, title, desc, draw, guardKeys){
+    MODULES[key]={ title, icon:'clipboard', render(root){
+      root.innerHTML=`<style>${CSS}</style>
+        <div class="mhead"><div class="tt">${esc(title)}</div><div class="ds">${desc}</div></div>
+        <div class="mbody wide" id="heBody"></div>`;
+      guard(root.querySelector('#heBody'), guardKeys||key, draw); } };
+  }
+  const shell=(host,s,html)=>{ host.innerHTML=headBar(s)+html; wireHead(host,s); };
+  const loading=(host,s)=>shell(host,s,`<div class="muted" style="padding:16px">불러오는 중…</div>`);
+  /* 여러 데이터 묶음을 순서대로 읽는다. 권한 밖이면 빈 배열로 두고 화면은 계속 그린다. */
+  async function loadMany(names, s){
+    const out={};
+    for(const n of names){
+      const r=await api('list',{ name:n });
+      if(r.relock){ s.relock(); return null; }
+      out[n]=r.ok?(r.items||[]):[]; out['can_'+n]=!!(r.ok&&r.canWrite); out['self_'+n]=!!r.self; out['err_'+n]=r.ok?'':(r.error||'');
+    }
+    return out;
+  }
+  window.HR={ session, clear, api, unlock, guard, headBar, wireHead, page, shell, loading, loadMany, CSS };
 })();
