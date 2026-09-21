@@ -205,7 +205,13 @@ const NAV = [
   /* HR — 인사·교육·총무. restricted:true = 권한 없는 사람에겐 메뉴 자체가 보이지 않음
      (다른 부서처럼 자물쇠로 노출되면 안 되는 민감 영역 · 서버 검증은 api/hr.js) */
   { dept:'hr', name:'HR', full:'인사·총무', icon:'users', restricted:true, items:[
-      { key:'hr.home', name:'홈·분기 현황', icon:'dashboard' },
+      { key:'hr.home',    name:'홈·분기 현황',      icon:'dashboard' },
+      { key:'hr.share',   name:'추천도서·강의 공유', icon:'chat' },
+      { key:'hr.match',   name:'맞춤 추천',         icon:'search' },
+      { key:'hr.catalog', name:'강의 카탈로그',      icon:'grid' },
+      { key:'hr.apply',   name:'신청 현황',         icon:'clipboard' },
+      { key:'hr.mypage',  name:'나의 교육·잔여한도', icon:'user' },
+      { key:'hr.review',  name:'교육 후기',         icon:'stamp' },
   ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.approvals', name:'결재함', icon:'inbox' },

@@ -83,6 +83,7 @@
         <div><label>직무</label><input id="sfJob" placeholder="예: 경리/HR"></div>
         <div><label>역할</label><select id="sfRole">${ROLES.map(v=>`<option value="${v[0]}">${v[1]}</option>`).join('')}</select></div>
         <div><label>입사일</label><input id="sfJoin" type="date"></div>
+        <div><label>계정 아이디(선택)</label><input id="sfLogin" placeholder="마이페이지 연결용"></div>
         <div><label>부족 역량(쉼표 구분)</label><input id="sfGap" placeholder="예: 회계, 데이터분석"></div>
         <div class="a"><button class="btn pri sm" id="sfSave">${icon('check')||''}저장</button><button class="btn ghost sm" id="sfCancel">취소</button></div>
       </div>`:''}
@@ -118,6 +119,7 @@
       $('#sfName').value=p?p.name||'':''; $('#sfTeam').value=p?p.team||'edutech':'edutech';
       $('#sfJob').value=p?p.job||'':''; $('#sfRole').value=p?p.role||'member':'member';
       $('#sfJoin').value=p?p.joinedAt||'':''; $('#sfGap').value=p?(p.gaps||[]).join(', '):'';
+      $('#sfLogin').value=p?p.loginId||'':'';
       $('#sfName').focus(); };
     const add=$('#hrAdd'); if(add) add.onclick=()=>openForm(null);
     $('#sfCancel').onclick=()=>{ form.hidden=true; editing=null; };
@@ -125,7 +127,7 @@
       const name=($('#sfName').value||'').trim();
       if(!name){ toast('이름을 입력하세요'); $('#sfName').focus(); return; }
       const item={ id:(editing&&editing.id)||uuid(), name, team:$('#sfTeam').value, job:($('#sfJob').value||'').trim(),
-        role:$('#sfRole').value, joinedAt:$('#sfJoin').value||'',
+        role:$('#sfRole').value, joinedAt:$('#sfJoin').value||'', loginId:($('#sfLogin').value||'').trim(),
         gaps:($('#sfGap').value||'').split(',').map(x=>x.trim()).filter(Boolean) };
       $('#sfSave').disabled=true;
       const d=await HR.api('put',{ name:'staff', item });

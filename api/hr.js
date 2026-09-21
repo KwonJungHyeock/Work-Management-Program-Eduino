@@ -29,15 +29,22 @@ const DATA = {
   staff:    { need: 'hr.home',     label: '직원 마스터' },
   share:    { need: 'hr.share',    label: '추천도서·강의' },
   catalog:  { need: 'hr.catalog',  label: '강의 카탈로그' },
-  apply:    { need: 'hr.apply',    label: '교육 신청·예산' },
+  // selfNeed = 전체 열람 권한은 없지만 '본인 행만' 볼 수 있는 권한(명세서: 일반 직원 = 본인 관련 항목만)
+  apply:    { need: 'hr.apply',    label: '교육 신청·예산', selfNeed: 'hr.mypage' },
   review:   { need: 'hr.review',   label: '교육 후기' },
+  match:    { need: 'hr.match',    label: '맞춤 추천' },
   feedback: { need: 'hr.feedback', label: '팀장 피드백' },     // 인사담당자·대표만
   legal:    { need: 'hr.legal',    label: '법정의무교육' },
   docreq:   { need: 'hr.docreq',   label: '서류 발급 신청' },
   welfare:  { need: 'hr.welfare',  label: '팀 복리비' },
   supply:   { need: 'hr.supply',   label: '소모품 관리' },
 };
-const HR_KEYS = Object.keys(DATA).map(k => DATA[k].need);
+const HR_KEYS = [...new Set(Object.keys(DATA).reduce((a, k) => a.concat([DATA[k].need, DATA[k].selfNeed]), []).filter(Boolean))];
+/* 이 행이 '본인 것'인가 — 본인 행만 열람할 때 쓰는 판정(계정 아이디 기준) */
+function ownedBy(item, loginId) {
+  if (!item || !loginId) return false;
+  return item.staffLogin === loginId || item.byId === loginId || item.loginId === loginId;
+}
 
 function kvCreds() {
   const env = process.env;
@@ -166,24 +173,33 @@ module.exports = async function handler(req, res) {
 
     const canRead = (t.r || []).indexOf(meta.need) >= 0;
     const canWrite = (t.w || []).indexOf(meta.need) >= 0;
-    if (!canRead) {
+    // 전체 권한이 없어도 '본인 행만' 권한이 있으면 자기 것은 보고 쓸 수 있다
+    const selfRead = !canRead && !!meta.selfNeed && (t.r || []).indexOf(meta.selfNeed) >= 0;
+    const selfWrite = !canWrite && !!meta.selfNeed && (t.w || []).indexOf(meta.selfNeed) >= 0;
+    if (!canRead && !selfRead) {
       await logAudit({ area: 'HR', act: 'deny', who: t.u, detail: name });
       return res.status(403).json({ ok: false, error: `'${meta.label}' 열람 권한이 없습니다.` });
     }
 
     if (op === 'list') {
       const map = arrToObj(await redis(['HGETALL', dataKey(name)]));
-      const items = Object.keys(map).map(k => { try { const o = JSON.parse(map[k]); o.id = k; return o; } catch (e) { return null; } }).filter(Boolean);
-      return res.status(200).json({ ok: true, items, canWrite });
+      let items = Object.keys(map).map(k => { try { const o = JSON.parse(map[k]); o.id = k; return o; } catch (e) { return null; } }).filter(Boolean);
+      if (selfRead) items = items.filter(x => ownedBy(x, t.u));           // 본인 것만
+      return res.status(200).json({ ok: true, items, canWrite: canWrite || selfWrite, self: selfRead });
     }
     if (op === 'get') {
       const v = await redis(['HGET', dataKey(name), String(body.id || '')]);
       let item = null; if (v) { try { item = JSON.parse(v); } catch (e) {} }
-      return res.status(200).json({ ok: true, item, canWrite });
+      if (item && selfRead && !ownedBy(item, t.u)) item = null;           // 남의 행은 없는 것으로
+      return res.status(200).json({ ok: true, item, canWrite: canWrite || selfWrite });
     }
     if (op === 'put') {
-      if (!canWrite) return res.status(403).json({ ok: false, error: `'${meta.label}' 수정 권한이 없습니다.` });
+      if (!canWrite && !selfWrite) return res.status(403).json({ ok: false, error: `'${meta.label}' 수정 권한이 없습니다.` });
       const item = body.item || {};
+      if (!canWrite && selfWrite && !ownedBy(item, t.u)) {                // 본인 행만 쓰기
+        await logAudit({ area: 'HR', act: 'deny-write', who: t.u, detail: name });
+        return res.status(403).json({ ok: false, error: '본인 항목만 저장할 수 있습니다.' });
+      }
       const id = String(item.id || '').trim();
       if (!id) return res.status(400).json({ ok: false, error: 'item.id required' });
       item.updatedAt = new Date().toISOString();
@@ -193,9 +209,14 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true, item });
     }
     if (op === 'del') {
-      if (!canWrite) return res.status(403).json({ ok: false, error: `'${meta.label}' 수정 권한이 없습니다.` });
+      if (!canWrite && !selfWrite) return res.status(403).json({ ok: false, error: `'${meta.label}' 수정 권한이 없습니다.` });
       const id = String(body.id || '').trim();
       if (!id) return res.status(400).json({ ok: false, error: 'id required' });
+      if (!canWrite && selfWrite) {                                       // 본인 행만 삭제
+        const v = await redis(['HGET', dataKey(name), id]);
+        let cur = null; if (v) { try { cur = JSON.parse(v); } catch (e) {} }
+        if (!cur || !ownedBy(cur, t.u)) return res.status(403).json({ ok: false, error: '본인 항목만 삭제할 수 있습니다.' });
+      }
       const n = await redis(['HDEL', dataKey(name), id]);
       await logAudit({ area: 'HR', act: 'del', who: t.u, name: t.n, detail: name + '/' + id });
       return res.status(200).json({ ok: true, removed: Number(n) || 0 });
