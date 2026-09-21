@@ -202,6 +202,11 @@ const NAV = [
       { key:'logi.mouserin', name:'자사제품 입고', icon:'box' },
       { key:'logi.manual', name:'업무 매뉴얼', icon:'clipboard' },
   ]},
+  /* HR — 인사·교육·총무. restricted:true = 권한 없는 사람에겐 메뉴 자체가 보이지 않음
+     (다른 부서처럼 자물쇠로 노출되면 안 되는 민감 영역 · 서버 검증은 api/hr.js) */
+  { dept:'hr', name:'HR', full:'인사·총무', icon:'users', restricted:true, items:[
+      { key:'hr.home', name:'홈·분기 현황', icon:'dashboard' },
+  ]},
   { dept:'admin', name:'관리자', full:'계정·현황', icon:'shield', adminOnly:true, items:[
       { key:'admin.approvals', name:'결재함', icon:'inbox' },
       { key:'admin.insights', name:'업무 현황', icon:'chart' },

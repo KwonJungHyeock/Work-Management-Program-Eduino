@@ -59,6 +59,14 @@ async function collAll(name) {
 }
 const COLL_NAMES = ['chinaorders', 'notice', 'memo', 'callbacks', 'calendar', 'ntrex', 'duties', 'handover_md', 'handover_cs',
   'assignments', 'requests', 'cafe24_sales', 'ts_history', 'activity', 'mouser_parts', 'mouser_edmap', 'settlements', 'mouser_inbound', 'navcustom'];
+/* HR 데이터 — eduino:hr:<이름> 해시. 컬렉션과 저장 위치가 달라 따로 수집한다.
+   (api/hr.js 의 DATA 목록과 같은 이름을 쓴다 — 화면을 늘리면 여기도 함께 늘릴 것) */
+const HR_NAMES = ['staff', 'share', 'catalog', 'apply', 'review', 'feedback', 'legal', 'docreq', 'welfare', 'supply'];
+async function hrAll(name) {
+  const arr = await redis(['HGETALL', 'eduino:hr:' + name]); const out = [];
+  if (Array.isArray(arr)) for (let i = 1; i < arr.length; i += 2) { try { out.push(JSON.parse(arr[i])); } catch (e) {} }
+  return out;
+}
 async function snapshotCollections() {
   const names = COLL_NAMES;
   const data = {}, counts = {};
@@ -104,6 +112,8 @@ async function snapshotDay() {
   }
   const colls = {};
   for (const n of COLL_NAMES) { const items = await collAll(n); if (items.length) { colls[n] = items; counts['coll:' + n] = items.length; } }
+  const hr = {};
+  for (const n of HR_NAMES) { const items = await hrAll(n); if (items.length) { hr[n] = items; counts['hr:' + n] = items.length; } }
   const settings = {};
   for (const sc of ['all', 'cs', 'md']) {
     const key = sc === 'all' ? 'eduino:settings' : 'eduino:settings:' + sc;
@@ -111,7 +121,7 @@ async function snapshotDay() {
     if (Array.isArray(arr)) for (let i = 0; i < arr.length; i += 2) o[arr[i]] = arr[i + 1];
     if (Object.keys(o).length) { settings[sc] = o; counts['settings:' + sc] = Object.keys(o).length; }
   }
-  const gz = packGz({ day, at, sheets, colls, settings });
+  const gz = packGz({ day, at, sheets, colls, hr, settings });
   const key = 'eduino:backup:day:' + day;
   await redis(['SET', key, JSON.stringify({ day, at, v: 2, gz, counts, bytes: gz.length })]);
   await redis(['EXPIRE', key, String(DAY_KEEP * 24 * 3600)]);           // 자동 만료 → 용량 무한증가 방지

@@ -14,9 +14,9 @@
     return d;
   }
   const DEPTS=[['hq','에듀이노 총괄'],['cs','CS · 고객 상담'],['md','MD · 상품 기획'],['logi','물류 · 물류 관리']];
-  const deptLabel=d=>({hq:'에듀이노 총괄',cs:'CS',md:'MD',logi:'물류',acct:'경리',admin:'대표'}[d]||d||'-');
+  const deptLabel=d=>({hq:'에듀이노 총괄',cs:'CS',md:'MD',logi:'물류',acct:'경리',hr:'HR',admin:'대표'}[d]||d||'-');
   // 권한 부여용 기능 목록 (사이드바 NAV의 CS·MD·물류 기능에서 생성)
-  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi')
+  const FEATURES=(typeof NAV!=='undefined'?NAV:[]).filter(g=>g.dept==='cs'||g.dept==='md'||g.dept==='logi'||g.dept==='hr')
     .map(g=>({dept:g.dept,name:g.name,items:(g.items||[]).map(it=>({key:it.key,name:it.name}))}));
   // 사이드바 NAV엔 없지만 수정 권한 부여가 필요한 내장 기록판(발주 기록·상담 기록 등)
   [{dept:'cs',extra:[{key:'cs.records',name:'CS상담 기록'}]},

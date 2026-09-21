@@ -83,6 +83,9 @@ function bootShell(){
   const isLead = !!(me.user && me.user.role==='lead' && (myDept==='cs'||myDept==='md'));   // 파트장(직무별)
   const perms = Array.isArray(me.user && me.user.perms) ? me.user.perms : null;
   const commonDepts = new Set(NAV.filter(g=>g.common).map(g=>g.dept));
+  // 제한 영역(HR 등) — 명시적으로 권한을 받은 사람과 관리자에게만 존재 자체를 노출
+  const RESTRICTED_DEPTS = new Set(NAV.filter(g=>g.restricted).map(g=>g.dept));
+  const groupVisible = (g)=> !g.restricted || isAdmin || (g.items||[]).some(it=>Array.isArray(perms)&&perms.includes(it.key));
   const deptOpen = new Set(typeof DEPT_OPEN_KEYS!=='undefined'?DEPT_OPEN_KEYS:[]);
   const hasPerm = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
@@ -91,6 +94,7 @@ function bootShell(){
     if(deptOpen.has(key) && d===myDept) return true;   // 누적 시트 등 직무 기본 열람
     if(key==='md.order' && perms && perms.includes('md.vendors')) return true;   // 입점사 정보 수정 권한자 → 발주 페이지 접근
     if(perms) return perms.includes(key);
+    if(RESTRICTED_DEPTS.has(d)) return false;          // HR 등 제한 영역은 부서 폴백으로 열리지 않음
     return d===myDept; };   // 폴백(권한정보 없는 옛 계정)
   const canAccess = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
@@ -98,7 +102,7 @@ function bootShell(){
     return hasPerm(key); };
 
   // 내비게이션 — 공통(홈)은 항상, CS·MD는 표시하되 권한 없는 기능은 잠금
-  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', logi:'#20b088', admin:'#f0a020' };
+  const DEPT_COLOR = { home:'#5b6b7f', cs:'#4d9bff', md:'#ff5257', logi:'#20b088', hr:'#7c4dd6', admin:'#f0a020' };
   const nav = $('nav');
   // 메뉴 커스터마이즈 — 관리자가 드래그로 순서변경 · 더블클릭으로 이름변경. 전 직원 공유(공용 coll 'navcustom').
   //  로컬 캐시로 즉시 적용 후 서버 최신본 반영. navCfg = { order:{dept:[key…]}, names:{key:label} }
@@ -109,6 +113,7 @@ function bootShell(){
     return [...known, ...items.filter(it=>!seen.has(it.key))]; };
   NAV.forEach(g=>{
     if(g.adminOnly && !isAdmin) return;              // 관리자 전용은 관리자만
+    if(!groupVisible(g)) return;                     // 제한 영역은 권한자에게만 (자물쇠로도 노출 안 함)
     const grp = el('div','nav-group'+(g.common?' nav-group-top':''));
     grp.dataset.dept = g.dept;
     grp.style.setProperty('--dept', DEPT_COLOR[g.dept]||'#8b93a1');
@@ -261,7 +266,7 @@ function bootShell(){
   // ---- 전역 검색 / 커맨드 팔레트 (⌘K / Ctrl+K) ----
   (function(){
     const navItems=[];
-    NAV.forEach(g=>{ if(g.adminOnly && !isAdmin) return; g.items.forEach(it=>{ if(canAccess(it.key)) navItems.push({type:'nav',key:it.key,name:it.name,group:g.name||'홈'}); }); });
+    NAV.forEach(g=>{ if(g.adminOnly && !isAdmin) return; if(!groupVisible(g)) return; g.items.forEach(it=>{ if(canAccess(it.key)) navItems.push({type:'nav',key:it.key,name:it.name,group:g.name||'홈'}); }); });
     if(isLead && !isAdmin) navItems.push({type:'nav',key:'admin.insights',name:'우리 파트 현황',group:'파트 관리'});
     const ov=el('div','pal-ov'); ov.id='palOv'; ov.style.display='none';
     ov.innerHTML=`<div class="pal" role="dialog"><div class="pal-in">${icon('search')}
