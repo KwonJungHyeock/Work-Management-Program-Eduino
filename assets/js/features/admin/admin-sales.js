@@ -45,24 +45,47 @@
     if(/중학교/.test(a)) return '중등'; if(/초등학교|초교/.test(a)) return '초등';
     if(/유치원|어린이집/.test(a)) return '유아'; return '개인·기업'; };
   const CAFE_DIMS=[['ch','판매처'],['sup','공급처'],['prod','상품분류'],['cust','고객유형(주소)']];
-  // CSV 파싱(따옴표 필드) → 4축 분류 집계
+  /* CSV 파싱(따옴표 필드) → 4축 분류 집계
+     카페24는 내려받는 메뉴마다 열 이름·구분자·제목줄이 달라서, 다음을 자동으로 맞춘다:
+       · 구분자(쉼표·세미콜론·탭)  · 제목줄이 위에 붙은 파일의 실제 헤더 행
+       · 열 이름 변형(판매처/쇼핑몰/유입경로 · 합계금액/총결제금액/실결제금액 …)
+     어떤 열을 금액으로 썼는지는 업로드 미리보기에 그대로 보여 주어 눈으로 확인하게 한다. */
+  const CF_CH  =['판매처','쇼핑몰','몰명','유입경로','주문경로','마켓','채널'];
+  // 취소분이 섞인 열(총주문금액 등)이 먼저 잡히지 않도록 '실제 결제/매출' 계열을 앞에 둔다
+  const CF_AMT =['합계금액','실결제금액','실매출액','총결제금액','결제금액','판매금액','상품금액','매출액','주문금액','금액'];
+  const CF_SUP =['공급처','공급업체','제조사','브랜드'];
+  const CF_PROD=['사입상품','상품코드','자체상품코드','상품명','상품'];
+  const CF_ADDR=['수령자주소','수취인주소','배송지','주소'];
   function parseCafeCsv(text){
     const lines=String(text||'').split(/\r?\n/).filter(l=>l.trim().length); if(lines.length<2) return {err:'빈 파일입니다.'};
+    const delim=(()=>{ const s=lines[0], n=c=>(s.split(c).length-1);
+      const cand=[[',',n(',')],[';',n(';')],['\t',n('\t')]].sort((a,b)=>b[1]-a[1]); return cand[0][1]?cand[0][0]:','; })();
     const cell=l=>{ const out=[]; let cur='',q=false; for(let i=0;i<l.length;i++){ const ch=l[i];
       if(q){ if(ch==='"'){ if(l[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
-      else { if(ch==='"') q=true; else if(ch===','){ out.push(cur); cur=''; } else cur+=ch; } } out.push(cur); return out; };
-    const head=cell(lines[0]).map(s=>String(s).replace(/\(.*?\)|\s/g,''));
+      else { if(ch==='"') q=true; else if(ch===delim){ out.push(cur); cur=''; } else cur+=ch; } } out.push(cur); return out; };
+    const norm=s=>String(s).replace(/\(.*?\)|\s|["']/g,'');
+    const hit=(h,cands)=>cands.some(c=>h.some(x=>x.includes(c)));
+    // 제목줄이 위에 있는 파일 대응 — 앞 10줄 중 '금액'열이 있는 행을 헤더로 삼는다
+    let hRow=-1, head=cell(lines[0]).map(norm);
+    for(let i=0;i<Math.min(10,lines.length-1);i++){ const h=cell(lines[i]).map(norm);
+      if(hit(h,CF_AMT) && hit(h,CF_CH)){ hRow=i; head=h; break; } }
+    if(hRow<0) for(let i=0;i<Math.min(10,lines.length-1);i++){ const h=cell(lines[i]).map(norm);
+      if(hit(h,CF_AMT)){ hRow=i; head=h; break; } }
+    if(hRow<0) return { err:'금액 열을 찾지 못했습니다.', headers:head };
     const idx=cands=>{ for(const c of cands){ const i=head.findIndex(h=>h.includes(c)); if(i>=0) return i; } return -1; };
-    const iCh=idx(['판매처']), iSup=idx(['공급처']), iProd=idx(['사입상품','상품코드','상품']), iAmt=idx(['합계금액','금액']), iAddr=idx(['수령자주소','주소']);
-    if(iCh<0||iAmt<0) return {err:'CSV 형식을 인식하지 못했습니다(판매처명·합계금액 열 필요).'};
+    const iCh=idx(CF_CH), iSup=idx(CF_SUP), iProd=idx(CF_PROD), iAmt=idx(CF_AMT), iAddr=idx(CF_ADDR);
+    if(iAmt<0) return { err:'금액 열을 찾지 못했습니다.', headers:head };
+    const used={ 판매처:iCh>=0?head[iCh]:'', 금액:head[iAmt], 공급처:iSup>=0?head[iSup]:'', 상품:iProd>=0?head[iProd]:'', 주소:iAddr>=0?head[iAddr]:'' };
     const dims={ch:{},sup:{},prod:{},cust:{}}; let total=0,count=0;
     const add=(m,k,a)=>{ const o=m[k]=m[k]||{amount:0,count:0}; o.amount+=a; o.count++; };
-    for(let i=1;i<lines.length;i++){ const c=cell(lines[i]); if(!c.length) continue;
-      const chv=String(c[iCh]||'').trim(), pv=String(iProd>=0?c[iProd]:'').trim(); if(!chv&&!pv) continue;
+    for(let i=hRow+1;i<lines.length;i++){ const c=cell(lines[i]); if(!c.length) continue;
+      const chv=String(iCh>=0?c[iCh]:'').trim(), pv=String(iProd>=0?c[iProd]:'').trim();
+      if(iCh>=0 && !chv && !pv) continue;
+      if(iCh<0 && !String(c[iAmt]||'').trim()) continue;
       const amt=Number(String(c[iAmt]||'').replace(/[^\d.-]/g,''))||0;
-      add(dims.ch,chClass(chv),amt); add(dims.sup,supClass(iSup>=0?c[iSup]:''),amt);
+      add(dims.ch,iCh>=0?chClass(chv):'(판매처 열 없음)',amt); add(dims.sup,supClass(iSup>=0?c[iSup]:''),amt);
       add(dims.prod,prodClass(pv),amt); add(dims.cust,custClass(iAddr>=0?c[iAddr]:''),amt); total+=amt; count++; }
-    return { dims, total, count };
+    return { dims, total, count, used, headers:head };
   }
   const ymFromName=name=>{ const m=String(name||'').match(/(20\d{2})[\-_.]?(0[1-9]|1[0-2])/); return m?`${m[1]}-${m[2]}`:''; };
 
@@ -509,9 +532,20 @@
             const rd=new FileReader(); rd.onload=()=>{ let txt=''; try{ txt=new TextDecoder('euc-kr').decode(new Uint8Array(rd.result)); }catch(_){ txt=''; }
               if(!txt || /�/.test(txt.slice(0,300))){ try{ txt=new TextDecoder('utf-8').decode(new Uint8Array(rd.result)); }catch(__){} }
               parsed=parseCafeCsv(txt);
-              if(!parsed||parsed.err){ prev.innerHTML=`<span style="color:var(--danger)">${esc((parsed&&parsed.err)||'파싱 실패')}</span>`; save.disabled=true; return; }
+              if(!parsed||parsed.err){
+                const hs=(parsed&&parsed.headers)||[];
+                prev.innerHTML=`<span style="color:var(--danger);font-weight:700">${esc((parsed&&parsed.err)||'파싱 실패')}</span>
+                  ${hs.length?`<div class="muted" style="font-size:11.5px;margin-top:6px;line-height:1.6">이 파일에서 읽은 열 이름: <b>${hs.slice(0,14).map(h=>esc(h||'(빈칸)')).join(' · ')}</b>${hs.length>14?` 외 ${hs.length-14}개`:''}</div>`:''}
+                  <div class="muted" style="font-size:11.5px;margin-top:6px;line-height:1.6">카페24 <b>주문 내역(주문 리스트)</b>을 엑셀로 내려받아 올려주세요.
+                    일별·월별 <b>매출 통계 리포트</b>에는 판매처·금액 열이 없어 집계할 수 없습니다.</div>`;
+                save.disabled=true; return; }
               const top=Object.entries(parsed.dims.ch).sort((a,b)=>b[1].amount-a[1].amount).slice(0,5).map(([k,v])=>`${esc(k)} ${won(v.amount)}`).join(' · ');
-              prev.innerHTML=`총 <b style="color:var(--ink)">${won(parsed.total)}원</b> · ${parsed.count}건<br><span class="muted">판매처: ${top}</span>`; save.disabled=false; };
+              const u=parsed.used||{};
+              prev.innerHTML=`총 <b style="color:var(--ink)">${won(parsed.total)}원</b> · ${parsed.count}건<br><span class="muted">판매처: ${top}</span>
+                <div class="muted" style="font-size:11.5px;margin-top:6px">인식한 열 — 금액 <b>${esc(u['금액']||'')}</b>${u['판매처']?` · 판매처 <b>${esc(u['판매처'])}</b>`:''}${u['공급처']?` · 공급처 <b>${esc(u['공급처'])}</b>`:''}${u['상품']?` · 상품 <b>${esc(u['상품'])}</b>`:''}</div>
+                ${!u['판매처']?`<div style="font-size:11.5px;margin-top:5px;color:var(--warn);font-weight:700">※ 판매처 열이 없어 총액만 집계됩니다(판매처별 분석 불가).</div>`:''}
+                <div class="muted" style="font-size:11.5px;margin-top:5px">금액이 실제와 맞는지 확인한 뒤 저장하세요.</div>`;
+              save.disabled=false; };
             rd.readAsArrayBuffer(f); };
           save.onclick=async()=>{ if(!parsed||parsed.err) return; const ym=ymEl.value; if(!ym){ toast('대상 월을 선택하세요'); return; }
             save.disabled=true; save.textContent='저장 중…'; const me=(Auth.user&&Auth.user())||{};
