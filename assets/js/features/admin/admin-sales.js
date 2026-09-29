@@ -365,16 +365,17 @@
           <div class="sl-period">
             <div class="seg">${PRESETS.map(([p,l])=>`<button data-p="${p}" class="${preset===p?'on':''}">${l}</button>`).join('')}</div>
             ${preset==='custom'?`<span class="rng"><input type="date" id="slFrom" value="${esc(fromDay)}"> ~ <input type="date" id="slTo" value="${esc(toDay)}"></span>`:''}
-            <span class="tot">${esc(rangeLabel)} · 합계 <b>${won(csSales+mdAgg.total)}원</b></span>
+            <span class="tot">${esc(rangeLabel)} · 매출 <b>${won(csSales)}원</b>
+              <span class="muted" style="font-weight:600">(매입 ${won(mdAgg.total)}원 별도)</span></span>
             <button class="btn ghost sm" id="slAudit" style="margin-left:8px">${icon('search')||''}누락 점검</button>
           </div>
           <div id="slAuditBox"></div>
           <div class="sl-grid">
             <div class="sl-card cs"><div class="hd"><h3>${icon('truck')} 발주/후불 매출</h3>
-              <div class="sub">CS · 발주+후불 합계 · ${csAll.length}건</div><div class="tot">${won(csSales)}<small> 원</small></div></div>
+              <div class="sub">CS 견적/발주/후불에 <b>수기 입력</b>한 건 중 구분이 '발주'·'후불' · ${csAll.length}건</div><div class="tot">${won(csSales)}<small> 원</small></div></div>
               <div class="bd">${csAgg.total||csAll.length?barRows(csAgg):'<div class="sl-empty">이 기간의 기록이 없습니다.</div>'}</div></div>
             <div class="sl-card md"><div class="hd"><h3>${icon('box')} 입점사 발주 매입</h3>
-              <div class="sub">MD · 정산구분별(발주금액 기준) · ${mdAll.length}건</div><div class="tot">${won(mdAgg.total)}<small> 원</small></div></div>
+              <div class="sub">MD 입점사 발주의 <b>매입 원가</b>(입고단가×수량) · 매출 아님 · ${mdAll.length}건</div><div class="tot">${won(mdAgg.total)}<small> 원</small></div></div>
               <div class="bd">${mdAgg.total||mdAll.length?barRows(mdAgg):'<div class="sl-empty">이 기간의 기록이 없습니다.</div>'}</div></div>
           </div>
           <div class="sl-grid2">
@@ -436,6 +437,7 @@
 
         box.innerHTML=`<div class="sl-audit">
           <div class="au-hd">${icon('search')||''} 누락 점검 · ${esc(fromDay)} ~ ${esc(toDay)}
+            <span class="muted" style="font-weight:600;font-size:11.5px">— CS 견적/발주/후불 <b>수기 입력분만</b> 점검(카페24 업로드분·MD 발주는 대상 아님)</span>
             <button class="btn ghost sm" id="auCsv" style="margin-left:auto">${icon('download')||''}의심 건 CSV</button>
             <button class="btn ghost sm" id="auClose">닫기</button></div>
 
@@ -530,7 +532,10 @@
                   :'<div class="sl-empty">데이터가 없습니다.</div>'}</div>
             </div>
             <div class="sl-trend" style="margin-top:16px"><h3>${icon('clipboard')} 업로드 월 관리</h3>
-              <div class="cf-months" style="margin-top:8px">${docs.slice().reverse().map(d=>`<span class="cf-mchip">${esc(d.ym)} · ${won(d.total||0)}원 · ${d.count||0}건 <button data-del="${esc(d.id)}" title="삭제">✕</button></span>`).join('')}</div></div>
+              <div class="cf-months" style="margin-top:8px">${docs.slice().reverse().map(d=>`<span class="cf-mchip" title="${esc([d.file?'파일: '+d.file:'', d.uploadedBy?'올린 사람: '+d.uploadedBy:'', d.uploadedAt?'올린 시각: '+String(d.uploadedAt).slice(0,16).replace('T',' '):''].filter(Boolean).join('\n'))}">
+                  <b>${esc(d.ym)}</b> · ${won(d.total||0)}원 · ${d.count||0}건
+                  ${(d.file||d.uploadedBy)?`<span class="muted" style="font-weight:600;font-size:11px">${esc(String(d.file||'').slice(0,22))}${d.uploadedBy?` · ${esc(d.uploadedBy)}`:''}</span>`:''}
+                  <button data-del="${esc(d.id)}" title="삭제">✕</button></span>`).join('')}</div></div>
             <div class="sl-note">※ 분류 — 판매처: 후불·쿠팡·기업(기타발주)·파트너사(샘활코딩/아이스크림/엔티렉스)·카페24·스마트스토어 / 공급처: 자사·입점사 / 상품: A~E 자사부품·F,G,H,J 자사키트·S 자사과학키트·P 입점사 / 고객유형: 주소의 초·중·고·대, 그 외 개인·기업.</div>`;
           wire();
           attachChartTips(host);
@@ -552,6 +557,7 @@
               <div class="muted" style="font-size:12px;margin-top:3px">CAFE24 주문 내역을 <b>엑셀(.xlsx/.xls) 또는 CSV</b>로 내려받아 올리세요 · 판매처·금액 열 자동 인식</div></div>
             <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
               <input type="file" id="cfFile" accept=".csv,.xlsx,.xls,.tsv,.txt,text/csv">
+              <div id="cfDup" style="margin-top:10px"></div>
               <label class="fld">대상 월<input type="month" id="cfYm"></label>
               <div id="cfPrev" class="muted" style="font-size:12.5px;line-height:1.6"></div></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)">
@@ -596,7 +602,18 @@
                    :`<div class="muted" style="font-size:11.5px;margin-top:5px">금액이 실제와 맞는지 확인한 뒤 저장하세요.</div>`}
               ${!u['판매처']?`<div style="font-size:11.5px;margin-top:5px;color:var(--warn);font-weight:700">※ 판매처 열이 없어 총액만 집계됩니다(판매처별 분석 불가).</div>`:''}`;
             save.disabled=zero; };
+          const warnDup=()=>{ const ym=ymEl.value; const prevDoc=(st.docs||[]).find(d=>d.ym===ym);
+            const box=ov.querySelector('#cfDup'); if(!box) return;
+            box.innerHTML = prevDoc
+              ? `<div style="font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:9px 11px;line-height:1.6">
+                   ${icon('alert')||''} <b>${esc(ym)}</b>에는 이미 올린 자료가 있습니다 —
+                   ${esc(prevDoc.file||'(파일명 없음)')} · ${won(prevDoc.total||0)}원${prevDoc.uploadedBy?` · ${esc(prevDoc.uploadedBy)}`:''}<br>
+                   저장하면 <b>기존 자료를 덮어씁니다.</b> 한 달에 여러 출처(카페24·셀메이트 등)를 따로 보관할 수는 없습니다.</div>`
+              : ''; };
+          ymEl.onchange=warnDup; warnDup();
           save.onclick=async()=>{ if(!parsed||parsed.err) return; const ym=ymEl.value; if(!ym){ toast('대상 월을 선택하세요'); return; }
+            const prevDoc=(st.docs||[]).find(d=>d.ym===ym);
+            if(prevDoc && !confirm(`${ym}에 이미 올린 자료(${prevDoc.file||'파일명 없음'} · ${won(prevDoc.total||0)}원)를 덮어씁니다. 계속할까요?`)) return;
             save.disabled=true; save.textContent='저장 중…'; const me=(Auth.user&&Auth.user())||{};
             const doc={ id:'cafe24:'+ym, ym, uploadedAt:new Date().toISOString(), uploadedBy:me.name||me.loginId||'', file:fname, total:parsed.total, count:parsed.count, dims:parsed.dims };
             const ok=await cafePush(doc); if(ok){ toast(`${ym} CAFE24 매출 저장됨`); close(); await loadC(); } else { toast('저장 실패'); save.disabled=false; save.textContent='저장'; } };
