@@ -117,6 +117,20 @@
         .sl-period .seg button:first-child{border-left:0}
         .sl-period .seg button.on{background:var(--active-bg);color:var(--red)}
         .sl-period input[type=month],.sl-period input[type=date]{font:inherit;font-size:12.5px;border:1px solid var(--line-2);border-radius:8px;padding:6px 9px}
+        .sl-audit{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 16px;margin-bottom:14px;box-shadow:var(--sh-sm)}
+        .sl-audit .au-hd{display:flex;align-items:center;gap:8px;font-weight:800;font-size:13.5px;padding-bottom:10px;border-bottom:1px solid var(--line-2);margin-bottom:12px}
+        .sl-audit .au-sec{font-size:13px;font-weight:800;margin-bottom:16px}
+        .sl-audit .au-sec:last-child{margin-bottom:0}
+        .sl-audit .au-d{font-size:12px;font-weight:600;color:var(--muted);margin:4px 0 8px;line-height:1.55}
+        .sl-audit .hi{color:var(--danger)}
+        .sl-audit .au-ok{font-size:12.5px;font-weight:600;color:var(--ok);background:var(--ok-bg,#e8f8ef);border-radius:8px;padding:7px 11px}
+        .sl-audit .au-t{width:100%;border-collapse:collapse;font-size:12.5px;font-weight:600}
+        .sl-audit .au-t th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:6px 9px;border-bottom:1px solid var(--line);background:var(--panel-2);white-space:nowrap}
+        .sl-audit .au-t td{padding:6px 9px;border-bottom:1px solid var(--line-2)}
+        .sl-audit .au-t th.n,.sl-audit .au-t td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+        .sl-audit .au-t td.ex{color:var(--muted);font-weight:500}
+        .sl-audit .au-l{margin:0;padding-left:18px;font-size:12.5px;font-weight:600;line-height:1.75}
+        .sl-audit .au-l li{color:var(--ink-2)}
         .sl-period .rng{display:flex;align-items:center;gap:6px}
         .sl-period .tot{margin-left:auto;font-size:12.5px;color:var(--muted)} .sl-period .tot b{color:var(--ink)}
         .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -299,7 +313,9 @@
             <div class="seg">${PRESETS.map(([p,l])=>`<button data-p="${p}" class="${preset===p?'on':''}">${l}</button>`).join('')}</div>
             ${preset==='custom'?`<span class="rng"><input type="date" id="slFrom" value="${esc(fromDay)}"> ~ <input type="date" id="slTo" value="${esc(toDay)}"></span>`:''}
             <span class="tot">${esc(rangeLabel)} · 합계 <b>${won(csSales+mdAgg.total)}원</b></span>
+            <button class="btn ghost sm" id="slAudit" style="margin-left:8px">${icon('search')||''}누락 점검</button>
           </div>
+          <div id="slAuditBox"></div>
           <div class="sl-grid">
             <div class="sl-card cs"><div class="hd"><h3>${icon('truck')} 발주/후불 매출</h3>
               <div class="sub">CS · 발주+후불 합계 · ${csAll.length}건</div><div class="tot">${won(csSales)}<small> 원</small></div></div>
@@ -325,6 +341,81 @@
         const fEl=body.querySelector('#slFrom'), tEl=body.querySelector('#slTo');
         if(fEl) fEl.onchange=()=>{ from=fEl.value||from; if(from>to) to=from; load(); };
         if(tEl) tEl.onchange=()=>{ to=tEl.value||to; if(to<from) from=to; load(); };
+        const auditBtn=body.querySelector('#slAudit');
+        if(auditBtn) auditBtn.onclick=()=>runAudit(body.querySelector('#slAuditBox'), fromDay, toDay, months, csAll);
+      }
+
+      /* ───────────────── 매출 누락 점검 ─────────────────
+         "합계가 실제와 안 맞는다"는 상황에서, 어떤 건이 왜 빠졌는지 찾아 준다.
+         ① 매출에 안 잡히는 구분(견적·개인결제·결제요청·기타) 금액
+         ② 금액칸에 글자가 있는데 숫자로 못 읽은 건
+         ③ 접수일자는 기간 안인데 귀속일이 달라 다른 달로 넘어간 건 ← 조회 자체가 안 되던 건
+         ④ 금액 상위 건 (눈으로 대조용) */
+      async function runAudit(box, fromDay, toDay, months, csIn){
+        if(!box) return;
+        box.innerHTML=`<div class="sl-audit"><div class="muted">점검 중… (앞뒤 달까지 훑는 중)</div></div>`;
+        // 귀속일이 어긋나 다른 달 버킷에 들어간 건을 찾기 위해 앞뒤 2개월을 더 읽는다
+        const wide=[...new Set([addMonth(months[0],-2), addMonth(months[0],-1), ...months,
+          addMonth(months[months.length-1],1), addMonth(months[months.length-1],2)])];
+        const packs=await Promise.all(wide.map(m=>monthRecs('cs','postpay',m)));
+        const all=packs.flat();
+        const rdOf=r=>String(r.rdate||'').slice(0,10);
+        const inRangeBy=(d)=>d && d>=fromDay && d<=toDay;
+
+        const SALES=['발주','후불'];
+        const excluded={}, badAmt=[], dayGap=[];
+        csIn.forEach(r=>{
+          const g=String(r.gubun||'').trim()||'(빈칸)';
+          if(SALES.indexOf(g)<0){ const o=excluded[g]=excluded[g]||{amount:0,count:0,rows:[]};
+            o.amount+=parseNum(r.amount); o.count++; if(o.rows.length<5) o.rows.push(r); }
+          const raw=String(r.amount==null?'':r.amount).trim();
+          if(raw && !parseNum(r.amount)) badAmt.push(r);              // 글자는 있는데 0원으로 읽힘
+        });
+        all.forEach(r=>{
+          const rd=rdOf(r), dy=dayOf(r);
+          if(rd && inRangeBy(rd) && !inRangeBy(dy)) dayGap.push(r);   // 접수일은 기간 안, 귀속일은 밖
+        });
+        const exRows=Object.keys(excluded).map(k=>({k,...excluded[k]})).sort((a,b)=>b.amount-a.amount);
+        const exTotal=exRows.reduce((t,x)=>t+x.amount,0);
+        const gapTotal=dayGap.reduce((t,r)=>t+parseNum(r.amount),0);
+        const top=csIn.slice().sort((a,b)=>parseNum(b.amount)-parseNum(a.amount)).slice(0,10);
+        const line=r=>`${esc(dayOf(r))} · ${esc(r.gubun||'-')} · ${esc(r.vendor||r.name||'-')} · ${esc(String(r.content||'').slice(0,26))} · <b>${won(parseNum(r.amount))}원</b>`;
+
+        box.innerHTML=`<div class="sl-audit">
+          <div class="au-hd">${icon('search')||''} 누락 점검 · ${esc(fromDay)} ~ ${esc(toDay)}
+            <button class="btn ghost sm" id="auCsv" style="margin-left:auto">${icon('download')||''}의심 건 CSV</button>
+            <button class="btn ghost sm" id="auClose">닫기</button></div>
+
+          <div class="au-sec">① 매출 합계에 <b>안 잡히는 구분</b> — 합계 <b class="hi">${won(exTotal)}원</b> · ${exRows.reduce((t,x)=>t+x.count,0)}건
+            <div class="au-d">매출 카드는 <b>발주 + 후불</b>만 더합니다. 아래 구분으로 입력된 건은 금액이 있어도 합계에서 빠집니다.</div>
+            ${exRows.length?`<table class="au-t"><thead><tr><th>구분</th><th class="n">건수</th><th class="n">금액</th><th>예시</th></tr></thead><tbody>
+              ${exRows.map(x=>`<tr><td><b>${esc(x.k)}</b></td><td class="n">${x.count}건</td><td class="n">${won(x.amount)}원</td>
+                <td class="ex">${x.rows.map(r=>esc(String(r.content||r.vendor||'').slice(0,18))).join(' / ')||'-'}</td></tr>`).join('')}
+              </tbody></table>`:'<div class="au-ok">해당 없음</div>'}</div>
+
+          <div class="au-sec">② <b>금액을 숫자로 읽지 못한 건</b> — ${badAmt.length}건
+            <div class="au-d">금액칸에 글자가 들어가 0원으로 계산된 건입니다(예: "견적서 참조", "협의", "120만").</div>
+            ${badAmt.length?`<ul class="au-l">${badAmt.slice(0,20).map(r=>`<li>${esc(dayOf(r))} · ${esc(r.gubun||'-')} · ${esc(r.vendor||r.name||'-')} · 입력값 "<b>${esc(String(r.amount))}</b>"</li>`).join('')}
+              ${badAmt.length>20?`<li class="muted">… 외 ${badAmt.length-20}건</li>`:''}</ul>`:'<div class="au-ok">해당 없음</div>'}</div>
+
+          <div class="au-sec">③ <b>접수일은 이 기간인데 다른 달로 잡힌 건</b> — ${dayGap.length}건 · <b class="hi">${won(gapTotal)}원</b>
+            <div class="au-d">접수일자를 비운 채 저장했거나 나중에 접수일만 고친 건입니다. 이 건들은 <b>이 기간 조회에서 아예 빠집니다.</b>
+              해당 건의 <b>접수일자를 다시 저장</b>하면(견적/발주/후불 화면에서 수정 → 저장) 제자리로 돌아갑니다.</div>
+            ${dayGap.length?`<ul class="au-l">${dayGap.slice(0,20).map(r=>`<li>접수 ${esc(rdOf(r))} → 귀속 <b>${esc(dayOf(r))}</b> · ${esc(r.gubun||'-')} · ${esc(r.vendor||r.name||'-')} · <b>${won(parseNum(r.amount))}원</b></li>`).join('')}
+              ${dayGap.length>20?`<li class="muted">… 외 ${dayGap.length-20}건</li>`:''}</ul>`:'<div class="au-ok">해당 없음</div>'}</div>
+
+          <div class="au-sec">④ 이 기간 <b>금액 상위 10건</b> <span class="au-d" style="display:inline">— 실제 장부와 눈으로 대조해 보세요</span>
+            ${top.length?`<ul class="au-l">${top.map(r=>`<li>${line(r)}</li>`).join('')}</ul>`:'<div class="au-ok">기록 없음</div>'}</div>
+        </div>`;
+        box.querySelector('#auClose').onclick=()=>{ box.innerHTML=''; };
+        box.querySelector('#auCsv').onclick=()=>{
+          const rows=[['유형','접수일자','귀속일','구분','거래처','이름','내용','금액(입력값)','금액(인식값)']];
+          exRows.forEach(x=>x.rows.forEach(r=>rows.push(['매출제외구분',r.rdate||'',dayOf(r),r.gubun||'',r.vendor||'',r.name||'',r.content||'',String(r.amount||''),parseNum(r.amount)])));
+          badAmt.forEach(r=>rows.push(['금액인식실패',r.rdate||'',dayOf(r),r.gubun||'',r.vendor||'',r.name||'',r.content||'',String(r.amount||''),parseNum(r.amount)]));
+          dayGap.forEach(r=>rows.push(['귀속일불일치',r.rdate||'',dayOf(r),r.gubun||'',r.vendor||'',r.name||'',r.content||'',String(r.amount||''),parseNum(r.amount)]));
+          const csv='\ufeff'+rows.map(a=>a.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+          downloadBlob(new Blob([csv],{type:'text/csv;charset=utf-8'}), `매출점검_${fromDay}_${toDay}.csv`);
+        };
       }
 
       /* ================= CAFE24 매출통계 탭 ================= */
