@@ -45,6 +45,12 @@
     if(/중학교/.test(a)) return '중등'; if(/초등학교|초교/.test(a)) return '초등';
     if(/유치원|어린이집/.test(a)) return '유아'; return '개인·기업'; };
   const CAFE_DIMS=[['ch','판매처'],['sup','공급처'],['prod','상품분류'],['cust','고객유형(주소)']];
+  /* 외부 매출 자료의 출처 — 같은 달이라도 출처별로 따로 보관한다(덮어쓰기 방지) */
+  const SALES_SRC=[{k:'cafe24',n:'카페24'},{k:'sellmate',n:'셀메이트'},{k:'etc',n:'기타'}];
+  const srcName=k=>{ const x=SALES_SRC.find(v=>v.k===k); return x?x.n:'기타'; };
+  // 예전 자료(id가 'cafe24:YYYY-MM')는 출처 표시가 없으므로 카페24로 간주
+  const srcOf=d=>d&&(d.source || (String(d.id||'').indexOf('cafe24:')===0?'cafe24':'etc'));
+  const docId=(src,ym)=>`sales:${src}:${ym}`;
   /* 파일 → 표(2차원 배열) → 4축 분류 집계
      카페24는 받는 메뉴마다 파일 모양이 제각각이라(엑셀·CSV·탭구분·HTML표, 제목줄 유무,
      열 이름 변형) 형태를 먼저 표로 통일한 뒤 같은 로직으로 집계한다.
@@ -237,6 +243,23 @@
         .bk-row .lbl .bk-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .bk-row .sl-amt small{font-size:10px}
         .cf-months{display:flex;flex-wrap:wrap;gap:8px}
+        .cf-mx{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+        .cf-mx th{font-size:11px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel-2);text-align:center;white-space:nowrap}
+        .cf-mx th:first-child{text-align:left}
+        .cf-mx td{border-bottom:1px solid var(--line-2);padding:8px 10px;vertical-align:top;text-align:center}
+        .cf-mx td.m{text-align:left;font-weight:800;white-space:nowrap}
+        .cf-mx td.tot{text-align:right;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+        .cf-mx td.miss{color:var(--danger);font-weight:800;background:#fdf4f3}
+        .cf-mx td.pend{background:#fffaf2}
+        .cf-mx .amt{font-weight:800;font-variant-numeric:tabular-nums}
+        .cf-mx .meta{font-size:10.5px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.4}
+        .cf-mx .act{display:flex;gap:4px;justify-content:center;align-items:center;margin-top:6px;flex-wrap:wrap}
+        .cf-mx .act button{font:inherit;font-size:11px;font-weight:700;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);border-radius:6px;padding:2px 8px;cursor:pointer}
+        .cf-mx .act button.go{border-color:var(--ok);color:#0b7a4b}
+        .cf-mx .act button.x{border:0;color:var(--muted);padding:2px 5px}
+        .cf-mx .act button.x:hover{background:#fdecea;color:#c0392b}
+        .cf-badge{font-size:10.5px;font-weight:800;border-radius:5px;padding:2px 7px;white-space:nowrap}
+        .cf-badge.ok{color:#0b7a4b;background:#e6f7f0} .cf-badge.pend{color:#a35c11;background:#fdefdf}
         .cf-mchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line-2);border-radius:9px;padding:5px 11px}
         .cf-mchip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:5px}
         .cf-mchip button:hover{background:#fdecea;color:#c0392b}
@@ -247,7 +270,7 @@
       </style>
       <div class="mhead">
         <div class="tt">매출 데이터</div>
-        <div class="ds">내부(발주/후불) 매출과 CAFE24 매출통계를 기간·유형별로 집계합니다.</div>
+        <div class="ds">내부(발주/후불) 매출과 외부 매출 자료(카페24·셀메이트 등)를 기간·유형별로 집계합니다.</div>
         <div class="mtabs" id="slTabs"><div class="t on" data-t="internal">발주/후불 매출 데이터</div><div class="t" data-t="cafe24">전체 매출</div></div>
       </div>
       <div class="mbody wide" id="slBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>
@@ -473,9 +496,13 @@
         };
       }
 
-      /* ================= CAFE24 매출통계 탭 ================= */
+      /* ================= 외부 매출 자료 탭 (출처별 등록 → 확인 → 합산) =================
+         · 출처(카페24·셀메이트·기타)별로 월 자료를 따로 보관 — 한쪽이 다른 쪽을 덮어쓰지 않는다
+         · 담당자가 [확인]을 누른 자료만 합계에 들어간다(확인 전에는 '미확인'으로 따로 표시)
+         · 월×출처 표에서 빠진 칸이 '미등록'으로 바로 보인다 */
       function renderCafe24(host){
         const st={preset:'all', dim:'ch', docs:[], from:'', to:''};
+        const meNow=()=>(Auth.user&&Auth.user())||{};
         const CF_PRESETS=[['all','전체'],['m12','최근 12개월'],['m6','최근 6개월'],['m3','최근 3개월'],['m1','최신 월'],['custom','직접설정']];
         const inPreset=(ym,months)=>{ if(!months.length) return false; const last=months[months.length-1];
           if(st.preset==='all') return true; if(st.preset==='m1') return ym===last;
@@ -499,44 +526,69 @@
           return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="100%" style="height:auto"><text x="${padL}" y="14" font-size="10.5" fill="var(--muted)">최대 ${won(max)}원</text>
             <line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-dasharray="3 3"/>
             <line x1="${padL}" y1="${yBase}" x2="${W-padR}" y2="${yBase}" stroke="var(--line)"/>${bars}${line}${dots}${labels}${hits}</svg>`; }
-        function emptyHtml(){ return `<div class="sl-empty" style="padding:40px">${icon('upload')}<div style="margin:10px 0 14px">아직 업로드된 CAFE24 매출이 없습니다.</div>
-          <button class="btn pri" id="cfUpEmpty">${icon('upload')} CSV 업로드</button>
-          <div class="muted" style="font-size:12px;margin-top:12px">CAFE24 매출 CSV(판매처명·공급처명·상품코드·합계금액·수령자주소)를 월별로 올리세요.</div></div>`; }
+        function emptyHtml(){ return `<div class="sl-empty" style="padding:40px">${icon('upload')}<div style="margin:10px 0 14px">아직 올린 매출 자료가 없습니다.</div>
+          <button class="btn pri" id="cfUpEmpty">${icon('upload')} 자료 올리기</button>
+          <div class="muted" style="font-size:12px;margin-top:12px">카페24·셀메이트 등 출처별로 월 자료를 올리면, 확인 후 합계에 반영됩니다.</div></div>`; }
         function draw(){ const docs=st.docs;
           if(!docs.length){ host.innerHTML=emptyHtml(); wire(); return; }
-          const months=docs.map(d=>d.ym); const last=months[months.length-1]; const sel=docs.filter(d=>inPreset(d.ym,months));
-          const total=sel.reduce((s,d)=>s+(d.total||0),0), cnt=sel.reduce((s,d)=>s+(d.count||0),0);
-          const dims=mergeDims(sel); const dimMap=dims[st.dim]||{};
-          let rows=Object.keys(dimMap).map(k=>({k,amount:dimMap[k].amount,count:dimMap[k].count})).sort((a,b)=>b.amount-a.amount);
+          const months=[...new Set(docs.map(d=>d.ym))].sort(); const last=months[months.length-1];
+          const sel=docs.filter(d=>inPreset(d.ym,months));
+          const selMonths=[...new Set(sel.map(d=>d.ym))].sort();
+          const okDocs=sel.filter(d=>d.confirmed), pendDocs=sel.filter(d=>!d.confirmed);
+          const total=okDocs.reduce((s2,d)=>s2+(d.total||0),0), cnt=okDocs.reduce((s2,d)=>s2+(d.count||0),0);
+          const pendAmt=pendDocs.reduce((s2,d)=>s2+(d.total||0),0);
+          const cellOfM=(ym,src)=>docs.find(d=>d.ym===ym && srcOf(d)===src);
+          const missN=selMonths.reduce((n,ym)=>n+SALES_SRC.filter(x=>!cellOfM(ym,x.k)).length,0);
+          const monthOk=ym=>SALES_SRC.reduce((s2,x)=>{ const d=cellOfM(ym,x.k); return s2+((d&&d.confirmed)?(d.total||0):0); },0);
+          const dims=mergeDims(okDocs); const dimMap=dims[st.dim]||{};
+          let rows=Object.keys(dimMap).map(k=>({k,amount:dimMap[k].amount,count:dimMap[k].count})).sort((x,y)=>y.amount-x.amount);
           if(rows.length>12){ const tail=rows.slice(12); const etc=tail.reduce((o,r)=>({amount:o.amount+r.amount,count:o.count+r.count}),{amount:0,count:0}); rows=rows.slice(0,12).concat([{k:'기타 '+tail.length+'종',amount:etc.amount,count:etc.count}]); }
           const maxA=Math.max(1,...rows.map(r=>r.amount)); const dimLabel=(CAFE_DIMS.find(d=>d[0]===st.dim)||['',''])[1];
           host.innerHTML=`
             <div class="sl-period">
-              <div class="seg">${CF_PRESETS.map(([p,l])=>`<button data-cp="${p}" class="${st.preset===p?'on':''}">${l}</button>`).join('')}</div>
+              <div class="seg">${CF_PRESETS.map(([p2,l])=>`<button data-cp="${p2}" class="${st.preset===p2?'on':''}">${l}</button>`).join('')}</div>
               ${st.preset==='custom'?`<span class="rng"><input type="month" id="cfFrom" value="${esc(st.from||months[0]||'')}" min="${esc(months[0]||'')}" max="${esc(last||'')}"> ~ <input type="month" id="cfTo" value="${esc(st.to||last||'')}" min="${esc(months[0]||'')}" max="${esc(last||'')}"></span>`:''}
-              <span class="tot">업로드 <b>${docs.length}</b>개월 · 표시 <b>${sel.length}</b>개월</span>
-              <button class="btn pri sm" id="cfUp" style="margin-left:8px">${icon('upload')} CSV 업로드</button></div>
+              <span class="tot">자료 <b>${docs.length}</b>건 · 표시 <b>${selMonths.length}</b>개월</span>
+              <button class="btn pri sm" id="cfUp" style="margin-left:8px">${icon('upload')} 자료 올리기</button></div>
             <div class="sl-grid" style="grid-template-columns:1fr 1fr 1fr">
-              <div class="sl-card" style="--ac:#1f6feb"><div class="hd"><h3>${icon('chart')} 총 매출</h3><div class="sub">CAFE24 · ${sel.length}개월</div><div class="tot">${won(total)}<small> 원</small></div></div></div>
-              <div class="sl-card" style="--ac:#12886a"><div class="hd"><h3>${icon('box')} 주문 건수</h3><div class="sub">라인 수</div><div class="tot">${won(cnt)}<small> 건</small></div></div></div>
-              <div class="sl-card" style="--ac:#7a5af8"><div class="hd"><h3>${icon('check2')} 업로드 월</h3><div class="sub">최신 ${esc(months[months.length-1]||'-')}</div><div class="tot">${docs.length}<small> 개월</small></div></div></div>
+              <div class="sl-card" style="--ac:#1f6feb"><div class="hd"><h3>${icon('check2')} 확인된 매출</h3>
+                <div class="sub">담당자가 확인한 자료만 합산 · ${okDocs.length}건</div><div class="tot">${won(total)}<small> 원</small></div></div></div>
+              <div class="sl-card" style="--ac:${pendAmt?'#d9822b':'#12886a'}"><div class="hd"><h3>${icon('alert')} 확인 대기</h3>
+                <div class="sub">올렸지만 아직 확인 전 · ${pendDocs.length}건</div><div class="tot">${won(pendAmt)}<small> 원</small></div></div></div>
+              <div class="sl-card" style="--ac:${missN?'#e0313b':'#12886a'}"><div class="hd"><h3>${icon('clipboard')} 미등록 칸</h3>
+                <div class="sub">표시 기간 · 출처 ${SALES_SRC.length}종 기준</div><div class="tot">${missN}<small> 칸</small></div></div></div>
             </div>
-            <div class="sl-grid2">
-              <div class="sl-trend"><h3>${icon('chart')} 월별 매출 추이</h3><div class="sub">CAFE24 · 업로드된 월</div>${cfTrend(sel.map(d=>d.ym),sel.map(d=>d.total||0))}</div>
-              <div class="sl-trend"><h3>${icon('grid')} 유형별 분석</h3><div class="sub">판매처·공급처·상품분류·고객유형(주소)</div>
+
+            <div class="sl-trend" style="margin-top:16px"><h3>${icon('clipboard')} 월별·출처별 등록 현황</h3>
+              <div class="sub">빠진 칸은 <b style="color:var(--danger)">미등록</b>으로 표시됩니다. 자료를 확인하면 그때부터 합계에 들어갑니다.</div>
+              <div style="overflow:auto"><table class="cf-mx">
+                <thead><tr><th style="width:86px">월</th>${SALES_SRC.map(x=>`<th>${esc(x.n)}</th>`).join('')}<th style="width:130px">확인 합계</th></tr></thead>
+                <tbody>${selMonths.slice().reverse().map(ym=>`<tr>
+                  <td class="m">${esc(ym)}</td>
+                  ${SALES_SRC.map(x=>{ const d=cellOfM(ym,x.k);
+                    if(!d) return `<td class="miss">미등록</td>`;
+                    return `<td class="${d.confirmed?'':'pend'}">
+                      <div class="amt">${won(d.total||0)}<small style="font-weight:600;color:var(--muted)"> · ${d.count||0}건</small></div>
+                      <div class="meta">${esc(String(d.file||'').slice(0,20))||'(파일명 없음)'}${d.uploadedBy?`<br>올림 ${esc(d.uploadedBy)}`:''}</div>
+                      <div class="act">${d.confirmed
+                        ? `<span class="cf-badge ok">✓ ${esc(d.confirmedBy||'확인')}</span><button data-unc="${esc(d.id)}">해제</button>`
+                        : `<span class="cf-badge pend">미확인</span><button class="go" data-cfm="${esc(d.id)}">확인</button>`}
+                        <button class="x" data-del="${esc(d.id)}" title="삭제">✕</button></div></td>`; }).join('')}
+                  <td class="tot">${won(monthOk(ym))}원</td></tr>`).join('')}</tbody></table></div></div>
+
+            <div class="sl-grid2" style="margin-top:16px">
+              <div class="sl-trend"><h3>${icon('chart')} 월별 매출 추이</h3><div class="sub">확인된 자료 기준</div>
+                ${cfTrend(selMonths,selMonths.map(monthOk))}</div>
+              <div class="sl-trend"><h3>${icon('grid')} 유형별 분석</h3><div class="sub">확인된 자료 · 판매처·공급처·상품분류·고객유형(주소)</div>
                 <div class="bk-ctrl"><span class="seg bk-dim">${CAFE_DIMS.map(([v,l])=>`<button data-cd="${v}" class="${st.dim===v?'on':''}">${l}</button>`).join('')}</span>
-                  <span class="tot" style="margin-left:auto;font-size:12px;color:var(--muted)"><b style="color:var(--ink)">${esc(dimLabel)}별</b> 합계 <b style="color:var(--ink)">${won(rows.reduce((s,r)=>s+r.amount,0))}원</b></span></div>
+                  <span class="tot" style="margin-left:auto;font-size:12px;color:var(--muted)"><b style="color:var(--ink)">${esc(dimLabel)}별</b> 합계 <b style="color:var(--ink)">${won(rows.reduce((s2,r)=>s2+r.amount,0))}원</b></span></div>
                 ${rows.length?`<div class="bk-bars">${rows.map((r,i)=>{ const c=BK_PALETTE[i%BK_PALETTE.length]; const pct=Math.max(r.amount?3:0,Math.round(r.amount/maxA*100));
                   return `<div class="sl-row bk-row"><div class="lbl" title="${esc(r.k)}"><span class="dot" style="background:${c}"></span><span class="bk-nm">${esc(r.k)}</span></div>
                     <div class="sl-bar"><i style="width:${pct}%;background:${c}"></i></div><div class="sl-amt">${won(r.amount)}<small> · ${r.count}건</small></div></div>`; }).join('')}</div>`
-                  :'<div class="sl-empty">데이터가 없습니다.</div>'}</div>
+                  :'<div class="sl-empty">확인된 자료가 없습니다. 위 표에서 [확인]을 눌러 주세요.</div>'}</div>
             </div>
-            <div class="sl-trend" style="margin-top:16px"><h3>${icon('clipboard')} 업로드 월 관리</h3>
-              <div class="cf-months" style="margin-top:8px">${docs.slice().reverse().map(d=>`<span class="cf-mchip" title="${esc([d.file?'파일: '+d.file:'', d.uploadedBy?'올린 사람: '+d.uploadedBy:'', d.uploadedAt?'올린 시각: '+String(d.uploadedAt).slice(0,16).replace('T',' '):''].filter(Boolean).join('\n'))}">
-                  <b>${esc(d.ym)}</b> · ${won(d.total||0)}원 · ${d.count||0}건
-                  ${(d.file||d.uploadedBy)?`<span class="muted" style="font-weight:600;font-size:11px">${esc(String(d.file||'').slice(0,22))}${d.uploadedBy?` · ${esc(d.uploadedBy)}`:''}</span>`:''}
-                  <button data-del="${esc(d.id)}" title="삭제">✕</button></span>`).join('')}</div></div>
-            <div class="sl-note">※ 분류 — 판매처: 후불·쿠팡·기업(기타발주)·파트너사(샘활코딩/아이스크림/엔티렉스)·카페24·스마트스토어 / 공급처: 자사·입점사 / 상품: A~E 자사부품·F,G,H,J 자사키트·S 자사과학키트·P 입점사 / 고객유형: 주소의 초·중·고·대, 그 외 개인·기업.</div>`;
+            <div class="sl-note">※ 출처별로 따로 보관되어 서로 덮어쓰지 않습니다. 합계에는 <b>[확인]한 자료만</b> 들어갑니다.
+              분류 — 판매처: 후불·쿠팡·기업(기타발주)·파트너사(샘활코딩/아이스크림/엔티렉스)·카페24·스마트스토어 / 공급처: 자사·입점사 / 상품: A~E 자사부품·F,G,H,J 자사키트·S 자사과학키트·P 입점사 / 고객유형: 주소의 초·중·고·대, 그 외 개인·기업.</div>`;
           wire();
           attachChartTips(host);
         }
@@ -548,14 +600,31 @@
           if(cf) cf.onchange=()=>{ st.from=cf.value||st.from; if(st.from>st.to) st.to=st.from; draw(); };
           if(ct) ct.onchange=()=>{ st.to=ct.value||st.to; if(st.to<st.from) st.from=st.to; draw(); };
           const up=host.querySelector('#cfUp')||host.querySelector('#cfUpEmpty'); if(up) up.onclick=openUpload;
-          host.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ if(!confirm('이 달 CAFE24 매출을 삭제할까요?')) return; await cafeDel(b.dataset.del); await loadC(); });
+          host.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{ const d=st.docs.find(x=>x.id===b.dataset.del);
+            if(!confirm(`${d?d.ym+' '+srcName(srcOf(d)):'이'} 자료를 삭제할까요?`)) return; await cafeDel(b.dataset.del); await loadC(); });
+          // 확인 — 담당자가 내용을 보고 승인해야 합계에 들어간다
+          host.querySelectorAll('[data-cfm]').forEach(b=>b.onclick=async()=>{
+            const d=st.docs.find(x=>x.id===b.dataset.cfm); if(!d) return;
+            if(!confirm(`${d.ym} ${srcName(srcOf(d))} · ${won(d.total||0)}원 을 확인 처리할까요?\n확인한 자료만 매출 합계에 반영됩니다.`)) return;
+            const u=meNow(); b.disabled=true;
+            const ok=await cafePush({ ...d, confirmed:true, confirmedBy:u.name||u.loginId||'', confirmedAt:new Date().toISOString() });
+            if(ok){ toast(`${d.ym} ${srcName(srcOf(d))} 확인 완료`); await loadC(); } else { b.disabled=false; toast('저장 실패'); } });
+          host.querySelectorAll('[data-unc]').forEach(b=>b.onclick=async()=>{
+            const d=st.docs.find(x=>x.id===b.dataset.unc); if(!d) return;
+            if(!confirm(`${d.ym} ${srcName(srcOf(d))} 확인을 해제할까요? 합계에서 빠집니다.`)) return;
+            b.disabled=true;
+            const ok=await cafePush({ ...d, confirmed:false, confirmedBy:'', confirmedAt:'' });
+            if(ok){ toast('확인을 해제했습니다'); await loadC(); } else { b.disabled=false; toast('저장 실패'); } });
         }
         function openUpload(){ let parsed=null, fname='';
           const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
           ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:520px;width:97%;box-shadow:var(--sh-lg)">
-            <div style="padding:16px 20px 10px;border-bottom:1px solid var(--line)"><div style="font-size:16px;font-weight:800">${icon('upload')} CAFE24 월별 CSV 업로드</div>
+            <div style="padding:16px 20px 10px;border-bottom:1px solid var(--line)"><div style="font-size:16px;font-weight:800">${icon('upload')} 월별 매출 자료 올리기</div>
               <div class="muted" style="font-size:12px;margin-top:3px">CAFE24 주문 내역을 <b>엑셀(.xlsx/.xls) 또는 CSV</b>로 내려받아 올리세요 · 판매처·금액 열 자동 인식</div></div>
             <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+              <label class="fld" style="display:block;margin-bottom:10px">자료 출처
+                <select id="cfSrc">${SALES_SRC.map(x=>`<option value="${x.k}">${esc(x.n)}</option>`).join('')}</select>
+                <span class="muted" style="font-size:11.5px">출처별로 따로 보관되어 서로 덮어쓰지 않습니다.</span></label>
               <input type="file" id="cfFile" accept=".csv,.xlsx,.xls,.tsv,.txt,text/csv">
               <div id="cfDup" style="margin-top:10px"></div>
               <label class="fld">대상 월<input type="month" id="cfYm"></label>
@@ -602,21 +671,33 @@
                    :`<div class="muted" style="font-size:11.5px;margin-top:5px">금액이 실제와 맞는지 확인한 뒤 저장하세요.</div>`}
               ${!u['판매처']?`<div style="font-size:11.5px;margin-top:5px;color:var(--warn);font-weight:700">※ 판매처 열이 없어 총액만 집계됩니다(판매처별 분석 불가).</div>`:''}`;
             save.disabled=zero; };
-          const warnDup=()=>{ const ym=ymEl.value; const prevDoc=(st.docs||[]).find(d=>d.ym===ym);
+          const srcEl=ov.querySelector('#cfSrc');
+          const warnDup=()=>{ const ym=ymEl.value, src=srcEl?srcEl.value:'cafe24';
+            const prevDoc=(st.docs||[]).find(d=>d.ym===ym && srcOf(d)===src);
             const box=ov.querySelector('#cfDup'); if(!box) return;
             box.innerHTML = prevDoc
               ? `<div style="font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:9px 11px;line-height:1.6">
-                   ${icon('alert')||''} <b>${esc(ym)}</b>에는 이미 올린 자료가 있습니다 —
+                   ${icon('alert')||''} <b>${esc(ym)} ${esc(srcName(src))}</b> 자료가 이미 있습니다 —
                    ${esc(prevDoc.file||'(파일명 없음)')} · ${won(prevDoc.total||0)}원${prevDoc.uploadedBy?` · ${esc(prevDoc.uploadedBy)}`:''}<br>
-                   저장하면 <b>기존 자료를 덮어씁니다.</b> 한 달에 여러 출처(카페24·셀메이트 등)를 따로 보관할 수는 없습니다.</div>`
+                   저장하면 <b>같은 출처의 기존 자료를 덮어씁니다.</b>(다른 출처 자료는 그대로 유지됩니다)</div>`
               : ''; };
-          ymEl.onchange=warnDup; warnDup();
+          ymEl.onchange=warnDup; if(srcEl) srcEl.onchange=warnDup; warnDup();
           save.onclick=async()=>{ if(!parsed||parsed.err) return; const ym=ymEl.value; if(!ym){ toast('대상 월을 선택하세요'); return; }
-            const prevDoc=(st.docs||[]).find(d=>d.ym===ym);
-            if(prevDoc && !confirm(`${ym}에 이미 올린 자료(${prevDoc.file||'파일명 없음'} · ${won(prevDoc.total||0)}원)를 덮어씁니다. 계속할까요?`)) return;
+            const src=srcEl?srcEl.value:'cafe24';
+            const prevDoc=(st.docs||[]).find(d=>d.ym===ym && srcOf(d)===src);
+            if(prevDoc && !confirm(`${ym} ${srcName(src)} 자료(${prevDoc.file||'파일명 없음'} · ${won(prevDoc.total||0)}원)를 덮어씁니다. 계속할까요?`)) return;
             save.disabled=true; save.textContent='저장 중…'; const me=(Auth.user&&Auth.user())||{};
-            const doc={ id:'cafe24:'+ym, ym, uploadedAt:new Date().toISOString(), uploadedBy:me.name||me.loginId||'', file:fname, total:parsed.total, count:parsed.count, dims:parsed.dims };
-            const ok=await cafePush(doc); if(ok){ toast(`${ym} CAFE24 매출 저장됨`); close(); await loadC(); } else { toast('저장 실패'); save.disabled=false; save.textContent='저장'; } };
+            const doc={ id:docId(src,ym), ym, source:src, sourceName:srcName(src),
+              uploadedAt:new Date().toISOString(), uploadedBy:me.name||me.loginId||'', file:fname,
+              total:parsed.total, count:parsed.count, dims:parsed.dims,
+              confirmed:false, confirmedBy:'', confirmedAt:'' };   // 담당자 확인 전에는 합계에 넣지 않는다
+            const ok=await cafePush(doc);
+            if(ok){
+              // 예전 형식(id='cafe24:YYYY-MM')으로 저장된 같은 자료가 남아 있으면 지운다 — 안 지우면 이중 집계
+              if(prevDoc && prevDoc.id!==doc.id){ try{ await cafeDel(prevDoc.id); }catch(e){} }
+              toast(`${ym} ${srcName(src)} 자료 저장됨 · 표에서 [확인]을 눌러야 합계에 반영됩니다`);
+              close(); await loadC();
+            } else { toast('저장 실패'); save.disabled=false; save.textContent='저장'; } };
         }
         async function loadC(){ const items=await cafeGet(); if(!host.isConnected) return; st.docs=(items||[]).filter(d=>d&&d.ym).sort((a,b)=>String(a.ym).localeCompare(String(b.ym))); draw(); }
         loadC();
