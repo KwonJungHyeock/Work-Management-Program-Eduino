@@ -45,47 +45,77 @@
     if(/중학교/.test(a)) return '중등'; if(/초등학교|초교/.test(a)) return '초등';
     if(/유치원|어린이집/.test(a)) return '유아'; return '개인·기업'; };
   const CAFE_DIMS=[['ch','판매처'],['sup','공급처'],['prod','상품분류'],['cust','고객유형(주소)']];
-  /* CSV 파싱(따옴표 필드) → 4축 분류 집계
-     카페24는 내려받는 메뉴마다 열 이름·구분자·제목줄이 달라서, 다음을 자동으로 맞춘다:
-       · 구분자(쉼표·세미콜론·탭)  · 제목줄이 위에 붙은 파일의 실제 헤더 행
-       · 열 이름 변형(판매처/쇼핑몰/유입경로 · 합계금액/총결제금액/실결제금액 …)
+  /* 파일 → 표(2차원 배열) → 4축 분류 집계
+     카페24는 받는 메뉴마다 파일 모양이 제각각이라(엑셀·CSV·탭구분·HTML표, 제목줄 유무,
+     열 이름 변형) 형태를 먼저 표로 통일한 뒤 같은 로직으로 집계한다.
      어떤 열을 금액으로 썼는지는 업로드 미리보기에 그대로 보여 주어 눈으로 확인하게 한다. */
   const CF_CH  =['판매처','쇼핑몰','몰명','유입경로','주문경로','마켓','채널'];
-  // 취소분이 섞인 열(총주문금액 등)이 먼저 잡히지 않도록 '실제 결제/매출' 계열을 앞에 둔다
   const CF_AMT =['합계금액','실결제금액','실매출액','총결제금액','결제금액','판매금액','상품금액','매출액','주문금액','금액'];
   const CF_SUP =['공급처','공급업체','제조사','브랜드'];
   const CF_PROD=['사입상품','상품코드','자체상품코드','상품명','상품'];
   const CF_ADDR=['수령자주소','수취인주소','배송지','주소'];
-  function parseCafeCsv(text){
-    const lines=String(text||'').split(/\r?\n/).filter(l=>l.trim().length); if(lines.length<2) return {err:'빈 파일입니다.'};
-    const delim=(()=>{ const s=lines[0], n=c=>(s.split(c).length-1);
-      const cand=[[',',n(',')],[';',n(';')],['\t',n('\t')]].sort((a,b)=>b[1]-a[1]); return cand[0][1]?cand[0][0]:','; })();
+  // 금액으로 잡으면 안 되는 열(할인·취소·배송비 등) — 이게 먼저 걸리면 매출이 0이거나 엉뚱해진다
+  const CF_AMT_BAD=/할인|취소|환불|반품|적립|포인트|쿠폰|마일리지|배송비|부가세|수수료/;
+  const CF_HEAD_MAX=24;   // 열 이름 최대 길이 — 이보다 길면 안내 문장으로 보고 헤더에서 제외
+  const cfNorm=s=>String(s==null?'':s).replace(/\(.*?\)|\s|["']/g,'');
+
+  /* 텍스트(CSV·TSV) → 표 : 구분자(쉼표·세미콜론·탭) 자동 감지 */
+  function cafeTextRows(text){
+    const lines=String(text||'').split(/\r?\n/).filter(l=>l.trim().length);
+    if(!lines.length) return [];
+    const s0=lines[0], n=c=>(s0.split(c).length-1);
+    const cand=[[',',n(',')],[';',n(';')],['\t',n('\t')]].sort((x,y)=>y[1]-x[1]);
+    const delim=cand[0][1]?cand[0][0]:',';
     const cell=l=>{ const out=[]; let cur='',q=false; for(let i=0;i<l.length;i++){ const ch=l[i];
       if(q){ if(ch==='"'){ if(l[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
       else { if(ch==='"') q=true; else if(ch===delim){ out.push(cur); cur=''; } else cur+=ch; } } out.push(cur); return out; };
-    const norm=s=>String(s).replace(/\(.*?\)|\s|["']/g,'');
-    const hit=(h,cands)=>cands.some(c=>h.some(x=>x.includes(c)));
-    // 제목줄이 위에 있는 파일 대응 — 앞 10줄 중 '금액'열이 있는 행을 헤더로 삼는다
-    let hRow=-1, head=cell(lines[0]).map(norm);
-    for(let i=0;i<Math.min(10,lines.length-1);i++){ const h=cell(lines[i]).map(norm);
-      if(hit(h,CF_AMT) && hit(h,CF_CH)){ hRow=i; head=h; break; } }
-    if(hRow<0) for(let i=0;i<Math.min(10,lines.length-1);i++){ const h=cell(lines[i]).map(norm);
-      if(hit(h,CF_AMT)){ hRow=i; head=h; break; } }
-    if(hRow<0) return { err:'금액 열을 찾지 못했습니다.', headers:head };
-    const idx=cands=>{ for(const c of cands){ const i=head.findIndex(h=>h.includes(c)); if(i>=0) return i; } return -1; };
-    const iCh=idx(CF_CH), iSup=idx(CF_SUP), iProd=idx(CF_PROD), iAmt=idx(CF_AMT), iAddr=idx(CF_ADDR);
+    return lines.map(cell);
+  }
+  /* HTML 표 → 표 : 확장자만 .xls 이고 내용은 HTML인 파일(카페24가 종종 이렇게 내려줌) */
+  function cafeHtmlRows(text){
+    try{ const doc=new DOMParser().parseFromString(String(text||''),'text/html');
+      return [...doc.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(td=>td.textContent.trim()))
+        .filter(r=>r.some(c=>c)); }catch(e){ return []; }
+  }
+
+  function parseCafeSheet(rows){
+    rows=(rows||[]).filter(r=>Array.isArray(r)&&r.some(c=>String(c==null?'':c).trim()));
+    if(rows.length<2) return { err:'표에서 읽을 내용이 없습니다.' };
+    /* 헤더 행 찾기 — 카페24 통계 파일은 위에 안내문이 여러 줄 붙는데, 그 문장에도
+       '금액' 같은 낱말이 들어 있어 헤더로 오인되기 쉽다. 그래서 헤더 후보를
+       ① 칸이 3개 이상이고 ② 칸 이름이 짧은(문장이 아닌) 행으로 제한한다. */
+    const hit=(h,cands)=>cands.some(c=>h.some(x=>x.length<=CF_HEAD_MAX && x.includes(c)));
+    const headLike=h=>h.filter(x=>x).length>=3;
+    const scan=(need2)=>{ for(let i=0;i<Math.min(20,rows.length-1);i++){ const h=rows[i].map(cfNorm);
+        if(!headLike(h)) continue;
+        if(hit(h,CF_AMT) && (!need2||hit(h,CF_CH))) return { i, h }; } return null; };
+    const found = scan(true) || scan(false);
+    if(!found) return { err:'금액 열을 찾지 못했습니다.', headers:(rows.find(r=>r.filter(c=>String(c||'').trim()).length>=3)||rows[0]).map(cfNorm) };
+    const hRow=found.i, head=found.h;
+    const fit=h=>h.length<=CF_HEAD_MAX;
+    // 숫자 열(상품구매금액 등)이 '상품'·'주소' 같은 이름 조각에 걸리지 않게 거른다
+    const NUMISH=/금액|수량|건수|주문수|품목수|률|율/;
+    const idx=cands=>{ for(const c of cands){ const i=head.findIndex(h=>fit(h)&&h.includes(c)&&!NUMISH.test(h)); if(i>=0) return i; } return -1; };
+    const idxAmt=()=>{ for(const c of CF_AMT){ const i=head.findIndex(h=>fit(h)&&h.includes(c)&&!CF_AMT_BAD.test(h)); if(i>=0) return i; }
+                       for(const c of CF_AMT){ const i=head.findIndex(h=>fit(h)&&h.includes(c)); if(i>=0) return i; } return -1; };
+    const iCh=idx(CF_CH), iSup=idx(CF_SUP), iProd=idx(CF_PROD), iAmt=idxAmt(), iAddr=idx(CF_ADDR);
     if(iAmt<0) return { err:'금액 열을 찾지 못했습니다.', headers:head };
     const used={ 판매처:iCh>=0?head[iCh]:'', 금액:head[iAmt], 공급처:iSup>=0?head[iSup]:'', 상품:iProd>=0?head[iProd]:'', 주소:iAddr>=0?head[iAddr]:'' };
     const dims={ch:{},sup:{},prod:{},cust:{}}; let total=0,count=0;
     const add=(m,k,a)=>{ const o=m[k]=m[k]||{amount:0,count:0}; o.amount+=a; o.count++; };
-    for(let i=hRow+1;i<lines.length;i++){ const c=cell(lines[i]); if(!c.length) continue;
-      const chv=String(iCh>=0?c[iCh]:'').trim(), pv=String(iProd>=0?c[iProd]:'').trim();
-      if(iCh>=0 && !chv && !pv) continue;
-      if(iCh<0 && !String(c[iAmt]||'').trim()) continue;
-      const amt=Number(String(c[iAmt]||'').replace(/[^\d.-]/g,''))||0;
-      add(dims.ch,iCh>=0?chClass(chv):'(판매처 열 없음)',amt); add(dims.sup,supClass(iSup>=0?c[iSup]:''),amt);
-      add(dims.prod,prodClass(pv),amt); add(dims.cust,custClass(iAddr>=0?c[iAddr]:''),amt); total+=amt; count++; }
-    return { dims, total, count, used, headers:head };
+    const cellOf=(c,i)=>String(i>=0&&c[i]!=null?c[i]:'').trim();
+    for(let i=hRow+1;i<rows.length;i++){ const c=rows[i];
+      const amtRaw=cellOf(c,iAmt);
+      const amt=Number(amtRaw.replace(/[^\d.-]/g,''))||0;
+      const chv=cellOf(c,iCh), pv=cellOf(c,iProd);
+      if(!amtRaw && !chv && !pv) continue;                    // 완전히 빈 행만 건너뜀
+      add(dims.ch, iCh>=0?chClass(chv||'(미지정)'):'(판매처 열 없음)', amt);
+      add(dims.sup, supClass(cellOf(c,iSup)), amt);
+      add(dims.prod, prodClass(pv), amt);
+      add(dims.cust, custClass(cellOf(c,iAddr)), amt);
+      total+=amt; count++; }
+    const sample=rows[hRow+1]?cellOf(rows[hRow+1],iAmt):'';   // 첫 데이터 행의 금액 원본값(0원일 때 원인 확인용)
+    return { dims, total, count, used, headers:head, sample };
   }
   const ymFromName=name=>{ const m=String(name||'').match(/(20\d{2})[\-_.]?(0[1-9]|1[0-2])/); return m?`${m[1]}-${m[2]}`:''; };
 
@@ -519,34 +549,53 @@
           const ov=el('div','modal-ov'); ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
           ov.innerHTML=`<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:520px;width:97%;box-shadow:var(--sh-lg)">
             <div style="padding:16px 20px 10px;border-bottom:1px solid var(--line)"><div style="font-size:16px;font-weight:800">${icon('upload')} CAFE24 월별 CSV 업로드</div>
-              <div class="muted" style="font-size:12px;margin-top:3px">판매처명·공급처명·상품코드·합계금액·수령자주소 열이 있는 CAFE24 매출 CSV</div></div>
+              <div class="muted" style="font-size:12px;margin-top:3px">CAFE24 주문 내역을 <b>엑셀(.xlsx/.xls) 또는 CSV</b>로 내려받아 올리세요 · 판매처·금액 열 자동 인식</div></div>
             <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-              <input type="file" id="cfFile" accept=".csv,text/csv">
+              <input type="file" id="cfFile" accept=".csv,.xlsx,.xls,.tsv,.txt,text/csv">
               <label class="fld">대상 월<input type="month" id="cfYm"></label>
               <div id="cfPrev" class="muted" style="font-size:12.5px;line-height:1.6"></div></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)">
               <button class="btn ghost" id="cfCancel">취소</button><button class="btn pri" id="cfSave" disabled>저장</button></div></div>`;
           document.body.appendChild(ov); const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; ov.querySelector('#cfCancel').onclick=close;
           const prev=ov.querySelector('#cfPrev'), save=ov.querySelector('#cfSave'), ymEl=ov.querySelector('#cfYm');
-          ov.querySelector('#cfFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; fname=f.name; const guess=ymFromName(f.name); if(guess) ymEl.value=guess;
-            const rd=new FileReader(); rd.onload=()=>{ let txt=''; try{ txt=new TextDecoder('euc-kr').decode(new Uint8Array(rd.result)); }catch(_){ txt=''; }
-              if(!txt || /�/.test(txt.slice(0,300))){ try{ txt=new TextDecoder('utf-8').decode(new Uint8Array(rd.result)); }catch(__){} }
-              parsed=parseCafeCsv(txt);
-              if(!parsed||parsed.err){
-                const hs=(parsed&&parsed.headers)||[];
-                prev.innerHTML=`<span style="color:var(--danger);font-weight:700">${esc((parsed&&parsed.err)||'파싱 실패')}</span>
-                  ${hs.length?`<div class="muted" style="font-size:11.5px;margin-top:6px;line-height:1.6">이 파일에서 읽은 열 이름: <b>${hs.slice(0,14).map(h=>esc(h||'(빈칸)')).join(' · ')}</b>${hs.length>14?` 외 ${hs.length-14}개`:''}</div>`:''}
-                  <div class="muted" style="font-size:11.5px;margin-top:6px;line-height:1.6">카페24 <b>주문 내역(주문 리스트)</b>을 엑셀로 내려받아 올려주세요.
-                    일별·월별 <b>매출 통계 리포트</b>에는 판매처·금액 열이 없어 집계할 수 없습니다.</div>`;
-                save.disabled=true; return; }
-              const top=Object.entries(parsed.dims.ch).sort((a,b)=>b[1].amount-a[1].amount).slice(0,5).map(([k,v])=>`${esc(k)} ${won(v.amount)}`).join(' · ');
-              const u=parsed.used||{};
-              prev.innerHTML=`총 <b style="color:var(--ink)">${won(parsed.total)}원</b> · ${parsed.count}건<br><span class="muted">판매처: ${top}</span>
-                <div class="muted" style="font-size:11.5px;margin-top:6px">인식한 열 — 금액 <b>${esc(u['금액']||'')}</b>${u['판매처']?` · 판매처 <b>${esc(u['판매처'])}</b>`:''}${u['공급처']?` · 공급처 <b>${esc(u['공급처'])}</b>`:''}${u['상품']?` · 상품 <b>${esc(u['상품'])}</b>`:''}</div>
-                ${!u['판매처']?`<div style="font-size:11.5px;margin-top:5px;color:var(--warn);font-weight:700">※ 판매처 열이 없어 총액만 집계됩니다(판매처별 분석 불가).</div>`:''}
-                <div class="muted" style="font-size:11.5px;margin-top:5px">금액이 실제와 맞는지 확인한 뒤 저장하세요.</div>`;
-              save.disabled=false; };
-            rd.readAsArrayBuffer(f); };
+          ov.querySelector('#cfFile').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; fname=f.name;
+            const guess=ymFromName(f.name); if(guess) ymEl.value=guess;
+            prev.innerHTML='<span class="muted">파일 읽는 중…</span>'; save.disabled=true;
+            let rows=[], how='';
+            try{
+              const buf=await f.arrayBuffer(), u8=new Uint8Array(buf);
+              const isZip = u8[0]===0x50&&u8[1]===0x4B;                                  // .xlsx
+              const isOle = u8[0]===0xD0&&u8[1]===0xCF&&u8[2]===0x11&&u8[3]===0xE0;      // 구형 .xls
+              if(isZip && window.XlsxLite){ rows=((await XlsxLite.parseSheets(f))[0]||{}).rows||[]; how='엑셀(xlsx)'; }
+              else if(isOle && window.XlsLite){ rows=((await XlsLite.parseSheets(buf))[0]||{}).rows||[]; how='엑셀(xls)'; }
+              else {
+                let txt=''; try{ txt=new TextDecoder('euc-kr').decode(u8); }catch(_){ txt=''; }
+                if(!txt || /\uFFFD/.test(txt.slice(0,300))){ try{ txt=new TextDecoder('utf-8').decode(u8); }catch(__){} }
+                if(/<t(able|r)[\s>]/i.test(txt.slice(0,3000))){ rows=cafeHtmlRows(txt); how='엑셀(HTML 표)'; }
+                else { rows=cafeTextRows(txt); how='CSV/텍스트'; }
+              }
+            }catch(err){ rows=[]; }
+            parsed = rows.length ? parseCafeSheet(rows) : { err:'파일을 읽지 못했습니다. 엑셀(.xlsx/.xls) 또는 CSV로 내려받아 올려주세요.' };
+            if(!parsed||parsed.err){
+              const hs=(parsed&&parsed.headers)||[];
+              prev.innerHTML=`<span style="color:var(--danger);font-weight:700">${esc((parsed&&parsed.err)||'파싱 실패')}</span>
+                ${how?`<div class="muted" style="font-size:11.5px;margin-top:5px">읽은 형식: ${esc(how)} · ${rows.length}줄</div>`:''}
+                ${hs.length?`<div class="muted" style="font-size:11.5px;margin-top:5px;line-height:1.6">이 파일에서 읽은 열 이름: <b>${hs.slice(0,14).map(h=>esc(h||'(빈칸)')).join(' · ')}</b>${hs.length>14?` 외 ${hs.length-14}개`:''}</div>`:''}
+                <div class="muted" style="font-size:11.5px;margin-top:5px;line-height:1.6">카페24 <b>주문 내역(주문 리스트)</b>을 내려받아 올려주세요.
+                  일별·월별 <b>매출 통계 리포트</b>에는 판매처·금액 열이 없어 집계할 수 없습니다.</div>`;
+              save.disabled=true; return; }
+            const top=Object.entries(parsed.dims.ch).sort((x,y)=>y[1].amount-x[1].amount).slice(0,5).map(([k,v])=>`${esc(k)} ${won(v.amount)}`).join(' · ');
+            const u=parsed.used||{};
+            const zero=!parsed.total;
+            prev.innerHTML=`총 <b style="color:${zero?'var(--danger)':'var(--ink)'}">${won(parsed.total)}원</b> · ${parsed.count}건
+              <span class="muted" style="font-size:11.5px">(${esc(how)})</span><br><span class="muted">판매처: ${top||'-'}</span>
+              <div class="muted" style="font-size:11.5px;margin-top:6px">인식한 열 — 금액 <b>${esc(u['금액']||'')}</b>${u['판매처']?` · 판매처 <b>${esc(u['판매처'])}</b>`:''}${u['공급처']?` · 공급처 <b>${esc(u['공급처'])}</b>`:''}${u['상품']?` · 상품 <b>${esc(u['상품'])}</b>`:''}</div>
+              ${zero?`<div style="font-size:11.5px;margin-top:6px;color:var(--danger);font-weight:700;line-height:1.6">합계가 0원입니다 — <b>금액 열을 잘못 잡았을 수 있습니다.</b><br>
+                     첫 줄의 '${esc(u['금액']||'')}' 값: "<b>${esc(parsed.sample||'(빈칸)')}</b>"<br>
+                     이 파일의 열: ${(parsed.headers||[]).slice(0,14).map(h=>esc(h||'(빈칸)')).join(' · ')}</div>`
+                   :`<div class="muted" style="font-size:11.5px;margin-top:5px">금액이 실제와 맞는지 확인한 뒤 저장하세요.</div>`}
+              ${!u['판매처']?`<div style="font-size:11.5px;margin-top:5px;color:var(--warn);font-weight:700">※ 판매처 열이 없어 총액만 집계됩니다(판매처별 분석 불가).</div>`:''}`;
+            save.disabled=zero; };
           save.onclick=async()=>{ if(!parsed||parsed.err) return; const ym=ymEl.value; if(!ym){ toast('대상 월을 선택하세요'); return; }
             save.disabled=true; save.textContent='저장 중…'; const me=(Auth.user&&Auth.user())||{};
             const doc={ id:'cafe24:'+ym, ym, uploadedAt:new Date().toISOString(), uploadedBy:me.name||me.loginId||'', file:fname, total:parsed.total, count:parsed.count, dims:parsed.dims };
