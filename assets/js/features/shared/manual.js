@@ -12,6 +12,13 @@
   const DEFAULT_TITLES = ['업무 우선순위','중요사항','주의사항'];
   const N = 3;
 
+  /* 외부에서 따로 만든 매뉴얼 문서를 탭 하나로 붙여 보여준다(읽기 전용).
+     저장 데이터에는 아래 '키'만 남기므로 파일 경로가 바뀌어도 여기만 고치면 된다. */
+  const EMBEDS = {
+    'logi-handover':{ src:'assets/embeds/logi-handover.html', name:'물류팀 인수인계 매뉴얼',
+      desc:'물류팀에서 만든 인수인계 매뉴얼 원본입니다. 제품 이해부터 주문 접수·송장 출력·포장·출고·재고관리까지 하루 업무 순서대로 정리되어 있습니다. 내용 수정은 원본 매뉴얼에서 다시 생성해 교체합니다.' }
+  };
+
   function buildManual(cfg){
     // cfg: { key, dept('cs'|'md'|'logi'), storeKey, title, seed:[탭이름…] }
     MODULES[cfg.key]={
@@ -33,7 +40,8 @@
           if(!Array.isArray(data.ensured)) data.ensured=[];
           if(data.ensured.indexOf(cfg.ensure.id)<0){
             if(!data.tabs.some(t=>t.name===cfg.ensure.name))
-              data.tabs.push({ id:newId(), name:cfg.ensure.name, single:!!cfg.ensure.single, cells:[cfg.ensure.content||'','',''] });
+              data.tabs.push({ id:newId(), name:cfg.ensure.name, single:!!cfg.ensure.single,
+                embed:cfg.ensure.embed||'', cells:[cfg.ensure.content||'','',''] });
             data.ensured.push(cfg.ensure.id);
             if(canEdit()) store(cfg.storeKey).set(data);
           }
@@ -63,6 +71,12 @@
           .mn-view{white-space:pre-wrap;font-size:13.5px;line-height:1.75;padding:14px 16px;color:var(--ink-2);min-height:160px}
           .mn-single{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
           .mn-single .mn-cell{width:100%;min-height:calc(100vh - 400px)}
+          .mn-embed{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
+          .mn-embed .eh{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+          .mn-embed .eh b{font-size:13.5px;font-weight:800}
+          .mn-embed .eh .btn{margin-left:auto;flex:none}
+          .mn-embed .ed{font-size:12px;color:var(--muted);padding:9px 14px;border-bottom:1px solid var(--line);line-height:1.6}
+          .mn-embed iframe{display:block;width:100%;height:calc(100vh - 290px);min-height:520px;border:0}
           .mn-meta{font-size:11.5px;color:var(--muted);margin-top:12px}
           .mn-empty{padding:44px;text-align:center;color:var(--muted)}
         </style>
@@ -82,6 +96,7 @@
         function draw(){
           const t=data.tabs.find(x=>x.id===activeId)||data.tabs[0]; activeId=t&&t.id;
           const edit=canEdit(); const admin=isAdmin();
+          const emb=(t&&t.embed&&EMBEDS[t.embed])||null;   // 임베드 탭 = 읽기 전용
           const colHtml=i=>{
             const title=data.sectionTitles[i]||DEFAULT_TITLES[i];
             const head = (titleEdit&&admin)
@@ -98,13 +113,20 @@
             <div class="mn-tabs">
               ${data.tabs.map(x=>`<div class="mn-tab ${x.id===activeId?'on':''}" data-id="${esc(x.id)}">${esc(x.name)}</div>`).join('')}
               ${edit?`<button class="mn-add" id="mnAdd">${icon('plus')}탭 추가</button>`:''}
-              ${edit&&t?`<div class="mn-tools">
+              ${edit&&t&&!emb?`<div class="mn-tools">
                 ${admin&&!t.single?`<button class="btn ghost sm" id="mnTitle">${icon('edit')}${titleEdit?'제목 완료':'제목 수정'}</button>`:''}
                 <button class="btn ghost sm" id="mnRen">${icon('edit')}탭 이름</button>
                 <button class="btn ghost sm" id="mnDel" style="color:var(--danger)">${icon('trash')}</button>
                 <button class="btn pri sm" id="mnSave">${icon('save')}저장</button></div>`:''}
             </div>
-            ${t?(t.single
+            ${t?(emb
+                ? `<div class="mn-embed">
+                    <div class="eh">${icon('book')||icon('clipboard')||''}<b>${esc(emb.name)}</b>
+                      <button class="btn ghost sm" id="mnOpen">${icon('external')||''}새 창으로 열기</button></div>
+                    ${emb.desc?`<div class="ed">${esc(emb.desc)}</div>`:''}
+                    <iframe src="${esc(emb.src)}" title="${esc(emb.name)}" loading="lazy"></iframe>
+                   </div>`
+                : t.single
                 ? `<div class="mn-single">${edit
                     ? `<textarea class="mn-cell" data-cell="0" placeholder="내용을 입력하세요">${esc((t.cells&&t.cells[0])||'')}</textarea>`
                     : `<div class="mn-view">${esc((t.cells&&t.cells[0])||'')||'<span class="muted">아직 작성된 내용이 없습니다.</span>'}</div>`}</div>`
@@ -118,6 +140,7 @@
           const del=body.querySelector('#mnDel'); if(del) del.onclick=()=>{ const cur=data.tabs.find(x=>x.id===activeId); if(!cur) return; if(!confirm(`'${cur.name}' 탭을 삭제할까요? (내용도 함께 삭제 · 팀 전체 반영)`)) return; data.tabs=data.tabs.filter(x=>x.id!==activeId); activeId=data.tabs[0]&&data.tabs[0].id; persist(); draw(); toast('탭을 삭제했습니다'); };
           const ttl=body.querySelector('#mnTitle'); if(ttl) ttl.onclick=()=>{ if(titleEdit){ saveTitlesFromDom(); saveActiveFromDom(); persist(); toast('섹션 제목을 저장했습니다'); } titleEdit=!titleEdit; draw(); };
           const sv=body.querySelector('#mnSave'); if(sv) sv.onclick=()=>{ saveActiveFromDom(); if(titleEdit) saveTitlesFromDom(); persist(); toast('매뉴얼을 저장했습니다'); };
+          const op=body.querySelector('#mnOpen'); if(op&&emb) op.onclick=()=>window.open(emb.src,'_blank','noopener');
         }
         draw();
       }
@@ -171,7 +194,8 @@
   buildManual({ key:'md.manual', dept:'md', storeKey:'eduino.manual.md', title:'업무 매뉴얼',
     seed:['입점사 발주','결제요청','입점사 관리','상품·품절 관리','가격비교','TS상담'] });
   buildManual({ key:'logi.manual', dept:'logi', storeKey:'eduino.manual.logi', title:'업무 매뉴얼',
-    seed:['입출고','재고관리','배송/택배','반품/교환 처리'] });
+    seed:['입출고','재고관리','배송/택배','반품/교환 처리'],
+    ensure:{ id:'logiHandover', name:'인수인계', embed:'logi-handover' } });
 
   window.buildManual = buildManual;
 })();
