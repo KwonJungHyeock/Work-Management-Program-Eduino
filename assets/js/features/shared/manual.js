@@ -16,8 +16,26 @@
      저장 데이터에는 아래 '키'만 남기므로 파일 경로가 바뀌어도 여기만 고치면 된다. */
   const EMBEDS = {
     'logi-handover':{ src:'assets/embeds/logi-handover.html', name:'물류팀 인수인계 매뉴얼',
-      desc:'물류팀에서 만든 인수인계 매뉴얼 원본입니다. 제품 이해부터 주문 접수·송장 출력·포장·출고·재고관리까지 하루 업무 순서대로 정리되어 있습니다. 내용 수정은 원본 매뉴얼에서 다시 생성해 교체합니다.' }
+      desc:'제품 이해부터 주문 접수·송장 출력·포장·출고·재고관리까지 하루 업무 순서대로 정리된 원본 문서입니다. 내용 수정은 원본 매뉴얼에서 다시 생성해 파일을 교체합니다.' }
   };
+
+  /* 임베드 문서를 프로그램 디자인에 맞춘다(같은 출처라 iframe 안을 만질 수 있음).
+     원본 HTML은 그대로 두고 스타일시트 한 장 + 테마 속성만 넣어 준다. */
+  function skinFrame(ifr){
+    if(!ifr.__mnSkin) ifr.__mnSkin=()=>{ try{
+      const d=ifr.contentDocument; if(!d||!d.head) return;
+      if(!d.getElementById('mnSkin')){
+        const l=d.createElement('link'); l.id='mnSkin'; l.rel='stylesheet';
+        l.href=new URL('assets/css/embed-manual.css', location.href).href;
+        d.head.appendChild(l);
+      }
+      const th=document.documentElement.getAttribute('data-theme');
+      if(th) d.documentElement.setAttribute('data-theme',th);
+      else d.documentElement.removeAttribute('data-theme');
+    }catch(e){} };
+    if(!ifr.__mnBound){ ifr.__mnBound=1; ifr.addEventListener('load',ifr.__mnSkin); }
+    ifr.__mnSkin();                       // 캐시로 이미 로드가 끝난 경우
+  }
 
   function buildManual(cfg){
     // cfg: { key, dept('cs'|'md'|'logi'), storeKey, title, seed:[탭이름…] }
@@ -72,11 +90,13 @@
           .mn-single{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
           .mn-single .mn-cell{width:100%;min-height:calc(100vh - 400px)}
           .mn-embed{border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);overflow:hidden}
-          .mn-embed .eh{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}
-          .mn-embed .eh b{font-size:13.5px;font-weight:800}
+          .mn-embed .eh{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+          .mn-embed .eh > .ic{color:var(--red);flex:none}
+          .mn-embed .et{min-width:0}
+          .mn-embed .et b{display:block;font-size:14px;font-weight:800}
+          .mn-embed .et small{display:block;font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:1px}
           .mn-embed .eh .btn{margin-left:auto;flex:none}
-          .mn-embed .ed{font-size:12px;color:var(--muted);padding:9px 14px;border-bottom:1px solid var(--line);line-height:1.6}
-          .mn-embed iframe{display:block;width:100%;height:calc(100vh - 290px);min-height:520px;border:0}
+          .mn-embed iframe{display:block;width:100%;height:calc(100vh - 258px);min-height:520px;border:0}
           .mn-meta{font-size:11.5px;color:var(--muted);margin-top:12px}
           .mn-empty{padding:44px;text-align:center;color:var(--muted)}
         </style>
@@ -121,9 +141,9 @@
             </div>
             ${t?(emb
                 ? `<div class="mn-embed">
-                    <div class="eh">${icon('book')||icon('clipboard')||''}<b>${esc(emb.name)}</b>
-                      <button class="btn ghost sm" id="mnOpen">${icon('external')||''}새 창으로 열기</button></div>
-                    ${emb.desc?`<div class="ed">${esc(emb.desc)}</div>`:''}
+                    <div class="eh">${icon('clipboard')}
+                      <div class="et"><b>${esc(emb.name)}</b>${emb.desc?`<small>${esc(emb.desc)}</small>`:''}</div>
+                      <button class="btn ghost sm" id="mnOpen">${icon('external')}새 창으로 열기</button></div>
                     <iframe src="${esc(emb.src)}" title="${esc(emb.name)}" loading="lazy"></iframe>
                    </div>`
                 : t.single
@@ -141,7 +161,14 @@
           const ttl=body.querySelector('#mnTitle'); if(ttl) ttl.onclick=()=>{ if(titleEdit){ saveTitlesFromDom(); saveActiveFromDom(); persist(); toast('섹션 제목을 저장했습니다'); } titleEdit=!titleEdit; draw(); };
           const sv=body.querySelector('#mnSave'); if(sv) sv.onclick=()=>{ saveActiveFromDom(); if(titleEdit) saveTitlesFromDom(); persist(); toast('매뉴얼을 저장했습니다'); };
           const op=body.querySelector('#mnOpen'); if(op&&emb) op.onclick=()=>window.open(emb.src,'_blank','noopener');
+          const ifr=body.querySelector('.mn-embed iframe'); if(ifr) skinFrame(ifr);
         }
+        // 프로그램에서 라이트/다크를 바꾸면 임베드 문서도 같이 전환 (화면을 떠나면 스스로 해제)
+        const themeMo=new MutationObserver(()=>{
+          if(!root.isConnected){ themeMo.disconnect(); return; }
+          const f=body.querySelector('.mn-embed iframe'); if(f) skinFrame(f);
+        });
+        themeMo.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
         draw();
       }
     };

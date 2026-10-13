@@ -1,0 +1,89 @@
+/* ===========================================================================
+   업무 매뉴얼 임베드 문서 스킨
+   - assets/embeds/*.html (팀에서 따로 만들어 쓰는 단일 파일 매뉴얼)을
+     프로그램 디자인에 맞추는 전용 스타일. manual.js 가 iframe 안에 끼워 넣는다.
+   - 원본 HTML은 손대지 않는다. 구조·순서·내용은 그대로 두고 '토큰'만 바꿔서
+     나중에 원본을 다시 생성해 교체해도 이 파일 하나로 다시 맞춰진다.
+   - 값은 assets/css/theme.css 와 같은 계열(색·글꼴·모서리·그림자).
+   =========================================================================== */
+
+/* ── 라이트 ── */
+:root{
+  --bg:#eceef1; --surface:#ffffff; --sidebar-bg:#f7f8fa; --band:#e9edf3; --paper:#ffffff;
+  --text:#151d27; --muted:#69727e; --line:#e2e5ea;
+  --accent:#1f56a3; --accent-soft:#e9f1fb; --on-accent:#ffffff;
+
+  /* 주의(빨강) · 확인(주황) · 도움말(초록) — 프로그램의 danger / warn / ok 톤 */
+  --warn:#d31b21;  --warn-soft:#fdecec;  --warn-line:#f1b4b6;
+  --check:#b26a00; --check-soft:#fbf1de; --check-line:#e7c47d;
+  --tip:#0f8b4e;   --tip-soft:#e8f6ee;   --tip-line:#a6dcbd;
+
+  --font:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,
+         "Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+
+  --radius:11px; --radius-sm:7px; --radius-num:5px;
+  --sidebar-w:234px; --topbar-h:58px;
+
+  /* 프로그램 본문(15px)보다 반 단계 작게 — 한 화면에 더 많이 들어오게 */
+  --fs-sm:12.5px; --fs-base:13.5px; --fs-body:14.5px; --fs-brand:14.5px;
+  --fs-num:19px; --fs-h2:19px; --fs-step:16.5px; --fs-h1:25px; --fs-h1-m:22px;
+  --fs-icon:20px; --fs-field:16px; --fs-cover:31px;
+  --lh-body:1.65;
+
+  --mark:#ffe9a8;
+  --img-line:#cfd4da; --img-bg:#f7f8fa; --timeline:#cfd4da;
+  --lift-shadow:0 1px 3px rgba(16,24,40,.07),0 6px 16px -4px rgba(16,24,40,.10);
+  --img-shadow:0 1px 2px rgba(16,24,40,.05),0 1px 1px rgba(16,24,40,.03);
+  --overlay:rgba(16,24,40,.42); --lightbox-bg:rgba(10,14,20,.88);
+}
+
+/* ── 모양 다듬기 (프로그램의 카드·제목 느낌에 맞춤) ── */
+body{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+h1,h2,h3{ letter-spacing:-.014em; }
+.page{ box-shadow:var(--img-shadow); }
+.sidebar{ padding-top:14px; }
+.brand{ padding-bottom:12px; }
+.search input{ border-radius:7px; }
+.download-btn,.pager a,.reset-btn,.print-btn{ border-radius:7px; }
+.to-top{ box-shadow:var(--lift-shadow); }
+
+/* 스크롤바 — 프로그램 본문과 동일 */
+*::-webkit-scrollbar{ width:10px; height:10px; }
+*::-webkit-scrollbar-thumb{ background:#c9ced5; border-radius:6px; border:2px solid transparent; background-clip:content-box; }
+*::-webkit-scrollbar-thumb:hover{ background:#b3bac3; background-clip:content-box; }
+
+/* ===== 다크 (프로그램 테마를 따라감 · manual.js 가 data-theme 을 맞춰 준다) ===== */
+:root[data-theme="dark"]{
+  --bg:#0e1219; --surface:#161b23; --sidebar-bg:#1c2230; --band:#1f2735; --paper:#161b23;
+  --text:#e8ebf1; --muted:#8b95a6; --line:#272e3c;
+  --accent:#6ea4f5; --accent-soft:#1b2942; --on-accent:#0e1219;
+
+  --warn:#ff8287;  --warn-soft:#2c1719;  --warn-line:#5a2b2e;
+  --check:#e0a34a; --check-soft:#2a2410; --check-line:#55451c;
+  --tip:#54c98d;   --tip-soft:#12271d;   --tip-line:#1f4a33;
+
+  --mark:#6b541a;
+  --img-line:#3a4453; --img-bg:#1c2230; --timeline:#3a4453;
+  --lift-shadow:0 2px 8px rgba(0,0,0,.5),0 8px 20px -6px rgba(0,0,0,.5);
+  --img-shadow:0 1px 2px rgba(0,0,0,.45);
+}
+:root[data-theme="dark"] mark{ color:#f3ecd6; }
+:root[data-theme="dark"] *::-webkit-scrollbar-thumb{ background:#39424f; }
+
+/* 장(章)별 색(--part)은 어두운 배경에서 그대로 쓰면 묻히므로 밝게 섞어서 쓴다.
+   원본의 인라인 --part 는 건드리지 않고, 밝힌 값을 따로 만들어 참조만 바꾼다. */
+:root[data-theme="dark"] [style*="--part"]{ --part-lit:color-mix(in srgb,var(--part) 42%,#d7e6ff); }
+:root[data-theme="dark"] .sec-head{ border-left-color:var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .page{ border-top-color:var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .cover-card{ border-top-color:var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .nav>li>a.active{ box-shadow:inset 4px 0 0 var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .floorplan{ border-color:var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .fp-shelf li{ border-left-color:var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .sec-head .eyebrow,
+:root[data-theme="dark"] .sec-ico,
+:root[data-theme="dark"] .card-ico,
+:root[data-theme="dark"] .card-num,
+:root[data-theme="dark"] .fp-shelf b{ color:var(--part-lit,var(--accent)); }
+:root[data-theme="dark"] .fp-pc,
+:root[data-theme="dark"] .fp-pack{ background:var(--part-lit,var(--accent))!important;
+  border-color:var(--part-lit,var(--accent))!important; color:#0e1219; }
