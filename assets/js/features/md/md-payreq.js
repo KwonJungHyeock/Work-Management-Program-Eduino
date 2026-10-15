@@ -25,8 +25,13 @@
   const payDocsOf=(coll,date)=>{ const b=PAY_BASE(date);
     return (coll||[]).filter(d=>d&&d.type==='payreq'&&(d.id===b||String(d.id||'').startsWith(b+'#')))
       .sort((x,y)=>roundOf(x)-roundOf(y)); };
-  /* 어떤 항목이 이미 올라갔는지 가리는 식별자 — 차수 추가 전 옛 문서는 id가 없어 업체·내용·금액으로 맞춘다 */
-  const sigOf=r=> String((r&&r.id)||'') || [r&&r.vendor,r&&r.content,parseAmt(r&&r.amount)].join('|');
+  /* 어떤 항목이 이미 결제됐는지 가리는 식별자.
+     차수 기능 이전에 올라간 문서에는 항목 id가 없다. 그래서 id 하나만 보면 옛 문서의
+     결제완료 건을 못 알아보고 다음 차수에 다시 올려 '같은 건 두 번 입금'이 될 수 있다.
+     → 항상 내용 기반 열쇠를 같이 만들고, 둘 중 하나라도 맞으면 결제된 것으로 본다. */
+  const payKey=r=>['k', String((r&&r.vendor)||'').trim(), String((r&&r.orderer)||'').trim(),
+    String((r&&r.content)||'').trim(), String((r&&r.qty)==null?'':(r&&r.qty)).trim(), parseAmt(r&&r.amount)].join('|');
+  const sigsOf=r=>{ const out=[payKey(r)]; const id=String((r&&r.id)||''); if(id) out.push('id:'+id); return out; };
   const PAYSTATUS={ none:{l:'미상신',c:'var(--muted)',bg:'var(--panel-2)'}, submitted:{l:'결제 상신됨',c:'var(--info)',bg:'var(--info-bg)'}, paid:{l:'결제 완료',c:'var(--ok)',bg:'var(--ok-bg)'} };
   async function collGetAll(){ try{ const r=await fetch('/api/store?type=coll&coll='+COLL); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
   async function collPush(item){ try{ return await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:COLL,item})}).then(r=>r.json()); }catch(e){ return null; } }
@@ -71,7 +76,8 @@
       const editable=canEdit();
       let date=todayStr(), all=[], editId=null, payDocs=[];
       const paidSigs=()=>{ const s=new Set();
-        payDocs.filter(d=>d.status==='paid').forEach(d=>(d.items||[]).forEach(it=>s.add(sigOf(it)))); return s; };
+        payDocs.filter(d=>d.status==='paid').forEach(d=>(d.items||[]).forEach(it=>sigsOf(it).forEach(x=>s.add(x)))); return s; };
+      const isPaid=(r,set)=>sigsOf(r).some(x=>set.has(x));
       const openDoc=()=>payDocs.find(d=>d.status==='submitted')||null;   // 상신했지만 아직 결제 전
       const blank=()=>({ id:'', kind:'택배운임', orderer:'', vendor:'', content:'', qty:'', amount:'', account:'' });
       let form=blank();
@@ -123,10 +129,10 @@
             <div class="pq-f"><label>&nbsp;</label><button class="btn pri" id="pfAdd">${icon('check')}추가</button></div>
           </div></div>`;
       }
-      function rowView(r, first, isPaid){
+      function rowView(r, first, paidFlag){
         return `<tr class="${first?'pq-gtop':''}">
           <td style="white-space:nowrap">${esc(String(r.day||r.date||'').slice(5))}</td>
-          <td style="white-space:nowrap">${kindBadge(r.kind||'발주')}${isPaid?' <span class="pq-paid" title="대표 결제완료된 건입니다">결제완료</span>':''}</td>
+          <td style="white-space:nowrap">${kindBadge(r.kind||'발주')}${paidFlag?' <span class="pq-paid" title="대표 결제완료된 건입니다">결제완료</span>':''}</td>
           <td style="white-space:nowrap">${esc(r.orderer||'')}</td>
           <td style="white-space:nowrap;font-weight:600;color:var(--ink)">${esc(r.vendor||'')}</td>
           <td class="wrap">${esc(r.content||'')}${(Number(r.ship)||0)>0?`<div class="muted" style="font-size:11px;margin-top:2px">상품 ${won(Number(r.prodAmount)||parseAmt(r.amount)-(Number(r.ship)||0))} + 배송비 ${won(Number(r.ship)||0)}</div>`:''}</td>
@@ -160,7 +166,7 @@
         while(i<rows.length){
           const v=String(rows[i].vendor||'').trim(); const grp=[]; let j=i;
           while(j<rows.length && String(rows[j].vendor||'').trim()===v){ grp.push(rows[j]); j++; }
-          grp.forEach((r,idx)=>{ html+= editId===r.id?rowEdit(r):rowView(r, idx===0, paid.has(sigOf(r))); });
+          grp.forEach((r,idx)=>{ html+= editId===r.id?rowEdit(r):rowView(r, idx===0, isPaid(r,paid)); });
           if(grp.length>1 && !grp.some(r=>r.id===editId)){
             const gt=grp.reduce((s,r)=>s+parseAmt(r.amount),0), gq=grp.reduce((s,r)=>s+(Number(r.qty)||0),0);
             html+=`<tr class="pq-sub"><td colspan="5">${esc(v||'(미지정)')} · ${grp.length}건 소계</td><td class="num">${gq||''}</td><td class="num">${won(gt)}원</td><td ${editable?'colspan="2"':''}></td></tr>`;
@@ -180,7 +186,7 @@
         const qtyTotal=rows.reduce((s,r)=>s+(Number(r.qty)||0),0);
         const cols=editable?9:8;
         const paidSet=paidSigs();
-        const pending=rows.filter(r=>!paidSet.has(sigOf(r)));          // 아직 결제되지 않은 건
+        const pending=rows.filter(r=>!isPaid(r,paidSet));              // 아직 결제되지 않은 건
         const pendTotal=pending.reduce((s,r)=>s+parseAmt(r.amount),0);
         const open=openDoc(), lastPaid=payDocs.filter(d=>d.status==='paid').slice(-1)[0]||null;
         const nextRound=payDocs.length?Math.max(...payDocs.map(roundOf))+1:1;
@@ -270,7 +276,7 @@
           if(!root.isConnected) return;
           if(fresh) payDocs=payDocsOf(fresh,date);
           const paidSet=paidSigs();
-          const rows=all.filter(r=>!paidSet.has(sigOf(r)));            // 이미 결제된 건은 다시 올리지 않는다
+          const rows=all.filter(r=>!isPaid(r,paidSet));                // 이미 결제된 건은 다시 올리지 않는다
           if(!rows.length){ if(msg) msg.textContent=''; sub.disabled=false;
             toast('상신할 새 결제요청이 없습니다 — 모두 결제완료되었습니다'); paint(); return; }
           // 업체·금액이 비어 있는 건(예: 중국 발주요청에서 올라온 건)은 그대로 올리면 대표가 입금할 수 없다
@@ -280,6 +286,12 @@
           const open=openDoc();                                        // 아직 결제 전이면 그 문서를 갱신, 아니면 다음 차수
           const round=open?roundOf(open):(payDocs.length?Math.max(...payDocs.map(roundOf))+1:1);
           const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
+          // 추가 차수는 이미 결제된 건이 섞이면 이중 입금이 되므로, 올라갈 목록을 눈으로 확인받는다
+          if(!open && round>1){
+            const lines=rows.slice(0,12).map(r=>` · ${String(r.vendor||'(업체 미지정)')} ${won(parseAmt(r.amount))}원 — ${String(r.content||'').slice(0,28)}`).join('\n');
+            if(!confirm(`${round}차로 추가 상신할 ${rows.length}건 · 합계 ${won(total)}원\n\n${lines}${rows.length>12?`\n … 외 ${rows.length-12}건`:''}\n\n이미 결제된 건이 섞여 있지 않은지 확인하세요.`)){
+              if(msg) msg.textContent=''; sub.disabled=false; return; }
+          }
           const doc={ id:open?open.id:docIdFor(date,round), type:'payreq', dept:'md', date, round, status:'submitted',
             items:rows.map(r=>({id:r.id,kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,qty:r.qty,amount:parseAmt(r.amount),account:acctOf(r)})),
             count:rows.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
