@@ -239,7 +239,11 @@
         const vm=body.querySelector('#pqVenMgr'); if(vm) vm.onclick=openVendorEditor;
         // 결제 상신(파트장급) — 그 날짜 결제요청 목록을 스냅샷해 대표 결재함으로 올림
         const sub=body.querySelector('#pqSubmit');
-        if(sub) sub.onclick=async()=>{ const msg=body.querySelector('#pqSubMsg'); sub.disabled=true; if(msg) msg.textContent='상신 중…';
+        if(sub) sub.onclick=async()=>{ const msg=body.querySelector('#pqSubMsg');
+          // 업체·금액이 비어 있는 건(예: 중국 발주요청에서 올라온 건)은 그대로 올리면 대표가 입금할 수 없다
+          const todo=all.filter(r=>!String(r.vendor||'').trim() || parseAmt(r.amount)<=0);
+          if(todo.length && !confirm(`업체(입금처) 또는 금액이 비어 있는 건이 ${todo.length}건 있습니다.\n이대로 상신하면 대표 결재함에서 입금할 수 없습니다.\n\n그래도 상신할까요?`)) return;
+          sub.disabled=true; if(msg) msg.textContent='상신 중…';
           // 서버 최신 상태 재확인 — 화면을 열어둔 사이 대표가 이미 결제완료했으면 되돌리지 않음(lost-update 방지)
           const fresh=await collGetAll();
           if(!root.isConnected) return;
