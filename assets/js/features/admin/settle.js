@@ -14,6 +14,8 @@
   };
   const DEPT_LABEL={cs:'CS',md:'MD'};
   const meU=()=>(Auth.user&&Auth.user())||{};
+  // 결제요청 차수 — id 끝의 #n (없으면 1차). 1차 결제 후 추가로 올라온 건이 2차·3차로 따로 온다.
+  const payRound=d=>{ const m=String((d&&d.id)||'').match(/#(\d+)$/); return m?Number(m[1]):1; };
   const isAdmin=()=>!!(Auth.isAdmin&&Auth.isAdmin());
   const isLead=()=>meU().role==='lead';
   const docId=(dept,date)=>`settle:${dept}:${date}`;
@@ -326,7 +328,11 @@
         if(all===null){ body.innerHTML=`<div class="empty">${icon('alert')}<div>서버에 연결되지 않았습니다.</div></div>`; return; }
         const docs=['cs','md'].map(dp=>all.find(d=>d.id===docId(dp,date))).filter(Boolean);
         const actionable=docs.filter(d=>d.status==='submitted'||d.status==='approved');
-        const payDocs=(all||[]).filter(d=>d&&d.type==='payreq'&&d.id===`payreq:md:${date}`&&(d.status==='submitted'||d.status==='paid'));
+        // 결제요청은 하루에 여러 차수로 올라올 수 있다 (1차 결제 후 추가된 건 = payreq:md:<날짜>#2 …)
+        const payBase=`payreq:md:${date}`;
+        const payDocs=(all||[]).filter(d=>d&&d.type==='payreq'&&(d.id===payBase||String(d.id||'').startsWith(payBase+'#'))
+            &&(d.status==='submitted'||d.status==='paid'))
+          .sort((a,b)=>payRound(a)-payRound(b));
         if(!actionable.length && !payDocs.length){ body.innerHTML=`<div class="empty">${icon('inbox')}<div style="margin-top:6px">${esc(date)}에 상신된 결재 건이 없습니다.</div><div class="muted" style="font-size:12.5px;margin-top:4px">파트장이 일일결산·결제요청을 상신하면 여기에 표시됩니다.</div></div>`; return; }
         body.innerHTML='';
         for(const doc of payDocs){ body.appendChild(payreqCard(doc, load)); }
@@ -389,7 +395,7 @@
         const vendorCount=()=> new Set(items.map(r=>String(r.vendor||'').trim())).size;
         const card=el('div','st-card st-approve'+(paid?' done':''));
         card.innerHTML=`
-          <div class="st-hd"><div class="st-t">${icon('stamp')} 결제요청(선결제) · ${esc(doc.date)}</div>
+          <div class="st-hd"><div class="st-t">${icon('stamp')} 결제요청(선결제) · ${esc(doc.date)}${payRound(doc)>1?` <span style="color:var(--warn)">${payRound(doc)}차(추가분)</span>`:''}</div>
             <span class="st-badge" style="color:${paid?'var(--ok)':'var(--info)'};background:${paid?'var(--ok-bg)':'var(--info-bg)'}">${paid?'결제 완료':'결제 대기'}</span></div>
           <div class="st-sec-cap">선결제 결제요청 · ${items.length}건 · 입금처 ${vendorCount()}곳 · 합계 <b style="color:var(--ink)">${won(doc.total||0)}원</b></div>
           <div style="overflow-x:auto"><table class="st-dtl"><thead><tr><th style="width:54px">구분</th><th style="width:104px">주문자명</th><th>내용</th><th style="width:104px">금액</th></tr></thead><tbody>

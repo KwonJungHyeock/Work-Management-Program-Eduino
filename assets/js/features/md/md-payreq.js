@@ -16,7 +16,17 @@
   const canSubmit=()=>{ const u=meU(); return isAdmin() || u.role==='lead'; };
   // 결재 문서(결제요청 상신) — 일일결산과 동일 컬렉션 재사용, id 로 구분
   const COLL='settlements';
-  const payDocId=date=>`payreq:md:${date}`;
+  /* 결재 문서는 하루에 여러 번(차수) 올라갈 수 있다.
+     1차 = payreq:md:<날짜> · 2차부터 = payreq:md:<날짜>#2 …
+     대표가 이미 결제완료한 뒤에 들어온 건(예: 중국 발주요청)을 다음 차수로 따로 올리기 위함. */
+  const PAY_BASE=date=>`payreq:md:${date}`;
+  const roundOf=d=>{ const m=String((d&&d.id)||'').match(/#(\d+)$/); return m?Number(m[1]):1; };
+  const docIdFor=(date,round)=> round<=1?PAY_BASE(date):`${PAY_BASE(date)}#${round}`;
+  const payDocsOf=(coll,date)=>{ const b=PAY_BASE(date);
+    return (coll||[]).filter(d=>d&&d.type==='payreq'&&(d.id===b||String(d.id||'').startsWith(b+'#')))
+      .sort((x,y)=>roundOf(x)-roundOf(y)); };
+  /* 어떤 항목이 이미 올라갔는지 가리는 식별자 — 차수 추가 전 옛 문서는 id가 없어 업체·내용·금액으로 맞춘다 */
+  const sigOf=r=> String((r&&r.id)||'') || [r&&r.vendor,r&&r.content,parseAmt(r&&r.amount)].join('|');
   const PAYSTATUS={ none:{l:'미상신',c:'var(--muted)',bg:'var(--panel-2)'}, submitted:{l:'결제 상신됨',c:'var(--info)',bg:'var(--info-bg)'}, paid:{l:'결제 완료',c:'var(--ok)',bg:'var(--ok-bg)'} };
   async function collGetAll(){ try{ const r=await fetch('/api/store?type=coll&coll='+COLL); if(!r.ok) throw 0; const d=await r.json(); return (d&&d.items)||[]; }catch(e){ return null; } }
   async function collPush(item){ try{ return await fetch('/api/store',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'collPush',coll:COLL,item})}).then(r=>r.json()); }catch(e){ return null; } }
@@ -59,7 +69,10 @@
     title:'결제요청', icon:'stamp',
     render(root){
       const editable=canEdit();
-      let date=todayStr(), all=[], editId=null, apDoc=null;
+      let date=todayStr(), all=[], editId=null, payDocs=[];
+      const paidSigs=()=>{ const s=new Set();
+        payDocs.filter(d=>d.status==='paid').forEach(d=>(d.items||[]).forEach(it=>s.add(sigOf(it)))); return s; };
+      const openDoc=()=>payDocs.find(d=>d.status==='submitted')||null;   // 상신했지만 아직 결제 전
       const blank=()=>({ id:'', kind:'택배운임', orderer:'', vendor:'', content:'', qty:'', amount:'', account:'' });
       let form=blank();
       root.innerHTML=`
@@ -86,6 +99,7 @@
         .pq-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--sh-sm);padding:12px 16px;margin-bottom:16px}
         .pq-status .pq-sp{flex:1}
         .pq-st-badge{font-size:12px;font-weight:800;border-radius:7px;padding:4px 11px}
+        .pq-paid{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 6px;border-radius:5px;color:var(--ok);background:var(--ok-bg);vertical-align:1px}
       </style>
       <div class="mhead pad"><div class="mhead-row">
         <div><div class="tt">결제요청</div><div class="ds">입점사 발주를 <b>선결제</b>로 저장하면 여기에 자동 집계됩니다(발주 기록에도 남음). 택배운임·환불은 수동 추가하세요.${editable?'':' <b>수정·삭제는 파트장·관리자</b>만 가능합니다.'}</div></div>
@@ -109,10 +123,10 @@
             <div class="pq-f"><label>&nbsp;</label><button class="btn pri" id="pfAdd">${icon('check')}추가</button></div>
           </div></div>`;
       }
-      function rowView(r, first){
+      function rowView(r, first, isPaid){
         return `<tr class="${first?'pq-gtop':''}">
           <td style="white-space:nowrap">${esc(String(r.day||r.date||'').slice(5))}</td>
-          <td>${kindBadge(r.kind||'발주')}</td>
+          <td style="white-space:nowrap">${kindBadge(r.kind||'발주')}${isPaid?' <span class="pq-paid" title="대표 결제완료된 건입니다">결제완료</span>':''}</td>
           <td style="white-space:nowrap">${esc(r.orderer||'')}</td>
           <td style="white-space:nowrap;font-weight:600;color:var(--ink)">${esc(r.vendor||'')}</td>
           <td class="wrap">${esc(r.content||'')}${(Number(r.ship)||0)>0?`<div class="muted" style="font-size:11px;margin-top:2px">상품 ${won(Number(r.prodAmount)||parseAmt(r.amount)-(Number(r.ship)||0))} + 배송비 ${won(Number(r.ship)||0)}</div>`:''}</td>
@@ -141,12 +155,12 @@
         </tr>`;
       }
       // 같은 입점사(업체)끼리 묶어 표시 + 업체별 소계 (같은 날짜 기준 · 결제 통합용)
-      function bodyRows(rows){
+      function bodyRows(rows, paid){
         let html='', i=0;
         while(i<rows.length){
           const v=String(rows[i].vendor||'').trim(); const grp=[]; let j=i;
           while(j<rows.length && String(rows[j].vendor||'').trim()===v){ grp.push(rows[j]); j++; }
-          grp.forEach((r,idx)=>{ html+= editId===r.id?rowEdit(r):rowView(r, idx===0); });
+          grp.forEach((r,idx)=>{ html+= editId===r.id?rowEdit(r):rowView(r, idx===0, paid.has(sigOf(r))); });
           if(grp.length>1 && !grp.some(r=>r.id===editId)){
             const gt=grp.reduce((s,r)=>s+parseAmt(r.amount),0), gq=grp.reduce((s,r)=>s+(Number(r.qty)||0),0);
             html+=`<tr class="pq-sub"><td colspan="5">${esc(v||'(미지정)')} · ${grp.length}건 소계</td><td class="num">${gq||''}</td><td class="num">${won(gt)}원</td><td ${editable?'colspan="2"':''}></td></tr>`;
@@ -165,20 +179,30 @@
         const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
         const qtyTotal=rows.reduce((s,r)=>s+(Number(r.qty)||0),0);
         const cols=editable?9:8;
-        const st=PAYSTATUS[(apDoc&&apDoc.status)||'none']||PAYSTATUS.none;
-        const paid=apDoc&&apDoc.status==='paid', submitted=apDoc&&apDoc.status==='submitted';
+        const paidSet=paidSigs();
+        const pending=rows.filter(r=>!paidSet.has(sigOf(r)));          // 아직 결제되지 않은 건
+        const pendTotal=pending.reduce((s,r)=>s+parseAmt(r.amount),0);
+        const open=openDoc(), lastPaid=payDocs.filter(d=>d.status==='paid').slice(-1)[0]||null;
+        const nextRound=payDocs.length?Math.max(...payDocs.map(roundOf))+1:1;
+        const st=PAYSTATUS[open?'submitted':(lastPaid?'paid':'none')];
+        const roundTag=d=>roundOf(d)>1?` (${roundOf(d)}차)`:'';
+        // 결제완료 뒤에 들어온 건은 다음 차수로 따로 올린다 (대표가 이미 결제한 문서는 건드리지 않음)
+        const addMode=!open && !!lastPaid && pending.length>0;
         const statusBar=`<div class="pq-status">
-          <span class="pq-st-badge" style="color:${st.c};background:${st.bg}">${st.l}</span>
-          ${submitted?`<span class="muted" style="font-size:12px">상신 ${esc(apDoc.submittedByName||'')} · ${esc((apDoc.submittedAt||'').slice(0,16).replace('T',' '))}</span>`:''}
-          ${paid?`<span style="color:var(--ok);font-size:12.5px;font-weight:700">✓ 대표 결제완료 · ${esc(apDoc.paidByName||'')} · ${esc((apDoc.paidAt||'').slice(0,16).replace('T',' '))}</span>`:''}
+          <span class="pq-st-badge" style="color:${st.c};background:${st.bg}">${st.l}${open?roundTag(open):(lastPaid?roundTag(lastPaid):'')}</span>
+          ${open?`<span class="muted" style="font-size:12px">상신 ${esc(open.submittedByName||'')} · ${esc((open.submittedAt||'').slice(0,16).replace('T',' '))}</span>`:''}
+          ${lastPaid?`<span style="color:var(--ok);font-size:12.5px;font-weight:700">✓ 대표 결제완료 · ${esc(lastPaid.paidByName||'')} · ${esc((lastPaid.paidAt||'').slice(0,16).replace('T',' '))}</span>`:''}
+          ${addMode?`<span style="color:var(--warn);font-size:12.5px;font-weight:700">결제 후 추가된 ${pending.length}건 · ${won(pendTotal)}원 — 아직 상신 전</span>`:''}
           <span class="pq-sp"></span>
-          ${canSubmit()&&!paid?`<button class="btn ok" id="pqSubmit"${rows.length?'':' disabled'}>${icon('stamp')}${submitted?'재상신(목록 갱신)':'결제 상신 → 대표 결재함'}</button>`:''}
+          ${canSubmit()&&(open||!lastPaid||addMode)?`<button class="btn ok" id="pqSubmit"${pending.length?'':' disabled'}>${icon('stamp')}${
+            addMode?`추가 결제 상신 (${nextRound}차)`:open?'재상신(목록 갱신)':'결제 상신 → 대표 결재함'}</button>`:''}
           <span class="muted" id="pqSubMsg" style="font-size:12.5px"></span></div>`;
         body.innerHTML=`${statusBar}${addFormHtml()}
-          <div class="bd-meta" style="font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600">${esc(date)} · 결제요청 ${rows.length}건 · 합계 <b style="color:var(--red)">${won(total)}원</b></div>
+          <div class="bd-meta" style="font-size:12.5px;color:var(--muted);margin:0 0 8px;font-weight:600">${esc(date)} · 결제요청 ${rows.length}건 · 합계 <b style="color:var(--red)">${won(total)}원</b>${
+            lastPaid&&pending.length?` <span style="color:var(--warn)">· 미상신 ${pending.length}건 ${won(pendTotal)}원</span>`:''}</div>
           <div class="pq-wrap"><table class="pq">
             <thead><tr><th>날짜</th><th>구분</th><th>주문자명</th><th>업체명</th><th>내용</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th><th>계좌정보</th>${editable?'<th></th>':''}</tr></thead>
-            <tbody>${rows.length?bodyRows(rows):`<tr><td class="pq-empty" colspan="${cols}">${esc(date)}에 결제요청 내역이 없습니다.${editable?' 선결제 발주를 저장하거나 위에서 수동 추가하세요.':''}</td></tr>`}</tbody>
+            <tbody>${rows.length?bodyRows(rows,paidSet):`<tr><td class="pq-empty" colspan="${cols}">${esc(date)}에 결제요청 내역이 없습니다.${editable?' 선결제 발주를 저장하거나 위에서 수동 추가하세요.':''}</td></tr>`}</tbody>
             ${rows.length?`<tfoot><tr><td colspan="5">합계</td><td class="num">${qtyTotal||''}</td><td class="num">${won(total)}원</td><td ${editable?'colspan="2"':''}></td></tr></tfoot>`:''}
           </table></div>`;
         wire();
@@ -240,21 +264,29 @@
         // 결제 상신(파트장급) — 그 날짜 결제요청 목록을 스냅샷해 대표 결재함으로 올림
         const sub=body.querySelector('#pqSubmit');
         if(sub) sub.onclick=async()=>{ const msg=body.querySelector('#pqSubMsg');
-          // 업체·금액이 비어 있는 건(예: 중국 발주요청에서 올라온 건)은 그대로 올리면 대표가 입금할 수 없다
-          const todo=all.filter(r=>!String(r.vendor||'').trim() || parseAmt(r.amount)<=0);
-          if(todo.length && !confirm(`업체(입금처) 또는 금액이 비어 있는 건이 ${todo.length}건 있습니다.\n이대로 상신하면 대표 결재함에서 입금할 수 없습니다.\n\n그래도 상신할까요?`)) return;
           sub.disabled=true; if(msg) msg.textContent='상신 중…';
-          // 서버 최신 상태 재확인 — 화면을 열어둔 사이 대표가 이미 결제완료했으면 되돌리지 않음(lost-update 방지)
+          // 서버 최신 상태 재확인 — 화면을 열어둔 사이 대표가 결제완료했을 수 있다
           const fresh=await collGetAll();
           if(!root.isConnected) return;
-          const cur=(fresh||[]).find(d=>d.id===payDocId(date));
-          if(cur && cur.status==='paid'){ apDoc=cur; if(msg) msg.textContent=''; toast('이미 대표 결제완료된 건입니다 — 재상신할 수 없습니다'); paint(); return; }
-          const total=all.reduce((s,r)=>s+parseAmt(r.amount),0);
-          const doc={ id:payDocId(date), type:'payreq', dept:'md', date, status:'submitted',
-            items:all.map(r=>({kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,qty:r.qty,amount:parseAmt(r.amount),account:acctOf(r)})),
-            count:all.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
-          const r=await collPush(doc); if(r) apDoc=doc;   // 저장 성공 시에만 상태 반영(실패 시 이전 상태 유지)
-          if(msg) msg.textContent=''; toast(r?'결제 상신 완료 — 대표 결재함으로 전송됐습니다':'상신 실패 — 서버 확인'); paint(); };
+          if(fresh) payDocs=payDocsOf(fresh,date);
+          const paidSet=paidSigs();
+          const rows=all.filter(r=>!paidSet.has(sigOf(r)));            // 이미 결제된 건은 다시 올리지 않는다
+          if(!rows.length){ if(msg) msg.textContent=''; sub.disabled=false;
+            toast('상신할 새 결제요청이 없습니다 — 모두 결제완료되었습니다'); paint(); return; }
+          // 업체·금액이 비어 있는 건(예: 중국 발주요청에서 올라온 건)은 그대로 올리면 대표가 입금할 수 없다
+          const todo=rows.filter(r=>!String(r.vendor||'').trim() || parseAmt(r.amount)<=0);
+          if(todo.length && !confirm(`업체(입금처) 또는 금액이 비어 있는 건이 ${todo.length}건 있습니다.\n이대로 상신하면 대표 결재함에서 입금할 수 없습니다.\n\n그래도 상신할까요?`)){
+            if(msg) msg.textContent=''; sub.disabled=false; return; }
+          const open=openDoc();                                        // 아직 결제 전이면 그 문서를 갱신, 아니면 다음 차수
+          const round=open?roundOf(open):(payDocs.length?Math.max(...payDocs.map(roundOf))+1:1);
+          const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);
+          const doc={ id:open?open.id:docIdFor(date,round), type:'payreq', dept:'md', date, round, status:'submitted',
+            items:rows.map(r=>({id:r.id,kind:r.kind,orderer:r.orderer,vendor:r.vendor,content:r.content,qty:r.qty,amount:parseAmt(r.amount),account:acctOf(r)})),
+            count:rows.length, total, submittedBy:meU().loginId||meU().name, submittedByName:meU().name||meU().loginId, submittedAt:nowISO() };
+          const r=await collPush(doc);                                 // 저장 성공 시에만 상태 반영(실패 시 이전 상태 유지)
+          if(r) payDocs=payDocs.filter(d=>d.id!==doc.id).concat([doc]).sort((x,y)=>roundOf(x)-roundOf(y));
+          if(msg) msg.textContent='';
+          toast(r?(round>1&&!open?`${round}차 결제 상신 완료 — 대표 결재함으로 전송됐습니다`:'결제 상신 완료 — 대표 결재함으로 전송됐습니다'):'상신 실패 — 서버 확인'); paint(); };
         const add=body.querySelector('#pfAdd');
         if(add){ ['pfKind','pfOrderer','pfVendor','pfContent','pfQty','pfAmount','pfAccount'].forEach(id=>{ const el2=body.querySelector('#'+id); if(el2) el2.oninput=el2.onchange=e=>{ form[id.replace('pf','').toLowerCase()==='kind'?'kind':({pfOrderer:'orderer',pfVendor:'vendor',pfContent:'content',pfQty:'qty',pfAmount:'amount',pfAccount:'account'})[id]]=e.target.value; }; });
           add.onclick=async()=>{
@@ -289,7 +321,7 @@
         if(!root.isConnected) return;
         if(recs===null){ body.innerHTML=`<div class="empty">${icon('alert')}<div>서버에 연결되지 않았습니다. (배포 환경에서 동작)</div></div>`; return; }
         all=recs.filter(r=>String(r.day||r.date||'').slice(0,10)===date);
-        apDoc=(coll||[]).find(d=>d.id===payDocId(date))||null;   // 결제 상신/완료 상태
+        payDocs=payDocsOf(coll,date);                            // 그 날짜의 결제 상신 문서(차수별)
         editId=null; paint();
       }
       dateEl.onchange=load; load();
