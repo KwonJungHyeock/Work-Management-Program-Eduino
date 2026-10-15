@@ -19,6 +19,28 @@
   const meU=()=>(Auth.user&&Auth.user())||{};
   const fmtD=iso=>{ try{ const d=new Date(iso); return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch{ return ''; } };
 
+  /* ── 결제요청 연동 ───────────────────────────────────────────────────────
+     중국 발주 건도 다른 결제요청(선결제 발주·마우저 직소싱)과 같은 길을 탄다.
+       이 화면 [결제요청] → md/payreq 시트에 한 줄 적재
+       → MD 결제요청 화면에 그날 건으로 집계 → 파트장이 [결제 상신]
+       → 대표(박정길) 결재함에서 계좌·금액 확인 후 [결제완료]
+     작성 권한은 결제요청 화면과 동일하게 파트장·관리자·'결제요청 수정' 권한자. */
+  const won=n=>Number(n||0).toLocaleString();
+  const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
+  const canPay=()=>{ const u=meU(); return !!(Auth.isAdmin&&Auth.isAdmin()) || u.role==='lead'
+    || (typeof canEditKey==='function' && canEditKey('md.payreq')); };
+  /* 업체명 → 입점사 정보의 계좌 (결제요청 화면과 같은 DB를 본다) */
+  function venAcct(name){
+    const n=String(name||'').trim(); if(!n) return '';
+    let L=[]; try{
+      L=(typeof STORE!=='undefined'&&STORE.mdVendors&&store(STORE.mdVendors).get(null))||[];
+      if(!Array.isArray(L)||!L.length) L=(typeof DEFAULT_MD_VENDORS!=='undefined'&&Array.isArray(DEFAULT_MD_VENDORS))?DEFAULT_MD_VENDORS:[];
+    }catch(e){ L=[]; }
+    let v=L.find(x=>x&&String(x.name||'').trim()===n);
+    if(!v && typeof normCoName==='function'){ const k=normCoName(n); if(k) v=L.find(x=>x&&normCoName(x.name)===k); }
+    return (v&&v.account)?String(v.account):'';
+  }
+
   MODULES['logi.china']={
     title:'중국 발주요청', icon:'box',
     render(root){
@@ -79,6 +101,25 @@
         .cn-b.code{font-family:var(--mono);background:var(--panel-2);color:var(--ink);border:1px solid var(--line)}
         .cn-b.st-open{background:var(--red-soft);color:var(--red)}
         .cn-b.st-done{background:var(--ok-bg);color:var(--ok)}
+        .cn-b.pay{background:var(--info-bg);color:var(--info);border:1px solid color-mix(in srgb,var(--info) 28%,transparent)}
+        .cn-pay{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
+        .cn-pay b{color:var(--ink);font-variant-numeric:tabular-nums}
+        /* 결제요청 입력 모달 */
+        .cp-ov{position:fixed;inset:0;background:rgba(16,24,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        .cp-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:560px;width:97%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;box-shadow:var(--sh-lg)}
+        .cp-hd{padding:18px 22px 13px;border-bottom:1px solid var(--line)}
+        .cp-hd .t{font-size:16px;font-weight:800;display:flex;align-items:center;gap:7px}
+        .cp-hd .d{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.55}
+        .cp-bd{padding:16px 22px;overflow-y:auto;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .cp-bd .wide{grid-column:1/-1}
+        @media(max-width:520px){.cp-bd{grid-template-columns:1fr}}
+        .cp-f{display:flex;flex-direction:column;gap:5px}
+        .cp-f label{font-size:11.5px;font-weight:700;color:var(--muted)}
+        .cp-f label em{font-style:normal;color:var(--danger);margin-left:3px}
+        .cp-f input,.cp-f textarea{width:100%;font:inherit;font-size:13.5px}
+        .cp-f input.amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+        .cp-ft{display:flex;align-items:center;gap:8px;padding:14px 22px;border-top:1px solid var(--line)}
+        .cp-ft .sp{flex:1;font-size:12.5px;color:var(--muted)}
         .cn-nm{font-weight:700;font-size:14px;color:var(--ink)}
         .cn-ct{font-size:13.5px;line-height:1.5;color:var(--ink-2);white-space:pre-wrap;word-break:break-word;margin-top:3px}
         .cn-meta{font-size:12px;color:var(--muted);margin-top:6px}
@@ -90,7 +131,8 @@
       </style>
       <div class="mhead pad"><div class="mhead-row">
         <div><div class="tt">중국 발주요청</div>
-          <div class="ds">고객이 발주한 중국 제품 중 <b>재고가 없어 대기</b>(주문완료·입고대기)하거나, <b>재고 부족으로 상담만 하고 발주로 이어지지 않은</b>(견적문의·입고요청) 건을 기록해 팀과 공유합니다. MD·구매가 발주 후 <b>완료 처리</b>합니다.</div></div>
+          <div class="ds">고객이 발주한 중국 제품 중 <b>재고가 없어 대기</b>(주문완료·입고대기)하거나, <b>재고 부족으로 상담만 하고 발주로 이어지지 않은</b>(견적문의·입고요청) 건을 기록해 팀과 공유합니다. MD·구매가 발주 후 <b>완료 처리</b>합니다.
+            ${canPay()?'실제 송금이 필요한 건은 <b>[결제요청]</b>으로 올리면 결제요청 목록에 집계되고, 상신 후 <b>대표 결재함</b>에서 결제됩니다.':''}</div></div>
         <div class="mhead-act cn-sum" id="cnSum"></div>
       </div></div>
       <div class="mbody">
@@ -185,9 +227,80 @@
       $('#cnForm').addEventListener('submit',e=>{ e.preventDefault(); save(); });
       $('#cnForm').addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); save(); } });
 
+      /* ── 결제요청 등록 ── 다른 결제요청과 같은 시트(md/payreq)에 한 줄 올린다 */
+      function openPayModal(it){
+        const today=todayStr();
+        const baseContent=[`[${it.code}]`, it.name||'', it.content?('· '+it.content):''].filter(Boolean).join(' ').trim();
+        const ov=el('div','cp-ov');
+        ov.innerHTML=`<div class="cp-box">
+          <div class="cp-hd"><div class="t">${icon('stamp')}결제요청 등록</div>
+            <div class="d">이 중국 발주 건을 <b>결제요청</b>에 올립니다. 등록하면 MD 결제요청 목록에 집계되고,
+              파트장이 <b>결제 상신</b>하면 <b>대표(박정길) 결재함</b>에서 계좌·금액을 확인해 결제완료 처리합니다.</div></div>
+          <div class="cp-bd">
+            <div class="cp-f"><label>결제일</label><input type="date" id="cpDate" value="${today}"></div>
+            <div class="cp-f"><label>수량</label><input type="text" id="cpQty" value="${esc(it.qty!=null&&it.qty!==''?it.qty:'')}" inputmode="numeric" placeholder="예: 5"></div>
+            <div class="cp-f"><label>업체명 (입금처)<em>*</em></label><input type="text" id="cpVendor" placeholder="예: 심천OOO무역"></div>
+            <div class="cp-f"><label>금액<em>*</em></label><input type="text" id="cpAmount" class="amt" inputmode="numeric" placeholder="예: 1,250,000"></div>
+            <div class="cp-f wide"><label>계좌정보 <span style="font-weight:500">· 업체명을 입력하면 입점사 정보에서 자동으로 채워집니다</span></label>
+              <input type="text" id="cpAccount" placeholder="은행 / 계좌번호 / 예금주"></div>
+            <div class="cp-f wide"><label>내용</label><input type="text" id="cpContent" value="${esc(baseContent)}"></div>
+            <div class="cp-f wide"><label>주문자명</label><input type="text" id="cpOrderer" value="${esc(it.customer||'')}" placeholder="예: 스팜 김은정"></div>
+          </div>
+          <div class="cp-ft"><span class="sp" id="cpMsg"></span>
+            <button class="btn ghost" id="cpCancel">취소</button>
+            <button class="btn pri" id="cpSave">${icon('check')}결제요청 등록</button></div>
+        </div>`;
+        document.body.appendChild(ov);
+        const q=s=>ov.querySelector(s);
+        const close=()=>ov.remove();
+        ov.onclick=e=>{ if(e.target===ov) close(); };
+        q('#cpCancel').onclick=close;
+        // 업체명 → 계좌 자동 연동 (사용자가 직접 고친 뒤에는 덮어쓰지 않음)
+        let acctTouched=false;
+        q('#cpAccount').oninput=()=>{ acctTouched=true; };
+        q('#cpVendor').oninput=e=>{ if(acctTouched) return; const a=venAcct(e.target.value); if(a) q('#cpAccount').value=a; };
+        q('#cpVendor').focus();
+        q('#cpSave').onclick=async()=>{
+          const vendor=q('#cpVendor').value.trim(), amount=parseAmt(q('#cpAmount').value);
+          const msg=q('#cpMsg');
+          if(!vendor){ msg.textContent='업체명(입금처)을 입력하세요'; q('#cpVendor').focus(); return; }
+          if(amount<=0){ msg.textContent='금액을 입력하세요'; q('#cpAmount').focus(); return; }
+          const date=q('#cpDate').value||today;
+          const u2=meU();
+          const rec={ id:uuid(), day:date, date, kind:'중국발주', orderer:q('#cpOrderer').value.trim(),
+            vendor, content:q('#cpContent').value.trim()||baseContent, qty:String(q('#cpQty').value||'').trim(),
+            amount, account:q('#cpAccount').value.trim()||venAcct(vendor),
+            whoName:u2.name||'', who:u2.loginId||u2.name||'', createdAt:nowISO(),
+            source:'china', chinaId:it.id };
+          q('#cpSave').disabled=true; msg.textContent='등록 중…';
+          if(!window.Records){ msg.textContent='서버에 연결되지 않았습니다'; q('#cpSave').disabled=false; return; }
+          await Records.pushRaw('md','payreq',rec);
+          it.payreq={ recId:rec.id, date, vendor, amount, account:rec.account,
+            by:u2.loginId||'', byName:u2.name||'', at:nowISO() };
+          await api.push(it);
+          if(typeof actLog==='function') actLog('결제요청 등록','중국 발주요청',`${vendor} ${won(amount)}원 · ${it.code}`);
+          close(); toast(`결제요청에 올렸습니다 — ${vendor} ${won(amount)}원`); load();
+        };
+      }
+      async function cancelPayreq(it){
+        const p=it.payreq; if(!p) return;
+        if(!confirm(`이 건의 결제요청(${esc(p.vendor)} ${won(p.amount)}원)을 취소할까요?\n결제요청 목록에서도 삭제됩니다.`)) return;
+        if(window.Records) await Records.del('md','payreq',p.recId,String(p.date||'').slice(0,7),meU().loginId,p.date);
+        delete it.payreq; await api.push(it);
+        toast('결제요청을 취소했습니다'); load();
+      }
+
       async function toggleDone(it){ it.done=!it.done; it.doneBy=it.done?u.loginId:''; it.doneByName=it.done?u.name:''; it.doneAt=it.done?nowISO():'';
         await api.push(it); toast(it.done?'완료 처리했습니다':'대기 상태로 되돌렸습니다'); load(); }
       async function remove(it){ if(!confirm('이 발주요청을 삭제할까요?')) return; await api.del(it.id); load(); }
+
+      /* 카드의 결제요청 버튼 — 권한 없는 사람에겐 상태만 보이고 버튼은 나오지 않는다 */
+      function payActHtml(it){
+        if(!canPay()) return '';
+        return it.payreq
+          ? `<button class="btn ghost sm" data-paycancel title="결제요청 목록에서도 삭제됩니다">결제요청 취소</button>`
+          : `<button class="btn sm" data-pay title="대표 결재함으로 올라가는 결제요청에 추가합니다">${icon('stamp')}결제요청</button>`;
+      }
 
       function draw(){
         const list=items.filter(it=>
@@ -196,7 +309,8 @@
           (filt.status===''||(filt.status==='done'?it.done:!it.done))
         ).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || String(b.createdAt).localeCompare(String(a.createdAt)));
         const openN=items.filter(it=>!it.done).length;
-        $('#cnSum').innerHTML=`<span class="s">처리 대기 <b>${openN}</b>건</span><span class="s">전체 ${items.length}건</span>`;
+        const payN=items.filter(it=>it.payreq).length;
+        $('#cnSum').innerHTML=`<span class="s">처리 대기 <b>${openN}</b>건</span>${payN?`<span class="s">결제요청 <b>${payN}</b>건</span>`:''}<span class="s">전체 ${items.length}건</span>`;
         $('#cnCnt').textContent=`· ${list.length}건`;
         const box=$('#cnList');
         if(!list.length){ box.innerHTML=`<div class="cn-empty">${icon('box')}<div style="margin-top:8px">해당 조건의 발주요청이 없습니다.</div></div>`; return; }
@@ -213,16 +327,21 @@
                 <span class="cn-b rq">${esc(it.req)}</span>
                 ${it.qty?`<span class="cn-b qty">${it.qty}개</span>`:''}
                 <span class="cn-b ${it.done?'st-done':'st-open'}">${it.done?'✓ 완료':'처리 대기'}</span>
+                ${it.payreq?`<span class="cn-b pay">${icon('stamp')}결제요청</span>`:''}
               </div>
               ${it.name?`<div class="cn-nm">${esc(it.name)}</div>`:''}
               ${it.content?`<div class="cn-ct">${esc(it.content)}</div>`:''}
+              ${it.payreq?`<div class="cn-pay">결제요청 ${esc(it.payreq.date||'')} · ${esc(it.payreq.vendor||'')} <b>${won(it.payreq.amount)}원</b>${it.payreq.account?' · '+esc(it.payreq.account):''} · 등록 ${esc(it.payreq.byName||it.payreq.by||'')}</div>`:''}
               <div class="cn-meta">${it.customer?'고객 '+esc(it.customer)+' · ':''}${esc(it.authorName||it.author||'-')} · ${esc(fmtD(it.createdAt))}${it.done&&it.doneByName?' · 완료: '+esc(it.doneByName):''}</div>
             </div>
             <div class="cn-act">
               <button class="btn ${it.done?'ghost':'ok'} sm" data-done>${it.done?'완료 취소':icon('check')+'완료'}</button>
+              ${payActHtml(it)}
               ${canManage?`<button class="btn ghost sm" data-del>${icon('trash')}</button>`:''}
             </div>`;
           c.querySelector('[data-done]').onclick=()=>toggleDone(it);
+          const pb=c.querySelector('[data-pay]'); if(pb) pb.onclick=()=>openPayModal(it);
+          const pc=c.querySelector('[data-paycancel]'); if(pc) pc.onclick=()=>cancelPayreq(it);
           const db=c.querySelector('[data-del]'); if(db) db.onclick=()=>remove(it);
           box.appendChild(c);
         });

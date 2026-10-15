@@ -48,7 +48,11 @@
   const parseAmt=v=>Number(String(v==null?'':v).replace(/[^\d.-]/g,''))||0;
   const ym=d=>String(d||'').slice(0,7);
   const KIND=['택배운임','환불','기타'];
-  const kindColor=k=>({'발주':['var(--info)','var(--info-bg)'],'택배운임':['var(--warn)','var(--warn-bg)'],'환불':['var(--danger)','var(--danger-soft)']}[k]||['var(--muted)','var(--panel-2)']);
+  // 행 [수정]에서 고를 수 있는 구분 — 자동 집계로 들어오는 '발주'(선결제 발주·마우저)와
+  // '중국발주'(중국 발주요청 화면에서 올림)도 포함해야 수정 시 구분이 바뀌지 않는다.
+  const KIND_ALL=['발주','중국발주',...KIND];
+  const kindColor=k=>({'발주':['var(--info)','var(--info-bg)'],'중국발주':['var(--d4,#7a5af0)','var(--red-soft)'],
+    '택배운임':['var(--warn)','var(--warn-bg)'],'환불':['var(--danger)','var(--danger-soft)']}[k]||['var(--muted)','var(--panel-2)']);
   const kindBadge=k=>{ if(!k) return ''; const [c,bg]=kindColor(k); return `<span style="display:inline-block;font-weight:800;font-size:11.5px;padding:2px 8px;border-radius:6px;color:${c};background:${bg}">${esc(k)}</span>`; };
 
   MODULES['md.payreq']={
@@ -126,7 +130,7 @@
       function rowEdit(r){
         return `<tr>
           <td style="white-space:nowrap">${esc(String(r.day||r.date||'').slice(5))}</td>
-          <td><select class="pq-in" data-k="kind" style="min-width:90px">${['발주',...KIND].map(k=>`<option ${k===(r.kind||'발주')?'selected':''}>${k}</option>`).join('')}</select></td>
+          <td><select class="pq-in" data-k="kind" style="min-width:96px">${KIND_ALL.map(k=>`<option ${k===(r.kind||'발주')?'selected':''}>${k}</option>`).join('')}</select></td>
           <td><input class="pq-in" data-k="orderer" value="${esc(r.orderer||'')}" style="min-width:110px"></td>
           <td><input class="pq-in" data-k="vendor" value="${esc(r.vendor||'')}" style="min-width:110px"></td>
           <td><input class="pq-in" data-k="content" value="${esc(r.content||'')}" style="min-width:150px"></td>
