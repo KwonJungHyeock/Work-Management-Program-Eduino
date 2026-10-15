@@ -177,7 +177,6 @@ const NAV = [
       { key:'cs.notes',     name:'CS상담 메모',   icon:'clipboard' },
       { key:'cs.postpay',   name:'견적/발주/후불', icon:'truck' },
       { key:'cs.exchange',  name:'교환/반품/환불', icon:'refresh' },
-      { key:'cs.china',     name:'중국 발주요청', icon:'box' },
       { key:'cs.templates', name:'답변·메일 템플릿', icon:'chat' },
       { key:'cs.lookup',    name:'상품 조회',   icon:'search' },
       { key:'cs.custdb',    name:'고객 정보 검색', icon:'search' },
@@ -200,6 +199,7 @@ const NAV = [
   ]},
   { dept:'logi', name:'물류', full:'물류 관리', icon:'truck', items:[
       { key:'logi.mouserin', name:'자사제품 입고', icon:'box' },
+      { key:'logi.china',  name:'중국 발주요청', icon:'box' },   // 2026-10 CS → 물류 이동 (구 key: cs.china)
       { key:'logi.manual', name:'업무 매뉴얼', icon:'clipboard' },
   ]},
   /* HR — 인사·교육·총무. restricted:true = 권한 없는 사람에겐 메뉴 자체가 보이지 않음
@@ -233,13 +233,25 @@ const NAV = [
 
 /* 직무 자동열람 기능 — 해당 부서 구성원이면 별도 권한 부여 없이 열람 가능(관리자는 전체).
    누적 시트(전 직원 공유 기록)는 부서 기본 열람으로 둔다. */
-const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.china', 'cs.exchange', 'cs.postpay', 'cs.settle', 'cs.partners', 'cs.manual', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
+const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.exchange', 'cs.postpay', 'cs.settle', 'cs.partners', 'cs.manual', 'md.records', 'md.payreq', 'md.tsnotes', 'md.tsrecords',
   'md.vendorchg', 'md.vendormgmt', 'md.vendorcards', 'md.stock', 'md.inspect', 'md.prodmgmt', 'md.prodhub', 'md.pricewatch', 'md.tstpl', 'md.settle', 'md.manual',
-  'logi.mouserin', 'logi.manual'];
+  'logi.mouserin', 'logi.china', 'logi.manual'];
+
+/* 부서를 넘어 기본 열람을 여는 화면 — 메뉴는 한 부서에 있지만 실제로 같이 쓰는 기능.
+   (예: 중국 발주요청은 물류 메뉴로 옮겼지만, 접수는 CS가 계속 하므로 CS 부서원도 그대로 열린다) */
+const DEPT_OPEN_EXTRA = {
+  'logi.china': ['cs'],
+};
+
+/* 메뉴가 옮겨간 화면 — 예전 주소(#구키)로 들어오면 새 주소로 자동 이동. */
+const ROUTE_MOVED = {
+  'cs.china': 'logi.china',        // 2026-10 CS → 물류
+};
 
 /* 화면 접근 별칭 — '전체 권한'은 없지만 '본인 것만' 권한이 있으면 그 화면에 들어갈 수 있다.
    (예: 팀장은 hr.fbwrite 로 팀장 피드백 화면에 들어가 자기가 쓴 것만 본다 · 서버가 행 단위로 다시 거른다) */
 const PERM_ALIAS = {
+  'logi.china' : ['cs.china'],     // 구 key 로 권한을 받아 둔 계정도 그대로 열리게
   'hr.feedback': ['hr.fbwrite'],
   'hr.docreq'  : ['hr.docme'],
   'hr.supply'  : ['hr.supplyme'],

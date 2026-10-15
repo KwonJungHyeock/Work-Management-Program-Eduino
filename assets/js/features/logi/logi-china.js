@@ -1,8 +1,10 @@
 /* ===========================================================================
-   CS · 중국 발주요청  — 고객이 발주한 중국 제품의 재고/입고 요청 리스트
+   물류 · 중국 발주요청  — 고객이 발주한 중국 제품의 재고/입고 요청 리스트
    ① 주문완료 · 입고대기 : 고객 결제완료 후 자사 상품 입고를 기다리는 건
    ② 견적문의 · 입고요청 : 재고 부족으로 상담만 하고 발주로 이어지지 않은 건(Loss 방지)
-   공용 컬렉션 'chinaorders'(팀 공유) — CS가 기록, MD/구매가 열람·발주 후 완료 처리
+   공용 컬렉션 'chinaorders'(팀 공유) — CS·물류가 기록, MD/구매가 열람·발주 후 완료 처리
+   ※ 2026-10 메뉴를 CS → 물류로 이동(key: cs.china → logi.china).
+     CS 부서원도 그대로 등록·열람할 수 있도록 config.js 의 DEPT_OPEN_EXTRA 로 열어 둔다.
    =========================================================================== */
 (function(){
   const COLL='chinaorders';
@@ -17,7 +19,7 @@
   const meU=()=>(Auth.user&&Auth.user())||{};
   const fmtD=iso=>{ try{ const d=new Date(iso); return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch{ return ''; } };
 
-  MODULES['cs.china']={
+  MODULES['logi.china']={
     title:'중국 발주요청', icon:'box',
     render(root){
       const u=meU(); const isAdmin=!!(Auth.isAdmin&&Auth.isAdmin());
@@ -238,4 +240,7 @@
       load();
     }
   };
+  // 하위 호환 — 예전 주소는 shell 의 ROUTE_MOVED 가 새 주소로 보낸다.
+  // 여기 별칭은 '최근 본 화면'·검색 팔레트에 남아 있는 구 키의 제목이 비지 않도록 남겨 둔다.
+  MODULES['cs.china']=MODULES['logi.china'];
 })();

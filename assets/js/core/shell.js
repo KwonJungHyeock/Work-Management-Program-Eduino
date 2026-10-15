@@ -89,11 +89,13 @@ function bootShell(){
   const hasKeyOrAlias = (key)=> !!(Array.isArray(perms) && (perms.includes(key) || (ALIAS[key]||[]).some(a=>perms.includes(a))));
   const groupVisible = (g)=> !g.restricted || isAdmin || (g.items||[]).some(it=>hasKeyOrAlias(it.key));
   const deptOpen = new Set(typeof DEPT_OPEN_KEYS!=='undefined'?DEPT_OPEN_KEYS:[]);
+  const deptOpenExtra = (typeof DEPT_OPEN_EXTRA!=='undefined')?DEPT_OPEN_EXTRA:{};
   const hasPerm = (key)=>{ const d=String(key||'').split('.')[0];
     if(commonDepts.has(d)) return true;
     if(isAdmin) return true;
     if(isLead && key==='admin.insights') return true;  // 파트장 → 자기 파트 업무 현황
     if(deptOpen.has(key) && d===myDept) return true;   // 누적 시트 등 직무 기본 열람
+    if((deptOpenExtra[key]||[]).includes(myDept)) return true;   // 부서를 넘어 같이 쓰는 화면
     if(key==='md.order' && perms && perms.includes('md.vendors')) return true;   // 입점사 정보 수정 권한자 → 발주 페이지 접근
     if(perms) return hasKeyOrAlias(key);
     if(RESTRICTED_DEPTS.has(d)) return false;          // HR 등 제한 영역은 부서 폴백으로 열리지 않음
@@ -384,6 +386,9 @@ function bootShell(){
     let key = location.hash.replace('#','') || firstKey();
     // '#키?조건' 형태 지원 — 조건은 모듈에 그대로 넘긴다(필터가 걸린 링크 공유용)
     let qs=''; { const i=key.indexOf('?'); if(i>=0){ qs=key.slice(i+1); key=key.slice(0,i); } }
+    // 옮겨진 화면 — 예전 주소/즐겨찾기로 들어오면 새 주소로 보낸다
+    { const moved=(typeof ROUTE_MOVED!=='undefined'&&ROUTE_MOVED[key])||'';
+      if(moved){ location.replace('#'+moved+(qs?'?'+qs:'')); return; } }
     if(key && !canAccess(key)){
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('on', n.dataset.key===key));
       const main=$('main'); main.className='main sc';

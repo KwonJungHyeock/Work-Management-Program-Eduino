@@ -41,8 +41,9 @@ assets/
       duties-data.js      직무/업무 범위(업무지시 추천용)
     features/         기능 모듈 — window.MODULES 에 화면 등록
       home/   home·calendar·tasks.js
-      cs/     cs·cs-notes·cs-lookup·cs-custdb·cs-china·cs-exchange·cs-postpay.js
+      cs/     cs·cs-notes·cs-lookup·cs-custdb·cs-exchange·cs-postpay.js
       md/     md·md-order·md-payreq·md-boards·md-pricewatch.js
+      logi/   logi-mouserin·logi-china.js     (중국 발주요청은 CS→물류 이동)
       ts/     ts-notes·ts-templates.js        (메뉴상 MD 섹션 · 모듈키 md.*)
       admin/  admin·settle·insights·duties·admin-sales.js
       shared/ sheets·handover·manual.js       (여러 부서가 쓰는 공용 빌더)
