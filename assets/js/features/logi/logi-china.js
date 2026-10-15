@@ -28,6 +28,10 @@
      화면 권한(파트장·관리자·'결제요청 수정' 권한자) 그대로다. */
   const canCancelPay=it=>{ const u=meU();
     return !!(Auth.isAdmin&&Auth.isAdmin()) || u.role==='lead' || (it.payreq&&it.payreq.by===u.loginId); };
+  /* 결제요청 화면으로 건너갈 수 있는 사람에게만 바로가기를 보여준다 (없는 사람은 눌러도 권한 안내만 나옴) */
+  const canOpenPayreq=()=>{ const u=meU();
+    return !!(Auth.isAdmin&&Auth.isAdmin()) || u.role==='lead' || u.dept==='md'
+      || (typeof canEditKey==='function' && canEditKey('md.payreq')); };
 
   MODULES['logi.china']={
     title:'중국 발주요청', icon:'box',
@@ -93,6 +97,8 @@
         .cn-pay{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--info);font-weight:700;margin-top:5px;line-height:1.5}
         .cn-pay .hint{font-weight:500;color:var(--muted)}
         .cn-pay .hint b{color:var(--ink-2)}
+        .cn-golink{border:1px solid var(--line-strong);background:var(--panel);border-radius:6px;font:inherit;font-size:11.5px;font-weight:700;color:var(--ink-2);padding:2px 8px;cursor:pointer}
+        .cn-golink:hover{border-color:var(--info);color:var(--info)}
         .cn-nm{font-weight:700;font-size:14px;color:var(--ink)}
         .cn-ct{font-size:13.5px;line-height:1.5;color:var(--ink-2);white-space:pre-wrap;word-break:break-word;margin-top:3px}
         .cn-meta{font-size:12px;color:var(--muted);margin-top:6px}
@@ -216,10 +222,16 @@
           vendor:'', content, qty:String(it.qty!=null?it.qty:'').trim(), amount:0, account:'',
           whoName:u2.name||'', who:u2.loginId||u2.name||'', createdAt:nowISO(),
           source:'china', chinaId:it.id };
-        await Records.pushRaw('md','payreq',rec);
+        // 저장이 실패했는데 '올렸습니다'라고 하면 결제요청 목록에 없는 건을 올린 줄 안다 → 결과를 확인한다
+        const r=await Records.pushRaw('md','payreq',rec);
+        if(!r || r.ok===false){
+          if(btn){ btn.disabled=false; btn.innerHTML=`${icon('stamp')}결제요청`; }
+          toast('결제요청 적재 실패 — '+((r&&r.error)||'서버 응답 없음')+' · 다시 시도해 주세요');
+          return;
+        }
         it.payreq={ recId:rec.id, date, by:u2.loginId||'', byName:u2.name||'', at:nowISO() };
         await api.push(it);
-        if(typeof actLog==='function') actLog('결제요청 등록','중국 발주요청',`${it.code} ${it.name||''}`.trim());
+        try{ if(typeof actLog==='function') actLog('결제요청 등록','중국 발주요청',`${it.code} ${it.name||''}`.trim()); }catch(e){}
         toast('결제요청에 올렸습니다 — 결제요청 화면에서 업체·금액을 입력한 뒤 상신하세요');
         load();
       }
@@ -271,7 +283,8 @@
               ${it.name?`<div class="cn-nm">${esc(it.name)}</div>`:''}
               ${it.content?`<div class="cn-ct">${esc(it.content)}</div>`:''}
               ${it.payreq?`<div class="cn-pay">${icon('stamp')}결제요청에 올림 · ${esc(it.payreq.date||'')} · ${esc(it.payreq.byName||it.payreq.by||'')}
-                <span class="hint">업체·금액은 <b>결제요청</b> 화면에서 입력한 뒤 상신합니다.</span></div>`:''}
+                <span class="hint">업체·금액은 <b>결제요청</b> 화면에서 입력한 뒤 상신합니다.</span>
+                ${canOpenPayreq()?`<button class="cn-golink" data-goto="${esc(it.payreq.date||'')}">그 날짜 결제요청 열기 →</button>`:''}</div>`:''}
               <div class="cn-meta">${it.customer?'고객 '+esc(it.customer)+' · ':''}${esc(it.authorName||it.author||'-')} · ${esc(fmtD(it.createdAt))}${it.done&&it.doneByName?' · 완료: '+esc(it.doneByName):''}</div>
             </div>
             <div class="cn-act">
@@ -282,6 +295,7 @@
           c.querySelector('[data-done]').onclick=()=>toggleDone(it);
           const pb=c.querySelector('[data-pay]'); if(pb) pb.onclick=()=>addPayreq(it,pb);
           const pc=c.querySelector('[data-paycancel]'); if(pc) pc.onclick=()=>cancelPayreq(it);
+          const gl=c.querySelector('[data-goto]'); if(gl) gl.onclick=()=>{ location.hash='md.payreq?date='+gl.dataset.goto; };
           const db=c.querySelector('[data-del]'); if(db) db.onclick=()=>remove(it);
           box.appendChild(c);
         });

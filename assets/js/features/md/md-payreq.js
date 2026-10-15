@@ -72,9 +72,12 @@
 
   MODULES['md.payreq']={
     title:'결제요청', icon:'stamp',
-    render(root){
+    render(root, opt){
       const editable=canEdit();
-      let date=todayStr(), all=[], editId=null, payDocs=[];
+      // '#md.payreq?date=YYYY-MM-DD' 로 특정 날짜를 바로 열 수 있다 (중국 발주요청 카드에서 넘어올 때)
+      let date=todayStr();
+      try{ const d=new URLSearchParams((opt&&opt.qs)||'').get('date'); if(/^\d{4}-\d{2}-\d{2}$/.test(d||'')) date=d; }catch(e){}
+      let all=[], editId=null, payDocs=[];
       const paidSigs=()=>{ const s=new Set();
         payDocs.filter(d=>d.status==='paid').forEach(d=>(d.items||[]).forEach(it=>sigsOf(it).forEach(x=>s.add(x)))); return s; };
       const isPaid=(r,set)=>sigsOf(r).some(x=>set.has(x));
