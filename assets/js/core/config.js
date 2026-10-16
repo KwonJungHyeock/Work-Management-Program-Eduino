@@ -172,6 +172,7 @@ const NAV = [
       { key:'home.alerts', name:'알림',        icon:'bell' },
       { key:'home.notice', name:'공지사항',   icon:'megaphone' },
       { key:'home.calendar', name:'일정·달력',  icon:'check2' },
+      { key:'home.intra',  name:'자료 서버',    icon:'lock' },   // 사내망 인사이트 서버 바로가기(접속코드 확인 후 새 탭)
   ]},
   { dept:'cs', name:'CS', full:'고객 상담', icon:'headset', items:[
       { key:'cs.notes',     name:'CS상담 메모',   icon:'clipboard' },
@@ -301,6 +302,8 @@ const STORE = {
   settleCfg:'eduino.settle.cfg',     // 일일결산 구글시트 연동 { sheetUrl } — 팀 공유
   custDbCfg:'eduino.custdb.cfg',     // 고객 데이터베이스(원장) 연동 { sheetUrl } — 후불/발주/견적이 21_거래내역으로 append · 팀 공유
   ntrexMailCfg:'eduino.ntrex.mailcfg', // 엔티렉스 공급가 요청 메일 양식 { to, toName, subject, body } · 관리자 편집 · 팀 공유
+  intraCfg: 'eduino.intra.cfg',      // 사내망 자료 서버 바로가기 { name, url, desc, codeHash } · 관리자 편집 · 팀 공유
+                                     // ※ 접속코드는 해시만 저장한다(평문 금지) — api/store 는 인증이 없어 설정이 그대로 읽힌다
 };
 
 /* 엔티렉스 공급가 요청 메일 기본 양식 (담당자 제공 · 관리자가 [엔티렉스 가격비교]에서 편집)
@@ -349,6 +352,7 @@ const SHARE_DEFAULT = {
   [STORE.settleCfg]:'all',           // 일일결산 시트 URL = 전사 공유
   [STORE.custDbCfg]:'all',           // 고객DB 원장 URL = 전사 공유
   [STORE.ntrexMailCfg]:'md',         // 엔티렉스 공급가 요청 메일 양식 = MD 공유
+  [STORE.intraCfg]:'all',            // 사내망 자료 서버 바로가기 = 전사 공유
   'eduino.ntrex.products':'md',      // 가격비교 취급상품 담당자 추가/수정 = MD 공유
   'eduino.ntrex.dismissed':'md',     // 가격 변동 알림 중 처리/삭제한 건 = MD 공유
   'eduino.ntrex.reviewed':'md',      // 일일 리포트 확인 표시(담당자·날짜) = MD 공유
@@ -375,7 +379,7 @@ const SHARED_SETTING_KEYS = [
   STORE.platforms, STORE.mdPresets, STORE.mdProducts, STORE.mdVendors,
   STORE.mdOrderCfg, STORE.csTpl, STORE.csMailTpl, STORE.csSmsTpl, STORE.csTplTabs, STORE.csTplData, STORE.tsTplTabs, STORE.tsTplData, STORE.csNoteCfg, STORE.csAgents,
   STORE.csTypes, STORE.csSumTpl, STORE.tsNoteCfg, STORE.tsAgents, STORE.tsTypes, STORE.tsSumTpl, STORE.tsMailTpl, STORE.tsChatTpl,
-  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed', 'eduino.ntrex.reviewed',
+  STORE.shareMap, STORE.catMap, STORE.optSets, STORE.settleCfg, STORE.custDbCfg, STORE.ntrexMailCfg, STORE.intraCfg, 'eduino.ntrex.products', 'eduino.ntrex.dismissed', 'eduino.ntrex.reviewed',
   'eduino.manual.cs', 'eduino.manual.md', 'eduino.manual.logi',
   // 현황판/CS 신설 페이지 구글시트 연동 URL (모듈별 · 팀 공유)
   'eduino.board.exchange.cfg', 'eduino.board.postpay.cfg',
