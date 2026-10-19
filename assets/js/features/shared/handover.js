@@ -51,7 +51,8 @@
     MODULES[cfg.key]={
       title:cfg.title, icon:'folder',
       render(root){
-        const canEdit=()=> isAdmin() || me().dept===cfg.dept;
+        // cfg.depts = 부서를 옮겼지만 옛 부서도 계속 쓰는 화면용(둘 다 수정 가능)
+        const canEdit=()=> isAdmin() || me().dept===cfg.dept || (cfg.depts||[]).indexOf(me().dept)>=0;
         let list=[], q='', sf='all';   // sf: 구분 필터
         const flt = cfg.filter;        // { k, label, types:[{v,re}] } — 있으면 필터 칩 노출
         const hasFilter = !!flt;
@@ -330,14 +331,19 @@
   buildHandover({ key:'md.vendorcards', coll:'handover_md', unit:'입점사', dept:'md',
     filter:{ k:'gradeSettle', label:'정산 구분', types:[{v:'월정산',re:/월\s*정산|월정산/},{v:'선결제',re:/선결제/},{v:'위탁',re:/위탁/}] },
     title:'입점사 관리', desc:'입점사별 담당자·결제조건·중요/주의사항·메모를 카드로 관리합니다(인수인계).' });
-  // CS: 파트너사 관리 (단독 페이지) — 등급별 필터·색상, 카드에 결제조건·메모 노출
-  buildHandover({ key:'cs.partners', coll:'handover_cs', unit:'파트너사', dept:'cs', fields:PARTNER_FIELDS,
+  // 파트너사 관리 (단독 페이지) — 등급별 필터·색상, 카드에 결제조건·메모 노출
+  // ※ 2026-10 메뉴를 CS → MD(입점사 관리 아래)로 이동(key: cs.partners → md.partners).
+  //    기록(coll:'handover_cs')은 그대로 두고, CS도 종전처럼 보고 고칠 수 있게 depts 로 열어 둔다.
+  buildHandover({ key:'md.partners', coll:'handover_cs', unit:'파트너사', dept:'md', depts:['cs'], fields:PARTNER_FIELDS,
     filter:{ k:'grade', label:'등급', types:[
       {v:'A등급', re:/a\s*등급|(?:^|[^a-z0-9])a(?:$|[^a-z0-9])/i},
       {v:'B등급', re:/b\s*등급|(?:^|[^a-z0-9])b(?:$|[^a-z0-9])/i},
       {v:'플랫폼', re:/플랫폼|platform/i} ] },
     cardLines:['supplyRate','site','contact','email','memo'],
     title:'파트너사 관리', desc:'파트너사별 등급·공급율·사이트·담당자·연락처·메일·결제조건·메모를 카드로 관리합니다.' });
+  // 하위 호환 — 예전 주소는 shell 의 ROUTE_MOVED 가 새 주소로 보낸다.
+  // 이 별칭은 '최근 본 화면'·검색 팔레트에 남아 있는 구 키의 제목이 비지 않도록 둔다.
+  MODULES['cs.partners']=MODULES['md.partners'];
 
   // MD '입점사 관리' 컨테이너 — 서브탭: 신규/변동사항(먼저) + 입점사 관리(카드)
   MODULES['md.vendormgmt']={
