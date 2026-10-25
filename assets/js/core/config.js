@@ -121,11 +121,19 @@ const APP_NAME = '에듀이노 통합 업무관리';
 const APP_NAME_FULL = '에듀이노 통합 업무관리 프로그램';
 const APP_VERSION = 'v1.0';
 
-/* 상단 사내 바로가기 링크 (여기만 수정하면 버튼이 추가/변경됩니다) */
+/* 상단 사내 바로가기 링크 (여기만 수정하면 버튼이 추가/변경됩니다)
+   roles 를 적으면 그 역할에게만 보인다(없으면 전원). */
 const QUICK_LINKS = [
   { name:'에듀이노몰',    short:'몰',  url:'https://eduino.kr' },
   { name:'카페24 관리자', short:'24', url:'https://eclogin.cafe24.com/Shop/?url=Init&login_mode=2&is_multi=F' },
+  // 다른 팀 업무관리 프로그램 — 대표·파트장이 팀별 현황을 오가며 보기 위한 바로가기
+  { name:'AIoT 팀보드',  short:'AI', url:'https://teamboard-aiot.vercel.app/v3/control', roles:['admin','manager','lead'] },
 ];
+/* 로그인한 사람에게 보여줄 바로가기만 추린다 */
+function myQuickLinks(){
+  const u=(typeof Auth!=='undefined'&&Auth.user&&Auth.user())||{};
+  return QUICK_LINKS.filter(l=>!l.roles || l.roles.indexOf(u.role)>=0);
+}
 
 /* CS 상담 메모 — 연동 구글시트 컬럼(날짜·분류·연락처·고객유형·주문자/학교/업체명·상품분류·상품코드·내용·답변·상담사)에 맞춘 값
    · 수정이 잦은 값은 상수로 분리 (분류는 사용자가 화면에서 편집 가능) */

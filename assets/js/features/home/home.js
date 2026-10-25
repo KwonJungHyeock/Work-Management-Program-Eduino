@@ -381,7 +381,7 @@
 
       // 바로가기
       const ql=root.querySelector('#dQuick');
-      (typeof QUICK_LINKS!=='undefined'?QUICK_LINKS:[]).forEach(l=>{ const a=el('a','ql-chip'); a.href=l.url; a.target='_blank'; a.rel='noopener noreferrer';
+      (typeof myQuickLinks==='function'?myQuickLinks():(typeof QUICK_LINKS!=='undefined'?QUICK_LINKS:[])).forEach(l=>{ const a=el('a','ql-chip'); a.href=l.url; a.target='_blank'; a.rel='noopener noreferrer';
         a.innerHTML=`${icon('external')}${esc(l.name)}`; ql.appendChild(a); });
 
       // 헤더 '전체 보기' 링크 + 좌측 하단 팀 일정 달력(전사 공유) 임베드

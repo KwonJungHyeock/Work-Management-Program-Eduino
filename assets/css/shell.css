@@ -36,13 +36,15 @@
 .nav-collapsed .side-brand .nm{display:none}
 
 /* 상단 사내 바로가기 */
-.quicklinks{display:flex;align-items:center;gap:6px}
+.quicklinks{display:flex;align-items:center;gap:6px;flex:none}
 .qlink{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border:1px solid var(--line);
-  border-radius:7px;background:var(--panel-2);font-size:12.5px;font-weight:600;color:var(--ink-2)}
+  border-radius:7px;background:var(--panel-2);font-size:12.5px;font-weight:600;color:var(--ink-2);
+  white-space:nowrap;flex:none}
 .qlink:hover{border-color:var(--red);color:var(--red);background:var(--red-soft)}
 .qlink .ic{font-size:14px;color:var(--faint)}
 .qlink:hover .ic{color:var(--red)}
-@media(max-width:1080px){.qlink span{display:none}.qlink{padding:0 8px}}
+/* 상단이 좁아지면 바로가기는 아이콘만 남긴다(글자가 두 줄로 접히지 않게) */
+@media(max-width:1420px){.qlink span:not(.ic){display:none}.qlink{padding:0 8px}}
 
 /* 앱 인트로 오버레이 (로고 클릭 시 재생) */
 .app-intro{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;

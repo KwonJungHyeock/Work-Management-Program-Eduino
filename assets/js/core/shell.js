@@ -53,7 +53,7 @@ function bootShell(){
 
   // 상단 사내 바로가기 링크
   const ql=$('quicklinks');
-  (typeof QUICK_LINKS!=='undefined'?QUICK_LINKS:[]).forEach(l=>{
+  (typeof myQuickLinks==='function'?myQuickLinks():(typeof QUICK_LINKS!=='undefined'?QUICK_LINKS:[])).forEach(l=>{
     const a=el('a','qlink'); a.href=l.url; a.target='_blank'; a.rel='noopener noreferrer'; a.title=l.name;
     a.innerHTML=`${icon('external')}<span>${esc(l.name)}</span>`; ql.appendChild(a);
   });
