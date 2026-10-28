@@ -163,16 +163,21 @@
           <td style="white-space:nowrap"><span style="display:flex;gap:4px"><button class="btn pri sm" data-a="save" data-id="${esc(r.id)}">${icon('check')}</button><button class="btn ghost sm" data-a="cancel">취소</button></span></td>
         </tr>`;
       }
-      // 같은 입점사(업체)끼리 묶어 표시 + 업체별 소계 (같은 날짜 기준 · 결제 통합용)
+      /* 묶음 = 한 번의 이체. 업체명뿐 아니라 '계좌'까지 같아야 묶는다.
+         환불처럼 업체명이 비어 있는 건은 예금주가 제각각이라, 업체명만 보고 묶으면
+         서로 다른 계좌가 한 덩어리가 되어 합계가 엉뚱한 계좌로 입금될 수 있다. */
+      const groupKey=r=>String(r.vendor||'').trim()+'\u0000'+String(acctOf(r)||'').trim();
       function bodyRows(rows, paid){
         let html='', i=0;
         while(i<rows.length){
-          const v=String(rows[i].vendor||'').trim(); const grp=[]; let j=i;
-          while(j<rows.length && String(rows[j].vendor||'').trim()===v){ grp.push(rows[j]); j++; }
+          const k=groupKey(rows[i]); const grp=[]; let j=i;
+          while(j<rows.length && groupKey(rows[j])===k){ grp.push(rows[j]); j++; }
           grp.forEach((r,idx)=>{ html+= editId===r.id?rowEdit(r):rowView(r, idx===0, isPaid(r,paid)); });
           if(grp.length>1 && !grp.some(r=>r.id===editId)){
             const gt=grp.reduce((s,r)=>s+parseAmt(r.amount),0), gq=grp.reduce((s,r)=>s+(Number(r.qty)||0),0);
-            html+=`<tr class="pq-sub"><td colspan="5">${esc(v||'(미지정)')} · ${grp.length}건 소계</td><td class="num">${gq||''}</td><td class="num">${won(gt)}원</td><td ${editable?'colspan="2"':''}></td></tr>`;
+            const nm=String(grp[0].vendor||'').trim()||'(업체 미지정)';
+            const ac=String(acctOf(grp[0])||'').trim();
+            html+=`<tr class="pq-sub"><td colspan="5">${esc(nm)}${ac?` <span style="font-weight:600;color:var(--muted)">· ${esc(ac)}</span>`:''} · ${grp.length}건 소계</td><td class="num">${gq||''}</td><td class="num">${won(gt)}원</td><td ${editable?'colspan="2"':''}></td></tr>`;
           }
           i=j;
         }
@@ -183,6 +188,7 @@
         // 업체(입점사)별로 묶고, 그 안에서 발주 먼저·입력순 — 같은 날짜의 같은 입점사 주문이 인접+소계로 통합 표시
         const rows=all.slice().sort((a,b)=>
           String(a.vendor||'').localeCompare(String(b.vendor||''))
+          || String(acctOf(a)||'').localeCompare(String(acctOf(b)||''))   // 계좌가 다르면 다른 이체 → 따로 묶이게
           || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1))
           || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
         const total=rows.reduce((s,r)=>s+parseAmt(r.amount),0);

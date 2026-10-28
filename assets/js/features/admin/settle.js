@@ -376,23 +376,29 @@
         const paid=doc.status==='paid'; const items=doc.items||[]; const won=n=>Number(n||0).toLocaleString();
         // 결제요청과 동일하게 같은 업체(입점사)끼리 묶고 2건 이상이면 업체별 소계 표시(표시용 · 데이터 변경 없음)
         const itemRow=r=>`<tr class="pq-it"><td>${r.kind?((typeof tagBadge==='function')?tagBadge(r.kind,'st-dt-badge'):esc(r.kind)):''}</td><td>${esc(r.orderer||'')}</td><td class="st-dt-wrap">${esc(r.content||'')}</td><td class="stnum">${won(r.amount)}원</td></tr>`;
-        // 업체 머리줄 = 이체 한 건 — 업체·계좌·입금액을 한 줄에 모아 대표님이 보고 바로 입금할 수 있게 한다
-        const blockHead=(v,g)=>{ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
-          const ac=(g.find(r=>String(r.account||'').trim())||{}).account||'';
+        // 한 블록 = 한 번의 이체. 업체명이 같아도 '계좌'가 다르면 다른 이체다.
+        // (환불처럼 업체명이 비어 있는 건은 예금주가 제각각이라, 업체명만으로 묶으면
+        //  서로 다른 계좌의 금액이 한 덩어리로 합산돼 엉뚱한 계좌로 입금될 수 있다)
+        const acctOf=r=>String((r&&r.account)||'').trim();
+        const payGroupKey=r=>String((r&&r.vendor)||'').trim()+'\u0000'+acctOf(r);
+        const blockHead=(g)=>{ const gt=g.reduce((t,r)=>t+(Number(r.amount)||0),0);
+          const v=String((g[0]&&g[0].vendor)||'').trim(), ac=acctOf(g[0]);
           return `<tr class="pq-hd"><td colspan="4"><div class="pq-hdw">
             <span class="pq-vn">${esc(v||'(업체 미지정)')}</span><span class="pq-cnt">${g.length}건</span>
-            ${ac?`<span class="pq-acct">${esc(String(ac).trim())}</span><button type="button" class="pq-copy" data-acct="${esc(String(ac).trim())}">${icon('copy')||''}계좌 복사</button>`
+            ${ac?`<span class="pq-acct">${esc(ac)}</span><button type="button" class="pq-copy" data-acct="${esc(ac)}">${icon('copy')||''}계좌 복사</button>`
                :`<span class="pq-acct none">계좌 미등록 — 확인 필요</span>`}
             <span class="pq-amt">입금액<b>${won(gt)}원</b></span></div></td></tr>`; };
         const payItemsHtml=()=>{ if(!items.length) return `<tr><td colspan="4" class="muted" style="text-align:center;padding:10px">항목 없음</td></tr>`;
-          const s=items.slice().sort((a,b)=> String(a.vendor||'').localeCompare(String(b.vendor||'')) || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1)) );
+          const s=items.slice().sort((a,b)=> String(a.vendor||'').localeCompare(String(b.vendor||''))
+            || acctOf(a).localeCompare(acctOf(b)) || ((a.kind==='발주'?0:1)-(b.kind==='발주'?0:1)) );
           let html='', i=0;
-          while(i<s.length){ const v=String(s[i].vendor||'').trim(); const g=[]; let j=i;
-            while(j<s.length && String(s[j].vendor||'').trim()===v){ g.push(s[j]); j++; }
-            html+=blockHead(v,g); g.forEach(r=>{ html+=itemRow(r); });
+          while(i<s.length){ const k=payGroupKey(s[i]); const g=[]; let j=i;
+            while(j<s.length && payGroupKey(s[j])===k){ g.push(s[j]); j++; }
+            html+=blockHead(g); g.forEach(r=>{ html+=itemRow(r); });
             i=j; }
           return html; };
-        const vendorCount=()=> new Set(items.map(r=>String(r.vendor||'').trim())).size;
+        // 입금처 수 = 실제 이체 횟수(업체+계좌 조합)
+        const vendorCount=()=> new Set(items.map(payGroupKey)).size;
         const card=el('div','st-card st-approve'+(paid?' done':''));
         card.innerHTML=`
           <div class="st-hd"><div class="st-t">${icon('stamp')} 결제요청(선결제) · ${esc(doc.date)}${payRound(doc)>1?` <span style="color:var(--warn)">${payRound(doc)}차(추가분)</span>`:''}</div>
