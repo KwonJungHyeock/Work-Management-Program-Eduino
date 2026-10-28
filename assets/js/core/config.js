@@ -251,6 +251,7 @@ const DEPT_OPEN_KEYS = ['cs.records', 'cs.lookup', 'cs.custdb', 'cs.exchange', '
 const DEPT_OPEN_EXTRA = {
   'logi.china': ['cs'],
   'md.partners': ['cs'],   // 메뉴는 MD 로 옮겼지만 견적 할인율 때문에 CS 도 계속 본다
+  'md.payreq'  : ['cs'],   // 사이트 환불·배송비는 CS 가 올린다 — CS 파트도 결제요청에 바로 등록·상신
 };
 
 /* 메뉴가 옮겨간 화면 — 예전 주소(#구키)로 들어오면 새 주소로 자동 이동. */

@@ -9,11 +9,12 @@
 (function(){
   const meU=()=>(Auth.user&&Auth.user())||{};
   const isAdmin=()=>!!(Auth.isAdmin&&Auth.isAdmin());
-  // 작성·수정 = 파트장·관리자 + [팀 설정]에서 '결제요청 수정' 권한을 받은 담당자
-  const canEdit=()=>{ const u=meU(); return isAdmin() || u.role==='lead'
-    || (typeof canEditKey==='function' && canEditKey('md.payreq')); };
-  // 결제 상신(승인 요청)은 기존대로 파트장·관리자만 — 권한 부여로 넓히지 않음
-  const canSubmit=()=>{ const u=meU(); return isAdmin() || u.role==='lead'; };
+  /* 작성·수정·상신 = 이 화면에 들어올 수 있는 구성원 전원 (2026-10 요청).
+     결제요청은 "내가 결제해야 할 건을 올리는" 일이라 파트장만 할 수 있으면 병목이 된다.
+     일일결산 상신과 같은 방식이며, 실제 집행은 대표 결재함의 [결제완료]에서 막힌다.
+     ※ 이미 결제완료된 행은 손대지 못하게 따로 막는다(다음 차수에 다시 올라가면 이중 입금). */
+  const canEdit=()=>true;
+  const canSubmit=()=>true;
   // 결재 문서(결제요청 상신) — 일일결산과 동일 컬렉션 재사용, id 로 구분
   const COLL='settlements';
   /* 결재 문서는 하루에 여러 번(차수) 올라갈 수 있다.
@@ -111,7 +112,7 @@
         .pq-paid{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 6px;border-radius:5px;color:var(--ok);background:var(--ok-bg);vertical-align:1px}
       </style>
       <div class="mhead pad"><div class="mhead-row">
-        <div><div class="tt">결제요청</div><div class="ds">입점사 발주를 <b>선결제</b>로 저장하면 여기에 자동 집계됩니다(발주 기록에도 남음). 택배운임·환불은 수동 추가하세요.${editable?'':' <b>수정·삭제는 파트장·관리자</b>만 가능합니다.'}</div></div>
+        <div><div class="tt">결제요청</div><div class="ds">입점사 발주를 <b>선결제</b>로 저장하면 여기에 자동 집계됩니다(발주 기록에도 남음). 택배운임·환불은 <b>수동 항목 추가</b>로 직접 올리세요. 구성원 누구나 올리고 <b>결제 상신</b>할 수 있습니다.</div></div>
         <div class="mhead-act"><label class="fld" style="margin:0">기준일 <input type="date" id="pqDate" value="${date}"></label></div>
       </div></div>
       <div class="mbody wide" id="pqBody"><div class="muted" style="padding:18px">불러오는 중…</div></div>`;
@@ -145,9 +146,11 @@
             if(!shown) return '';
             return saved ? esc(shown)
               : `<span title="입점사 정보에서 자동 연동된 계좌입니다">${esc(shown)} <span class="muted" style="font-size:10.5px;font-weight:700">연동</span></span>`; })()}</td>
-          ${editable?`<td style="white-space:nowrap"><span style="display:flex;gap:4px;justify-content:flex-end">
-            <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
-            <button class="btn ghost sm" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button></span></td>`:''}
+          ${editable?`<td style="white-space:nowrap">${paidFlag
+            ? '<span class="muted" style="font-size:11.5px">결제됨</span>'
+            : `<span style="display:flex;gap:4px;justify-content:flex-end">
+                <button class="btn ghost sm" data-a="edit" data-id="${esc(r.id)}">수정</button>
+                <button class="btn ghost sm" data-a="del" data-id="${esc(r.id)}" title="삭제">${icon('trash')}</button></span>`}</td>`:''}
         </tr>`;
       }
       function rowEdit(r){
@@ -323,13 +326,16 @@
         body.querySelectorAll('[data-a=cancel]').forEach(b=>b.onclick=()=>{ editId=null; paint(); });
         body.querySelectorAll('[data-a=save]').forEach(b=>b.onclick=async(e)=>{
           const tr=e.currentTarget.closest('tr'); const old=all.find(x=>x.id===editId); if(!old) return;
+          if(isPaid(old,paidSigs())){ toast('이미 결제완료된 건은 고칠 수 없습니다'); editId=null; paint(); return; }
           const rec={...old}; tr.querySelectorAll('[data-k]').forEach(inp=>{ rec[inp.dataset.k]= inp.dataset.k==='amount'?parseAmt(inp.value):inp.value; });
           e.currentTarget.disabled=true; Object.assign(old,rec); editId=null; paint();
           if(window.Records) await Records.pushRaw('md','payreq',rec); toast('수정했습니다');
         });
         body.querySelectorAll('[data-a=del]').forEach(b=>b.onclick=async()=>{
-          if(!confirm('이 결제요청 항목을 삭제할까요?')) return;
           const r=all.find(x=>x.id===b.dataset.id); if(!r) return;
+          if(isPaid(r,paidSigs())){ toast('이미 결제완료된 건은 지울 수 없습니다'); return; }
+          const who=[r.vendor||'(업체 미지정)', won(parseAmt(r.amount))+'원', (r.whoName||r.who||'')].filter(Boolean).join(' · ');
+          if(!confirm(`이 결제요청 항목을 삭제할까요?\n${who}\n\n팀 전체 목록에서 사라집니다.`)) return;
           all=all.filter(x=>x.id!==b.dataset.id); paint();
           if(window.Records) await Records.del('md','payreq',r.id,String(r.day||r.date||date).slice(0,7),r.who,r.day||r.date);
           toast('삭제했습니다');
